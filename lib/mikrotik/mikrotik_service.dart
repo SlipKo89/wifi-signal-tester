@@ -84,6 +84,16 @@ class MikrotikService {
     return t.read(path);
   }
 
+  /// Router health: cpu-load, version, board-name, uptime, free/total memory.
+  Future<Map<String, String>?> readResource() async {
+    try {
+      final r = await _transport!.read('/system/resource');
+      return r.isEmpty ? null : r.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Noise floor for the band of [mhz], falling back to the other band.
   int? noiseFloorForFreq(int? mhz) {
     if (mhz != null && mhz >= 4900) return _nf5g ?? _nf2g;

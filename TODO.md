@@ -43,8 +43,16 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Audit: co-channel / non-1-6-11 check across a router's own APs
 - [x] Reference / help for every metric (tap-a-number + Reference screen)
 - [x] Audit: PDF export (NotoSans for Cyrillic)
+- [x] Audit: show passed checks/policies (channel plan, country, TX, isolation,
+      sticky-client, router info) — not just problems
+- [x] Router health metric on dashboard (CPU / board / version / uptime)
+- [x] Roam counter (AP switches this session)
 - [ ] Audit: extend to WifiWave2 (/interface/wifi) config
 - [ ] Audit: PMF/802.11w recommendation (careful — "required" drops old clients)
+- [ ] Wireless log analysis — /log is often huge (12k+ entries) and wifi
+      logging is off by default; needs a filtered/limited read + "enable
+      topic wireless/caps" hint. Deferred
+- [ ] Roaming handoff time (proper reconnect-speed measurement, not just count)
 - [ ] Verify PDF export on a real device (built, not yet field-tested)
 
 ## Later (v0.3+)

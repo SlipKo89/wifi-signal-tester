@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data — connection is judged by IP, SSID is shown when available. The Android
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
+### Added
+- **Router health on the dashboard**: CPU load (colour-coded), board, RouterOS
+  version and uptime for the serving router, plus a roam counter (how many times
+  the client switched AP this session, with the last transition).
+- **Audit now shows passed checks and policies**, not just problems — so a
+  healthy router gets a substantive report: router info (board/version/CPU/
+  uptime), clean 2.4 GHz channel plan (20 MHz on 1/6/11), country set, TX power
+  at default, WPA2/WPA3, client isolation, and sticky-client mitigation
+  (signal-range access rules that push weak clients to roam). "Issues" now
+  counts only critical/warnings.
+
+### Fixed
+- REST transport now handles single-object responses (e.g. /system/resource),
+  not just arrays — CPU/health and the audit's router info were coming back empty.
+
 ### Changed
 - **Config audit reworked to be accurate and deeper.** It now audits the
   *operating state* (`current-channel` → real width / TX power / frequency) and

@@ -33,6 +33,18 @@ class MonitorController extends ChangeNotifier {
   /// up in a registration table, and lets us name a foreign AP too).
   String? connectedApName;
 
+  /// Health of the serving router (cpu-load, version, board, uptime).
+  Map<String, String>? routerResource;
+  int? get cpuLoad => int.tryParse(routerResource?['cpu-load'] ?? '');
+  String? get routerBoard => routerResource?['board-name'];
+  String? get routerVersion => routerResource?['version'];
+  String? get routerUptime => routerResource?['uptime'];
+
+  /// Roaming: which AP the client sits on, and how many times it has switched.
+  String? _lastApName;
+  int roamCount = 0;
+  String? lastRoam;
+
   /// Our MAC as last resolved from ARP (re-resolved every poll).
   String? _ourMac;
 
@@ -213,6 +225,17 @@ class MonitorController extends ChangeNotifier {
       }
       apUnmanaged = phone.ipAddress != null && stationSignal == null;
 
+      // Roaming: detect when the serving AP changes.
+      final apNow = stationSignal?.interfaceName ?? connectedApName;
+      if (apNow != null && _lastApName != null && apNow != _lastApName) {
+        roamCount++;
+        lastRoam = '$_lastApName → $apNow';
+      }
+      if (apNow != null) _lastApName = apNow;
+
+      // Router health from whichever router serves the client.
+      routerResource = _serving == null ? null : await _serving!.readResource();
+
       _computeThroughput();
       _push(phoneHistory, phone.rssiDbm);
       _push(apHistory, stationSignal?.signalDbm);
@@ -371,6 +394,10 @@ class MonitorController extends ChangeNotifier {
     _ourMac = null;
     downKbps = upKbps = null;
     _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
+    routerResource = null;
+    _lastApName = null;
+    roamCount = 0;
+    lastRoam = null;
     phoneHistory.clear();
     apHistory.clear();
     state = MonitorState.idle;

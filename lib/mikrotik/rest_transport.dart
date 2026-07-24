@@ -79,13 +79,13 @@ class RestTransport implements RouterOsTransport {
     }
 
     final decoded = jsonDecode(resp.body);
-    if (decoded is! List) return const [];
-    return decoded
-        .whereType<Map>()
-        .map((row) => row.map(
-              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
-            ))
-        .toList();
+    Map<String, String> asRow(Map row) =>
+        row.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+    // Most menus return a JSON array; a few (e.g. /system/resource) return a
+    // single object — wrap it so callers always get a list of rows.
+    if (decoded is List) return decoded.whereType<Map>().map(asRow).toList();
+    if (decoded is Map) return [asRow(decoded)];
+    return const [];
   }
 
   @override

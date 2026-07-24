@@ -51,12 +51,116 @@ class AuditEngine {
     final out = <Finding>[];
     for (final svc in routers) {
       final c = await _gather(svc);
+      _routerInfo(c, out);
       _deviceChecks(c, out);
       _capsmanChecks(c, out);
       _standaloneChecks(c, out);
+      _bestPractices(c, out);
     }
     out.sort((a, b) => a.sev.index.compareTo(b.sev.index));
     return out;
+  }
+
+  void _routerInfo(_Ctx c, List<Finding> out) {
+    final r = c.resource;
+    if (r == null) return;
+    out.add(Finding(AuditSeverity.info,
+        titleEn: 'Router: ${r['board-name'] ?? '?'}',
+        titleRu: 'Роутер: ${r['board-name'] ?? '?'}',
+        detailEn:
+            'RouterOS ${r['version'] ?? '?'} · CPU ${r['cpu-load'] ?? '?'}% · '
+            'uptime ${r['uptime'] ?? '?'}.',
+        detailRu:
+            'RouterOS ${r['version'] ?? '?'} · CPU ${r['cpu-load'] ?? '?'}% · '
+            'аптайм ${r['uptime'] ?? '?'}.',
+        where: c.host));
+  }
+
+  /// Positive/pass checks and policies — so a healthy router still gets a
+  /// substantive report, and good practices are confirmed.
+  void _bestPractices(_Ctx c, List<Finding> out) {
+    // Regulatory country.
+    final countries =
+        c.wireless.map((w) => w['country'] ?? '').where((s) => s.isNotEmpty);
+    if (countries.isNotEmpty &&
+        countries.every((s) => s != 'no_country_set')) {
+      out.add(Finding(AuditSeverity.ok,
+          titleEn: 'Regulatory country set',
+          titleRu: 'Страна задана',
+          detailEn: 'Country is set (${countries.first}) — correct power and '
+              'channel limits.',
+          detailRu: 'Страна задана (${countries.first}) — верные лимиты '
+              'мощности и каналов.'));
+    }
+
+    // TX-power mode.
+    if (c.wireless.isNotEmpty &&
+        c.wireless.every((w) => (w['tx-power-mode'] ?? 'default') == 'default')) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: 'TX power at default',
+          titleRu: 'Мощность по умолчанию',
+          detailEn: 'Radios use the card default power — the recommended, safe '
+              'setting.',
+          detailRu: 'Радио используют мощность по умолчанию — рекомендуемый '
+              'безопасный вариант.'));
+    }
+
+    // Sticky-client mitigation via signal-based access rules.
+    final signalRules = c.accessList.where((a) =>
+        a['disabled'] != 'true' &&
+        ((a['signal-range'] ?? '').isNotEmpty ||
+            (a['allow-signal-out-of-range'] ?? '').isNotEmpty));
+    if (signalRules.isNotEmpty) {
+      out.add(Finding(AuditSeverity.ok,
+          titleEn: 'Sticky-client mitigation on',
+          titleRu: 'Отшибание «залипших» клиентов',
+          detailEn:
+              '${signalRules.length} access rule(s) use signal thresholds — '
+              'weak clients get pushed off so they roam to a closer AP.',
+          detailRu:
+              '${signalRules.length} правил доступа с порогами сигнала — слабые '
+              'клиенты сбрасываются и переходят на ближнюю точку.'));
+    } else {
+      out.add(const Finding(AuditSeverity.info,
+          titleEn: 'No signal-based access rules',
+          titleRu: 'Нет правил по сигналу',
+          detailEn:
+              'Nothing forces weak clients to roam — a phone can cling to a far '
+              'AP. Consider access-list signal-range + allow-signal-out-of-range.',
+          detailRu:
+              'Ничто не гонит слабых клиентов роумиться — телефон может '
+              'залипнуть на дальней точке. Рассмотри access-list signal-range + '
+              'allow-signal-out-of-range.'));
+    }
+
+    // Client isolation on active configs' datapaths.
+    final activeConfigs = <String>{
+      for (final i in c.capsIfaces)
+        if (i['running'] == 'true' && (i['configuration'] ?? '').isNotEmpty)
+          i['configuration']!
+    };
+    final isolated = <String>{};
+    for (final cfg in c.capsConfigs) {
+      if (!activeConfigs.contains(cfg['name'])) continue;
+      final dp = c.datapaths[cfg['datapath']];
+      if (dp != null && dp['client-to-client-forwarding'] == 'false') {
+        isolated.add(cfg['ssid'] ?? cfg['name'] ?? '');
+      }
+    }
+    if (isolated.isNotEmpty) {
+      out.add(Finding(AuditSeverity.ok,
+          titleEn: 'Client isolation on',
+          titleRu: 'Изоляция клиентов включена',
+          detailEn:
+              'Clients can\'t talk to each other on: ${isolated.join(', ')} — '
+              'good for guest/IoT networks.',
+          detailRu:
+              'Клиенты не видят друг друга в: ${isolated.join(', ')} — хорошо '
+              'для гостевых/IoT сетей.'));
+    }
+
+    // Wireless logging on? (useful events)
+    // Handled in _logNote via a separate read is overkill; note-only here.
   }
 
   Future<_Ctx> _gather(MikrotikService svc) async {
@@ -68,6 +172,7 @@ class AuditEngine {
       }
     }
 
+    final resource = await read('/system/resource');
     return _Ctx(
       capsIfaces: await read('/caps-man/interface'),
       capsConfigs: await read('/caps-man/configuration'),
@@ -79,6 +184,15 @@ class AuditEngine {
         for (final p in await read('/interface/wireless/security-profiles'))
           p['name'] ?? '': p
       },
+      datapaths: {
+        for (final d in await read('/caps-man/datapath')) d['name'] ?? '': d
+      },
+      accessList: [
+        ...await read('/caps-man/access-list'),
+        ...await read('/interface/wireless/access-list'),
+      ],
+      resource: resource.isEmpty ? null : resource.first,
+      host: svc.host,
     );
   }
 
@@ -135,11 +249,15 @@ class AuditEngine {
 
     // Operating-state RF checks per active radio.
     final freq24 = <int, int>{}; // freq -> count (2.4 GHz)
+    var had24 = false;
+    var chan24Issue = false;
     for (final i in active) {
       final name = i['name'] ?? '?';
       final ch = _parseChannel(i['current-channel']);
       if (ch.is24) {
+        had24 = true;
         if (ch.width != null && ch.width! > 20) {
+          chan24Issue = true;
           out.add(Finding(AuditSeverity.warn,
               titleEn: '2.4 GHz running ${ch.width} MHz',
               titleRu: '2.4 ГГц на ${ch.width} МГц',
@@ -178,6 +296,7 @@ class AuditEngine {
     // Co-channel: same 2.4 GHz frequency on more than one active radio.
     freq24.forEach((freq, count) {
       if (count > 1) {
+        chan24Issue = true;
         out.add(Finding(AuditSeverity.warn,
             titleEn: 'Co-channel on 2.4 GHz ($freq)',
             titleRu: 'Совпадение канала 2.4 ГГц ($freq)',
@@ -190,6 +309,7 @@ class AuditEngine {
             fixEn: 'Assign non-overlapping channels (1 / 6 / 11).',
             fixRu: 'Назначь непересекающиеся каналы (1 / 6 / 11).'));
       } else if (![2412, 2437, 2462].contains(freq)) {
+        chan24Issue = true;
         out.add(Finding(AuditSeverity.info,
             titleEn: 'Non-standard 2.4 channel ($freq)',
             titleRu: 'Нестандартный канал 2.4 ($freq)',
@@ -201,6 +321,19 @@ class AuditEngine {
                 'пересекаются только 1, 6 и 11.'));
       }
     });
+
+    // Pass: 2.4 GHz channel plan is clean.
+    if (had24 && !chan24Issue) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: '2.4 GHz channel plan is clean',
+          titleRu: 'Канал-план 2.4 ГГц в порядке',
+          detailEn:
+              'All 2.4 GHz radios run 20 MHz on non-overlapping channels '
+              '(1 / 6 / 11) — textbook.',
+          detailRu:
+              'Все радио 2.4 ГГц — 20 МГц на непересекающихся каналах '
+              '(1 / 6 / 11) — как надо.'));
+    }
 
     // Security of applied configurations only.
     final notOnAir = <String>[];
@@ -404,11 +537,19 @@ class _Ctx {
   final Map<String, Map<String, String>> capsSecs;
   final List<Map<String, String>> wireless;
   final Map<String, Map<String, String>> wirelessProfiles;
+  final Map<String, Map<String, String>> datapaths;
+  final List<Map<String, String>> accessList;
+  final Map<String, String>? resource;
+  final String? host;
   _Ctx({
     required this.capsIfaces,
     required this.capsConfigs,
     required this.capsSecs,
     required this.wireless,
     required this.wirelessProfiles,
+    required this.datapaths,
+    required this.accessList,
+    required this.resource,
+    required this.host,
   });
 }

@@ -317,10 +317,87 @@ class _Dashboard extends StatelessWidget {
                   helpKey: 'uptime'),
           ],
         ),
+        if (ctrl.routerResource != null || ctrl.roamCount > 0) ...[
+          const SizedBox(height: 12),
+          _RouterHealthCard(ctrl: ctrl),
+        ],
         const SizedBox(height: 12),
         _HistoryChart(
             phone: ctrl.phoneHistory, ap: ctrl.apHistory),
       ],
+    );
+  }
+}
+
+/// Compact health strip for the serving router: CPU, board/version, uptime,
+/// and how many times the client has roamed this session.
+class _RouterHealthCard extends StatelessWidget {
+  final MonitorController ctrl;
+  const _RouterHealthCard({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
+    final cpu = ctrl.cpuLoad;
+    final cpuColor = cpu == null
+        ? Colors.grey
+        : cpu < 50
+            ? const Color(0xFF3FB950)
+            : cpu < 80
+                ? const Color(0xFFD29922)
+                : const Color(0xFFF85149);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.memory, size: 16, color: AppTheme.accent),
+                const SizedBox(width: 6),
+                Text(
+                  ctrl.routerBoard ?? l.t('Router', 'Роутер'),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.accent,
+                      letterSpacing: 0.5),
+                ),
+                const Spacer(),
+                if (ctrl.routerVersion != null)
+                  Text('RouterOS ${ctrl.routerVersion}',
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFF7D8590))),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 20,
+              runSpacing: 14,
+              children: [
+                MetricTile(
+                  label: 'CPU',
+                  value: cpu?.toString() ?? '—',
+                  unit: '%',
+                  color: cpuColor,
+                ),
+                if (ctrl.routerUptime != null)
+                  MetricTile(
+                      label: l.t('Uptime', 'Аптайм'),
+                      value: ctrl.routerUptime!),
+                MetricTile(
+                    label: l.t('Roams', 'Роуминги'),
+                    value: ctrl.roamCount.toString()),
+                if (ctrl.lastRoam != null)
+                  MetricTile(
+                      label: l.t('Last roam', 'Последний'),
+                      value: ctrl.lastRoam!),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

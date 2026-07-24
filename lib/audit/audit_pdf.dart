@@ -20,7 +20,10 @@ Future<Uint8List> buildAuditPdf(
   final doc =
       pw.Document(theme: pw.ThemeData.withFont(base: reg, bold: bold));
 
-  final issues = findings.where((f) => f.sev != AuditSeverity.ok).length;
+  final issues = findings
+      .where((f) =>
+          f.sev == AuditSeverity.critical || f.sev == AuditSeverity.warn)
+      .length;
 
   PdfColor color(AuditSeverity s) => switch (s) {
         AuditSeverity.critical => PdfColors.red700,

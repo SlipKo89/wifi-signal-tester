@@ -67,8 +67,10 @@ class _AuditScreenState extends State<AuditScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final findings = snap.data!;
-          final issues =
-              findings.where((f) => f.sev != AuditSeverity.ok).length;
+          final issues = findings
+              .where((f) =>
+                  f.sev == AuditSeverity.critical || f.sev == AuditSeverity.warn)
+              .length;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
