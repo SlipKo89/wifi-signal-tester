@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E1116"/>
+      <stop offset="1" stop-color="#0B1A2E"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#2F81F7" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#2F81F7" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="430" fill="url(#glow)"/>
+
+  <g transform="translate(512 512) scale(0.95) translate(-512 -512)"
+     fill="none" stroke-linecap="round" stroke-width="34">
+    <!-- Phone side (green), waves toward centre -->
+    <g stroke="#3FB950">
+      <path d="M345.0 458.4 A70 70 0 0 1 345.0 565.6"/>
+      <path d="M383.6 412.4 A130 130 0 0 1 383.6 611.6"/>
+      <path d="M422.2 366.5 A190 190 0 0 1 422.2 657.5"/>
+    </g>
+    <circle cx="300" cy="512" r="34" fill="#3FB950" stroke="none"/>
+
+    <!-- Access-point side (blue), waves toward centre -->
+    <g stroke="#2F81F7">
+      <path d="M679.0 458.4 A70 70 0 0 0 679.0 565.6"/>
+      <path d="M640.4 412.4 A130 130 0 0 0 640.4 611.6"/>
+      <path d="M601.8 366.5 A190 190 0 0 0 601.8 657.5"/>
+    </g>
+    <circle cx="724" cy="512" r="34" fill="#2F81F7" stroke="none"/>
+  </g>
+</svg>

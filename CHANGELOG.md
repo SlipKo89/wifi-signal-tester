@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
 ### Added
+- **App icon**: a "two-sided signal" mark — a green source (phone) and a blue
+  source (AP) with waves meeting in the middle, on a dark blue-tinted
+  background. Drawn as SVG, with Android adaptive + iOS icons generated via
+  flutter_launcher_icons.
 - **Audible asymmetry alert**: a bell toggle in the app bar beeps (and vibrates)
   whenever the AP−phone signal divergence exceeds a threshold — a hands-free
   walk-test aid. Threshold is configurable in Settings → Alerts. The tone is

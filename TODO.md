@@ -50,7 +50,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Localization framework (proper i18n, not hardcoded RU/EN strings)
 - [ ] Optional read-only user auto-check (warn if the API user has write policy)
 - [ ] Speed/latency probe alongside signal (ping the gateway)
-- [ ] App icon, splash, store listing assets
+- [x] App icon (two-sided signal, SVG → adaptive/iOS)
+- [ ] Splash screen + store listing assets
 
 ## Ideas parking lot (brainstormed, to triage later)
 
