@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phone-only mode** — "Just view my network (no router)" on the connection
+  form shows the device's own Wi-Fi (SSID, band, channel, signal, link speed,
+  standard, security) without connecting to any MikroTik.
+- **Phone-side audit** — audits the connection from what the phone reports:
+  signal strength, band, 2.4 GHz channel (1/6/11), security (open/WEP → flagged),
+  Wi-Fi generation, and link-rate-vs-signal. Shareable as PDF.
+- Richer phone facts via a native WifiManager channel: negotiated/tx/rx link
+  speed, 802.11 generation (Wi-Fi 4/5/6/7), and security type.
 - **In-app changelog** (⋮ → Changelog): browsable, bilingual release notes.
 - **"What's new" popup**: after an app update, the new version's highlights are
   shown once at startup (skipped on a fresh install).

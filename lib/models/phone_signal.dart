@@ -14,6 +14,17 @@ class PhoneSignal {
   /// Channel frequency in MHz.
   final int? frequencyMhz;
 
+  /// Negotiated link speed (Mbps) and per-direction speeds where available.
+  final int? linkSpeedMbps;
+  final int? txLinkSpeedMbps;
+  final int? rxLinkSpeedMbps;
+
+  /// 802.11 generation, e.g. "Wi-Fi 6 (ax)".
+  final String? wifiStandard;
+
+  /// Security of the connection, e.g. "WPA2/WPA3-PSK", "Open".
+  final String? security;
+
   const PhoneSignal({
     this.rssiDbm,
     this.ssid,
@@ -21,7 +32,20 @@ class PhoneSignal {
     this.ipAddress,
     this.gatewayIp,
     this.frequencyMhz,
+    this.linkSpeedMbps,
+    this.txLinkSpeedMbps,
+    this.rxLinkSpeedMbps,
+    this.wifiStandard,
+    this.security,
   });
+
+  /// 2.4 GHz channel number, when on 2.4 GHz.
+  int? get channel24 {
+    final f = frequencyMhz;
+    if (f == null || f < 2400 || f > 2500) return null;
+    if (f == 2484) return 14;
+    return ((f - 2412) ~/ 5) + 1;
+  }
 
   /// Rough SNR estimate: RSSI above an assumed noise floor. The AP-side SNR
   /// from MikroTik is the trustworthy one; this is only a hint.

@@ -11,9 +11,15 @@ import '../theme.dart';
 /// box plus a standalone AP). Loads the saved list and hands it back on connect.
 class ConnectionForm extends StatefulWidget {
   final void Function(List<RouterConnection> routers) onConnect;
+  final VoidCallback? onPhoneOnly;
   final bool busy;
 
-  const ConnectionForm({super.key, required this.onConnect, this.busy = false});
+  const ConnectionForm({
+    super.key,
+    required this.onConnect,
+    this.onPhoneOnly,
+    this.busy = false,
+  });
 
   @override
   State<ConnectionForm> createState() => _ConnectionFormState();
@@ -216,6 +222,15 @@ class _ConnectionFormState extends State<ConnectionForm> {
                   ? l.t('Connecting…', 'Подключение…')
                   : _connectLabel(l)),
             ),
+            if (widget.onPhoneOnly != null)
+              Center(
+                child: TextButton.icon(
+                  onPressed: widget.busy ? null : widget.onPhoneOnly,
+                  icon: const Icon(Icons.smartphone, size: 18),
+                  label: Text(l.t('Just view my network (no router)',
+                      'Просто смотреть свою сеть (без роутера)')),
+                ),
+              ),
           ],
         ),
       ),

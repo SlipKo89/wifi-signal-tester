@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wifi_iot/wifi_iot.dart';
@@ -26,23 +27,83 @@ class LocationAccess {
 /// The app must not modify or delete anything on the device.
 class PhoneWifiService {
   final NetworkInfo _info = NetworkInfo();
+  static const _native = MethodChannel('wifi_apk/phone');
 
   Future<PhoneSignal> read() async {
     final ssid = _clean(await _safe(_info.getWifiName));
     final bssid = _clean(await _safe(_info.getWifiBSSID));
     final ip = await _safe(_info.getWifiIP);
     final gateway = await _safe(_info.getWifiGatewayIP);
-    final rssi = await _safe(WiFiForIoTPlugin.getCurrentSignalStrength);
-    final freq = await _safe(WiFiForIoTPlugin.getFrequency);
+    final rssiPlugin = await _safe(WiFiForIoTPlugin.getCurrentSignalStrength);
+    final freqPlugin = await _safe(WiFiForIoTPlugin.getFrequency);
+
+    // Richer facts from the native WifiManager (link speed, standard, security).
+    final n = await _nativeInfo();
+    int? ni(String k) => (n?[k] as num?)?.toInt();
 
     return PhoneSignal(
-      rssiDbm: rssi,
+      rssiDbm: ni('rssi') ?? rssiPlugin,
       ssid: ssid,
       bssid: bssid,
       ipAddress: ip,
       gatewayIp: gateway,
-      frequencyMhz: freq,
+      frequencyMhz: ni('frequency') ?? freqPlugin,
+      linkSpeedMbps: _pos(ni('linkSpeed')),
+      txLinkSpeedMbps: _pos(ni('txLinkSpeed')),
+      rxLinkSpeedMbps: _pos(ni('rxLinkSpeed')),
+      wifiStandard: _standard(ni('standard')),
+      security: _security(ni('security')),
     );
+  }
+
+  Future<Map?> _nativeInfo() async {
+    try {
+      return await _native.invokeMapMethod<String, dynamic>('info');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int? _pos(int? v) => (v == null || v <= 0) ? null : v;
+
+  String? _standard(int? s) {
+    switch (s) {
+      case 1:
+        return 'Wi-Fi 4 legacy (a/b/g)';
+      case 4:
+        return 'Wi-Fi 4 (n)';
+      case 5:
+        return 'Wi-Fi 5 (ac)';
+      case 6:
+        return 'Wi-Fi 6 (ax)';
+      case 7:
+        return '802.11ad';
+      case 8:
+        return 'Wi-Fi 7 (be)';
+      default:
+        return null;
+    }
+  }
+
+  String? _security(int? s) {
+    switch (s) {
+      case 0:
+        return 'Open';
+      case 1:
+        return 'WEP';
+      case 2:
+        return 'WPA/WPA2-PSK';
+      case 3:
+        return 'WPA/WPA2-EAP';
+      case 4:
+        return 'WPA3-SAE';
+      case 5:
+        return 'WPA3-EAP-192';
+      case 6:
+        return 'Enhanced Open (OWE)';
+      default:
+        return null;
+    }
   }
 
   /// Requests location permission (needed for SSID/BSSID) and reports whether

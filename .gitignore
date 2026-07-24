@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+TODO-me.md
 
 # IntelliJ / Android Studio / VS Code
 *.iml

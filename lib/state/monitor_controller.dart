@@ -55,6 +55,9 @@ class MonitorController extends ChangeNotifier {
   /// table — a non-managed / standalone AP, so there's no AP-side signal.
   bool apUnmanaged = false;
 
+  /// Phone-only mode: monitor the device's own Wi-Fi without any router.
+  bool phoneOnly = false;
+
   /// Whether we have the location access Android needs to reveal SSID/BSSID.
   bool locationGranted = true;
   bool locationServiceOn = true;
@@ -132,6 +135,7 @@ class MonitorController extends ChangeNotifier {
   /// succeed). SSID/BSSID need location access, so we ask first.
   Future<void> connect(List<RouterConnection> cfgs) async {
     state = MonitorState.connecting;
+    phoneOnly = false;
     error = null;
     notifyListeners();
 
@@ -166,6 +170,20 @@ class MonitorController extends ChangeNotifier {
         ? null
         : 'Connected to ${_routers.length}/${cfgs.length}. '
             'Failed: ${failures.join('; ')}';
+    notifyListeners();
+    await refresh();
+    startLive();
+  }
+
+  /// Monitor only the phone's own Wi-Fi, no router connection.
+  Future<void> startPhoneOnly() async {
+    final access = await _phone.ensureLocationAccess();
+    locationGranted = access.granted;
+    locationServiceOn = access.serviceOn;
+    await _closeRouters();
+    phoneOnly = true;
+    state = MonitorState.connected;
+    error = null;
     notifyListeners();
     await refresh();
     startLive();
@@ -223,7 +241,8 @@ class MonitorController extends ChangeNotifier {
           _ourMac ??= mac;
         }
       }
-      apUnmanaged = phone.ipAddress != null && stationSignal == null;
+      apUnmanaged =
+          !phoneOnly && phone.ipAddress != null && stationSignal == null;
 
       // Roaming: detect when the serving AP changes.
       final apNow = stationSignal?.interfaceName ?? connectedApName;
@@ -385,6 +404,7 @@ class MonitorController extends ChangeNotifier {
 
   Future<void> disconnect() async {
     stopLive();
+    phoneOnly = false;
     _recordingSessionId = null;
     await _closeRouters();
     phoneSignal = null;

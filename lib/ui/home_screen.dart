@@ -105,6 +105,8 @@ class _HomeScreenState extends State<HomeScreen> {
               switch (v) {
                 case 'audit':
                   open(const AuditScreen());
+                case 'phone_audit':
+                  open(const AuditScreen(phone: true));
                 case 'reference':
                   open(const ReferenceScreen());
                 case 'history':
@@ -118,10 +120,16 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (_) => [
-              if (connected)
+              if (connected && !ctrl.phoneOnly)
                 PopupMenuItem(
                   value: 'audit',
                   child: Text(l.t('Config audit', 'Аудит настроек')),
+                ),
+              if (connected && ctrl.phoneOnly)
+                PopupMenuItem(
+                  value: 'phone_audit',
+                  child: Text(
+                      l.t('Network audit (phone)', 'Аудит сети (телефон)')),
                 ),
               PopupMenuItem(
                 value: 'reference',
@@ -162,6 +170,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       alertThresholdDb: settings.alertThresholdDb,
                     );
                     ctrl.connect(routers);
+                  },
+                  onPhoneOnly: () {
+                    ctrl.applySettings(
+                      pollSeconds: settings.pollSeconds,
+                      historyLength: settings.historyLength,
+                      alertsEnabled: settings.alertsEnabled,
+                      alertThresholdDb: settings.alertThresholdDb,
+                    );
+                    ctrl.startPhoneOnly();
                   },
                 ),
         ),
@@ -251,8 +268,22 @@ class _Dashboard extends StatelessWidget {
                 value: phone?.frequencyMhz?.toString() ?? '—',
                 unit: 'MHz',
                 helpKey: 'band'),
+            if (phone?.linkSpeedMbps != null)
+              MetricTile(
+                  label: l.t('Link', 'Линк'),
+                  value: phone!.linkSpeedMbps.toString(),
+                  unit: 'Mbps',
+                  helpKey: 'rate'),
+            if (phone?.wifiStandard != null)
+              MetricTile(
+                  label: l.t('Standard', 'Стандарт'),
+                  value: phone!.wifiStandard!),
+            if (phone?.security != null)
+              MetricTile(
+                  label: l.t('Security', 'Защита'), value: phone!.security!),
           ],
         ),
+        if (!ctrl.phoneOnly) ...[
         const SizedBox(height: 12),
         SignalCard(
           title: l.t('AP → hears PHONE', 'ТОЧКА → слышит телефон'),
@@ -336,6 +367,7 @@ class _Dashboard extends StatelessWidget {
                   helpKey: 'uptime'),
           ],
         ),
+        ],
         if (ctrl.routerResource != null || ctrl.roamCount > 0) ...[
           const SizedBox(height: 12),
           _RouterHealthCard(ctrl: ctrl),

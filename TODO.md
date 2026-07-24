@@ -101,3 +101,4 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Bump Kotlin from 2.1.0 (build warns it will be dropped; wants ≥2.2.20)
 - [ ] Full i18n framework (gen-l10n/.arb) — currently a lightweight inline
       L10n.t table covers the main strings only
+      
