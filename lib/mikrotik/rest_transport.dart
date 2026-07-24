@@ -1,0 +1,95 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
+
+import 'router_os_transport.dart';
+
+/// RouterOS 7.1+ REST API transport (HTTPS by default).
+///
+/// Menu path `/interface/wireless/registration-table` maps to
+/// `https://host/rest/interface/wireless/registration-table`.
+class RestTransport implements RouterOsTransport {
+  final String host;
+  final int port;
+  final String username;
+  final String password;
+  final bool useTls;
+  final Duration timeout;
+
+  late final http.Client _client;
+  late final String _authHeader;
+
+  RestTransport({
+    required this.host,
+    required this.username,
+    required this.password,
+    this.useTls = true,
+    int? port,
+    this.timeout = const Duration(seconds: 8),
+  }) : port = port ?? (useTls ? 443 : 80);
+
+  @override
+  String get kind => 'REST';
+
+  String get _scheme => useTls ? 'https' : 'http';
+
+  @override
+  Future<void> connect() async {
+    // Accept self-signed certs — routers on a LAN almost always use them.
+    final io = HttpClient();
+    io.badCertificateCallback = (_, __, ___) => true;
+    io.connectionTimeout = timeout;
+    _client = IOClient(io);
+    _authHeader =
+        'Basic ${base64Encode(utf8.encode('$username:$password'))}';
+
+    // A cheap authenticated probe to fail fast on wrong credentials / no REST.
+    final uri = Uri.parse('$_scheme://$host:$port/rest/system/identity');
+    final resp = await _client
+        .get(uri, headers: {'Authorization': _authHeader})
+        .timeout(timeout);
+    if (resp.statusCode == 401) {
+      throw RouterOsException('Authentication failed (401)');
+    }
+    if (resp.statusCode >= 400) {
+      throw RouterOsException('REST API not available (${resp.statusCode})');
+    }
+  }
+
+  @override
+  Future<List<Map<String, String>>> read(
+    String menuPath, {
+    Map<String, String>? filters,
+  }) async {
+    var uri = Uri.parse('$_scheme://$host:$port/rest$menuPath');
+    if (filters != null && filters.isNotEmpty) {
+      uri = uri.replace(queryParameters: filters);
+    }
+    final resp = await _client
+        .get(uri, headers: {'Authorization': _authHeader})
+        .timeout(timeout);
+
+    if (resp.statusCode == 401) {
+      throw RouterOsException('Authentication failed (401)');
+    }
+    if (resp.statusCode >= 400) {
+      throw RouterOsException('GET $menuPath → HTTP ${resp.statusCode}');
+    }
+
+    final decoded = jsonDecode(resp.body);
+    if (decoded is! List) return const [];
+    return decoded
+        .whereType<Map>()
+        .map((row) => row.map(
+              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+            ))
+        .toList();
+  }
+
+  @override
+  Future<void> close() async {
+    _client.close();
+  }
+}

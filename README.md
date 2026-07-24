@@ -1,0 +1,126 @@
+# MikroTik Wi-Fi Signal Tester
+
+*Русская версия — [README.ru.md](README.ru.md)*
+
+A Flutter app (Android now, iOS later) for **testing Wi-Fi from both sides**.
+Regular analyzers show only how your phone hears the access point. For real
+site-survey work you also need to know **how the access point hears your
+device** — signal, SNR, rates. This app reads that from a MikroTik (running
+CAPsMAN or plain Wi-Fi) **read-only**, for **your device's MAC only**, and puts
+it next to your phone's own readings.
+
+```
+┌──────────────────────────────────────────────┐
+│ Wi-Fi Signal Tester            API · WifiWave2 │
+├──────────────────────────────────────────────┤
+│ HomeNet_5G     192.168.88.42     Δ AP−phone    │
+│ e8:9f:..:1a                        +6 dB       │
+├──────────────────────────────────────────────┤
+│ PHONE → hears AP                               │
+│  -48 dBm  ██████████████░░░░                   │
+│  SNR est. 47 dB   Band 5 GHz   Freq 5180 MHz   │
+├──────────────────────────────────────────────┤
+│ AP → hears PHONE                               │
+│  -42 dBm  ████████████████░░                   │
+│  SNR 51 dB  TX 866Mbps  RX 780Mbps  Ch0 -44    │
+├──────────────────────────────────────────────┤
+│  ╱╲    signal history   ── phone  ── AP        │
+│ ╱  ╲__╱╲___╱──                                 │
+└──────────────────────────────────────────────┘
+```
+
+## Features
+
+- **Two-sided view**: phone RSSI vs. the AP's signal for your station, plus the
+  delta between them.
+- **From MikroTik**: `signal-strength` (dBm), `signal-to-noise` (SNR),
+  tx/rx-rate, per-MIMO-chain signal, CCQ.
+- **Auto everything**: detects the wireless stack (WifiWave2 / CAPsMAN new /
+  CAPsMAN legacy / classic) and the transport (REST → binary API).
+- **Randomized-MAC safe**: finds your station by IP→MAC via ARP/DHCP, so
+  Android 10+ MAC randomization doesn't break it.
+- **Read-only & scoped**: only `print`/`GET`, only your MAC.
+- **Live**: polls every ~2 s with a signal sparkline for walk-around testing.
+
+## Requirements (build machine — macOS)
+
+You need Flutter, a JDK 17, and the Android SDK. On this Mac, Homebrew and Xcode
+are present but **Flutter, the Android SDK and a modern JDK are not** — install
+them:
+
+```bash
+# 1) JDK 17 (the bundled Java 8 is too old for the Android toolchain)
+brew install --cask temurin@17
+
+# 2) Flutter SDK (brings Dart with it)
+brew install --cask flutter
+
+# 3) Android SDK + platform tools (Android Studio is the simplest source)
+brew install --cask android-studio
+#    then launch Android Studio once → it installs the SDK, or use the SDK Manager
+
+# 4) Point tooling at the JDK and accept Android licenses
+flutter config --jdk-dir "$(/usr/libexec/java_home -v 17)"
+flutter doctor --android-licenses
+flutter doctor              # fix anything still flagged
+```
+
+> Prefer no Android Studio? Install just the command-line tools with
+> `brew install --cask android-commandlinetools` and run
+> `sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"`.
+
+## Build & run
+
+```bash
+cd wifi-apk
+./scripts/bootstrap.sh        # generates android/ & ios/, runs flutter pub get
+
+# add permissions once — see docs/android-setup.md
+
+flutter run                   # on a connected phone (USB debugging on)
+flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.apk
+```
+
+Copy that `.apk` to your Android device to install it.
+
+## MikroTik side
+
+Create a read-only user and enable the API/REST service — full steps in
+[docs/mikrotik-readonly-user.md](docs/mikrotik-readonly-user.md). Short version:
+
+```
+/user group add name=monitor policy=read,api,rest-api,winbox,test
+/user add name=monitor group=monitor password=CHANGE_ME
+/ip service enable www-ssl     # for REST
+/ip service enable api         # for binary API
+```
+
+## How it works
+
+See [docs/architecture.md](docs/architecture.md). In one line: read the phone's
+IP → map IP→MAC on the router via ARP/DHCP → read the registration table for
+that MAC → show both sides side by side.
+
+## Security — read-only on **both** sides
+
+- **Router:** no write path exists in the code; the transport interface has only
+  `read()`. Pair it with a read-only RouterOS user so writes are impossible even
+  in principle.
+- **Device:** the app only reads the Wi-Fi chip (RSSI, SSID, frequency). It never
+  changes, connects, disconnects or forgets any network, requests no
+  `CHANGE_WIFI_STATE` permission, and touches no files, contacts or media. The
+  only thing it stores is *its own* router credentials in the Keystore.
+- Credentials are stored in the Android Keystore / iOS Keychain, never in plain
+  preferences.
+- Self-signed TLS is accepted (LAN assumption) — this will become a visible
+  toggle (see [TODO.md](TODO.md)).
+
+## Project docs
+
+- [CHANGELOG.md](CHANGELOG.md) — versioned history (SemVer)
+- [TODO.md](TODO.md) — backlog / roadmap
+- [docs/](docs/) — architecture, MikroTik & Android setup
+
+## License
+
+TBD.
