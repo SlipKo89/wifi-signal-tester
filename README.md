@@ -123,4 +123,4 @@ that MAC → show both sides side by side.
 
 ## License
 
-TBD.
+[MIT](LICENSE) © 2026 SlipKo

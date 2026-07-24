@@ -122,4 +122,4 @@ flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.ap
 
 ## Лицензия
 
-Уточняется.
+[MIT](LICENSE) © 2026 SlipKo

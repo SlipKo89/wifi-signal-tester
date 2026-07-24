@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data — connection is judged by IP, SSID is shown when available. The Android
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
+### Added
+- MIT license.
+- **AP-side SNR** even on legacy CAPsMAN, which doesn't report it: the app reads
+  each router's radio noise floor (`monitor once`) and estimates SNR as
+  rx-signal − noise-floor (shown as "SNR est."). The phone-side SNR now uses the
+  same measured noise floor instead of a fixed −95 dBm assumption. Added a
+  read-only `command()` to the transports for `monitor`.
+
 ### Fixed
 - **No more stale AP-side numbers.** The MAC is re-resolved from ARP every poll
   (the phone gets a new randomized MAC when it roams to another SSID), and when

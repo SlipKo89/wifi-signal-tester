@@ -17,6 +17,13 @@ abstract class RouterOsTransport {
     Map<String, String>? filters,
   });
 
+  /// Runs a read-only command that isn't a plain print — e.g. `monitor once`
+  /// to read a radio's noise floor. Params become `=key=value` / JSON fields.
+  Future<List<Map<String, String>>> command(
+    String path,
+    Map<String, String> params,
+  );
+
   Future<void> close();
 
   /// Human-readable transport name for the UI ("REST" / "API").

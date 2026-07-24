@@ -130,6 +130,33 @@ class BinaryApiTransport implements RouterOsTransport {
   }
 
   @override
+  Future<List<Map<String, String>>> command(
+    String path,
+    Map<String, String> params,
+  ) async {
+    final words = <String>[path];
+    params.forEach((k, v) => words.add('=$k=$v'));
+    _writeSentence(words);
+
+    final rows = <Map<String, String>>[];
+    while (true) {
+      final sentence = await _readSentence();
+      if (sentence.isEmpty) continue;
+      final tag = sentence.first;
+      if (tag == '!re') {
+        rows.add(_parseAttributes(sentence.skip(1)));
+      } else if (tag == '!done') {
+        break;
+      } else if (tag == '!trap') {
+        throw RouterOsException(_attr(sentence, 'message') ?? 'trap');
+      } else if (tag == '!fatal') {
+        throw RouterOsException('fatal: ${sentence.skip(1).join(' ')}');
+      }
+    }
+    return rows;
+  }
+
+  @override
   Future<void> close() async {
     await _socket?.close();
     _socket?.destroy();

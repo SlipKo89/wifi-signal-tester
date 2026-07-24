@@ -89,6 +89,31 @@ class RestTransport implements RouterOsTransport {
   }
 
   @override
+  Future<List<Map<String, String>>> command(
+    String path,
+    Map<String, String> params,
+  ) async {
+    final uri = Uri.parse('$_scheme://$host:$port/rest$path');
+    final resp = await _client
+        .post(uri,
+            headers: {
+              'Authorization': _authHeader,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(params))
+        .timeout(timeout);
+    if (resp.statusCode >= 400) {
+      throw RouterOsException('POST $path → HTTP ${resp.statusCode}');
+    }
+    final decoded = jsonDecode(resp.body);
+    Map<String, String> asRow(Map row) =>
+        row.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
+    if (decoded is List) return decoded.whereType<Map>().map(asRow).toList();
+    if (decoded is Map) return [asRow(decoded)];
+    return const [];
+  }
+
+  @override
   Future<void> close() async {
     _client.close();
   }

@@ -65,12 +65,23 @@ class MikrotikService {
   /// first next time (roaming-friendly).
   WirelessStack? _stack;
 
+  /// Measured noise floor (dBm) of this router's own radios, per band. Used to
+  /// estimate SNR where the registration table doesn't report it (CAPsMAN).
+  int? _nf2g;
+  int? _nf5g;
+
   WirelessStack? get stack => _stack;
   String? get transportKind => _transport?.kind;
 
   /// AP name for a BSSID the phone reports, if this router owns that radio.
   String? apNameForBssid(String? bssid) =>
       bssid == null ? null : _bssidToAp[bssid.toLowerCase()];
+
+  /// Noise floor for the band of [mhz], falling back to the other band.
+  int? noiseFloorForFreq(int? mhz) {
+    if (mhz != null && mhz >= 4900) return _nf5g ?? _nf2g;
+    return _nf2g ?? _nf5g;
+  }
 
   /// Connects using the preferred transport, falling back to the other.
   Future<void> connect(RouterConnection cfg) async {
@@ -96,6 +107,7 @@ class MikrotikService {
         _transport = t;
         await _detectStacks();
         await _loadBssidMap();
+        await _loadNoiseFloor();
         return;
       } catch (e) {
         lastError = e;
@@ -161,6 +173,44 @@ class MikrotikService {
     await harvest('/caps-man/interface', 'name');
     await harvest('/interface/wireless', 'name');
     await harvest('/interface/wifi', 'name');
+  }
+
+  /// Reads the noise floor of this router's own radios via `monitor once`.
+  /// Best-effort; a manager with no local radios simply yields nothing.
+  Future<void> _loadNoiseFloor() async {
+    _nf2g = null;
+    _nf5g = null;
+    for (final menu in ['/interface/wireless', '/interface/wifi']) {
+      try {
+        for (final iface in await _transport!.read(menu)) {
+          final name = iface['name'];
+          if (name == null || name.isEmpty) continue;
+          try {
+            final mon = await _transport!
+                .command('$menu/monitor', {'.id': name, 'once': ''});
+            if (mon.isEmpty) continue;
+            final nf = _parseInt(mon.first['noise-floor']);
+            if (nf == null) continue;
+            final is5 = '${iface['band']} $name'.contains('5');
+            if (is5) {
+              _nf5g = nf;
+            } else {
+              _nf2g = nf;
+            }
+          } catch (_) {
+            // monitor not supported for this interface — skip.
+          }
+        }
+      } catch (_) {
+        // Menu absent.
+      }
+    }
+  }
+
+  int? _parseInt(String? raw) {
+    if (raw == null) return null;
+    final m = RegExp(r'-?\d+').firstMatch(raw);
+    return m == null ? null : int.tryParse(m.group(0)!);
   }
 
   /// Resolves our MAC from our IP via ARP, then DHCP leases as a fallback.

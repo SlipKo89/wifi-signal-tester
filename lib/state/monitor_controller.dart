@@ -70,6 +70,32 @@ class MonitorController extends ChangeNotifier {
     return ap - ph;
   }
 
+  /// AP-side SNR: from the registration table if reported, otherwise estimated
+  /// as rx-signal − the serving router's measured noise floor (CAPsMAN doesn't
+  /// report SNR directly).
+  int? get apSnr {
+    final s = stationSignal;
+    if (s == null) return null;
+    if (s.snr != null) return s.snr;
+    final nf = _serving?.noiseFloorForFreq(phoneSignal?.frequencyMhz);
+    if (s.signalDbm != null && nf != null) return s.signalDbm! - nf;
+    return null;
+  }
+
+  bool get apSnrIsEstimate => stationSignal?.snr == null;
+
+  /// Phone-side SNR using the router's real noise floor when we have it, else
+  /// a −95 dBm assumption.
+  int? get phoneSnr {
+    final rssi = phoneSignal?.rssiDbm;
+    if (rssi == null) return null;
+    final nf = _primary?.noiseFloorForFreq(phoneSignal?.frequencyMhz) ?? -95;
+    return rssi - nf;
+  }
+
+  bool get phoneSnrIsEstimate =>
+      (_primary?.noiseFloorForFreq(phoneSignal?.frequencyMhz)) == null;
+
   /// Connects to every configured router (best-effort — at least one must
   /// succeed). SSID/BSSID need location access, so we ask first.
   Future<void> connect(List<RouterConnection> cfgs) async {

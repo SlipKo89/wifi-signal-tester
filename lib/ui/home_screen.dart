@@ -110,10 +110,10 @@ class _Dashboard extends StatelessWidget {
           signalDbm: phone?.rssiDbm,
           metrics: [
             MetricTile(
-              label: 'SNR est.',
-              value: phone?.estimatedSnr?.toString() ?? '—',
+              label: ctrl.phoneSnrIsEstimate ? 'SNR est.' : 'SNR',
+              value: ctrl.phoneSnr?.toString() ?? '—',
               unit: 'dB',
-              color: AppTheme.snrColor(phone?.estimatedSnr),
+              color: AppTheme.snrColor(ctrl.phoneSnr),
             ),
             MetricTile(label: 'Band', value: phone?.band ?? '—'),
             MetricTile(
@@ -140,10 +140,10 @@ class _Dashboard extends StatelessWidget {
             if (ctrl.servingHost != null && ctrl.routerCount > 1)
               MetricTile(label: 'Via', value: ctrl.servingHost!),
             MetricTile(
-              label: 'SNR',
-              value: ap?.snr?.toString() ?? '—',
+              label: ctrl.apSnrIsEstimate ? 'SNR est.' : 'SNR',
+              value: ctrl.apSnr?.toString() ?? '—',
               unit: 'dB',
-              color: AppTheme.snrColor(ap?.snr),
+              color: AppTheme.snrColor(ctrl.apSnr),
             ),
             MetricTile(label: 'TX rate', value: ap?.txRate ?? '—'),
             MetricTile(label: 'RX rate', value: ap?.rxRate ?? '—'),
