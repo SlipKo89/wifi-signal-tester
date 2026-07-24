@@ -19,10 +19,10 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] **Threshold alerts** — user-set targets (signal / SNR / delta); colour the
       dashboard good/warn/bad and vibrate+beep when a metric crosses the line,
       for hands-free walk testing
-- [ ] **Asymmetry diagnosis with advice** — turn the AP−phone delta into a
-      verdict, e.g. "AP hears you 12 dB worse → lower AP TX power / hidden-node",
-      "strong signal but low rate/CCQ → interference". Rule-based hints, not just
-      raw numbers
+- [~] **Asymmetry diagnosis with advice** — turn the AP−phone delta into a
+      verdict. Done: tap the Δ badge for explanation + rule-based advice.
+      Left: fold in rate/CCQ ("strong signal but low rate → interference") and
+      surface a short inline verdict without tapping
 
 ## Next (v0.2)
 - [ ] Per-MIMO-chain view (signal-strength-ch0/ch1) with bar visualization

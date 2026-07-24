@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
 ### Added
+- Tap the Δ AP−phone badge for an explanation of the signal-asymmetry metric
+  plus rule-based advice from the current numbers (e.g. "AP hears you 24 dB
+  weaker → lower AP TX power / move closer").
 - MIT license.
 - **AP-side SNR** even on legacy CAPsMAN, which doesn't report it: the app reads
   each router's radio noise floor (`monitor once`) and estimates SNR as

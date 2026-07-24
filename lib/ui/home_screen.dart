@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/phone_signal.dart';
 import '../state/monitor_controller.dart';
 import 'about_dialog.dart';
+import 'delta_info.dart';
 import 'theme.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/metric_tile.dart';
@@ -100,6 +101,8 @@ class _Dashboard extends StatelessWidget {
         _ConnectionSummary(
           phone: phone,
           delta: ctrl.signalDelta,
+          apSignalDbm: ap?.signalDbm,
+          apName: ap?.interfaceName ?? ctrl.connectedApName,
           locationIssue: !ctrl.locationGranted || !ctrl.locationServiceOn,
         ),
         const SizedBox(height: 12),
@@ -169,10 +172,14 @@ class _Dashboard extends StatelessWidget {
 class _ConnectionSummary extends StatelessWidget {
   final PhoneSignal? phone;
   final int? delta;
+  final int? apSignalDbm;
+  final String? apName;
   final bool locationIssue;
   const _ConnectionSummary({
     required this.phone,
     required this.delta,
+    required this.apSignalDbm,
+    required this.apName,
     required this.locationIssue,
   });
 
@@ -211,7 +218,16 @@ class _ConnectionSummary extends StatelessWidget {
                     ],
                   ),
                 ),
-                _DeltaBadge(delta: delta),
+                _DeltaBadge(
+                  delta: delta,
+                  onTap: () => showDeltaInfo(
+                    context,
+                    phoneRssi: phone?.rssiDbm,
+                    apSignal: apSignalDbm,
+                    delta: delta,
+                    apName: apName,
+                  ),
+                ),
               ],
             ),
             if (showHint) ...[
@@ -252,26 +268,39 @@ class _ConnectionSummary extends StatelessWidget {
 
 class _DeltaBadge extends StatelessWidget {
   final int? delta;
-  const _DeltaBadge({required this.delta});
+  final VoidCallback onTap;
+  const _DeltaBadge({required this.delta, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final has = delta != null;
     final sign = has && delta! > 0 ? '+' : '';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          const Text('Δ AP−phone',
-              style: TextStyle(fontSize: 9, color: Color(0xFF7D8590))),
-          Text(has ? '$sign$delta dB' : '—',
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w800)),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Δ AP−phone',
+                    style: TextStyle(fontSize: 9, color: Color(0xFF7D8590))),
+                const SizedBox(width: 3),
+                Icon(Icons.info_outline,
+                    size: 10, color: AppTheme.accent.withValues(alpha: 0.8)),
+              ],
+            ),
+            Text(has ? '$sign$delta dB' : '—',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w800)),
+          ],
+        ),
       ),
     );
   }
