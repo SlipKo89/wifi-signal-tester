@@ -13,6 +13,7 @@ import 'history_screen.dart';
 import 'reference_screen.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
+import 'whats_new.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/signal_card.dart';
@@ -22,8 +23,20 @@ String _fmtKbps(int kbps) => kbps >= 1000
     ? '${(kbps / 1000).toStringAsFixed(1)} Mbps'
     : '$kbps Kbps';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Announce new features once after an update.
+    maybeShowWhatsNew(context, context.read<SettingsController>());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +111,8 @@ class HomeScreen extends StatelessWidget {
                   open(const HistoryScreen());
                 case 'settings':
                   open(const SettingsScreen());
+                case 'changelog':
+                  open(const ChangelogScreen());
                 case 'about':
                   showAboutSheet(context);
               }
@@ -119,6 +134,10 @@ class HomeScreen extends StatelessWidget {
               PopupMenuItem(
                 value: 'settings',
                 child: Text(l.t('Settings', 'Настройки')),
+              ),
+              PopupMenuItem(
+                value: 'changelog',
+                child: Text(l.t('Changelog', 'История версий')),
               ),
               PopupMenuItem(
                 value: 'about',

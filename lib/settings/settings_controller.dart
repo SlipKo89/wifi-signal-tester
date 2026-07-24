@@ -14,6 +14,7 @@ class SettingsController extends ChangeNotifier {
   int _historyLength = 60;
   bool _alertsEnabled = false;
   int _alertThresholdDb = 12;
+  String _lastSeenVersion = '';
 
   String get lang => _lang;
   ThemeMode get themeMode => _themeMode;
@@ -21,6 +22,9 @@ class SettingsController extends ChangeNotifier {
   int get historyLength => _historyLength;
   bool get alertsEnabled => _alertsEnabled;
   int get alertThresholdDb => _alertThresholdDb;
+
+  /// Last app version whose "What's new" the user has already seen ('' = never).
+  String get lastSeenVersion => _lastSeenVersion;
 
   /// Resolved locale for MaterialApp (null = follow system).
   Locale? get locale => _lang == 'system' ? null : Locale(_lang);
@@ -46,7 +50,13 @@ class SettingsController extends ChangeNotifier {
     _historyLength = p.getInt('historyLength') ?? 60;
     _alertsEnabled = p.getBool('alertsEnabled') ?? false;
     _alertThresholdDb = p.getInt('alertThresholdDb') ?? 12;
+    _lastSeenVersion = p.getString('lastSeenVersion') ?? '';
     notifyListeners();
+  }
+
+  Future<void> setLastSeenVersion(String v) async {
+    _lastSeenVersion = v;
+    await _prefs?.setString('lastSeenVersion', v);
   }
 
   Future<void> setAlertsEnabled(bool v) async {

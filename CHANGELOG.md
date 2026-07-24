@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **In-app changelog** (⋮ → Changelog): browsable, bilingual release notes.
+- **"What's new" popup**: after an app update, the new version's highlights are
+  shown once at startup (skipped on a fresh install).
+
 ## [0.2.0] - 2026-07-24
 
 ### Added
