@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
 ### Added
+- **Config audit** (⋮ menu, when connected): reads Wi-Fi config read-only from
+  the routers and flags common mistakes for non-experts — open networks,
+  WPA1/TKIP/WEP, 2.4 GHz 40 MHz, WMM off, no country, legacy basic rates, very
+  high TX power — each with a plain explanation and a suggested fix. Skips
+  CAPsMAN-managed radios (their local config is overridden), so it doesn't
+  raise false positives.
+- **Reference / help for the numbers**: tap any metric for a sheet explaining
+  it with good/ok/bad ranges, plus a browsable Reference screen with all
+  metrics. Bilingual.
 - **Settings screen** (⋮ menu): language (System / English / Русский, applied
   live), poll interval and chart-history length.
 - **Persistent measurement history**: a Record button on the dashboard stores

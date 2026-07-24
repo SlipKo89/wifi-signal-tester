@@ -68,6 +68,7 @@ class MonitorController extends ChangeNotifier {
   bool get isLive => _timer != null;
 
   int get routerCount => _routers.length;
+  List<MikrotikService> get routers => List.unmodifiable(_routers);
   MikrotikService? get _primary => _serving ?? (_routers.isEmpty ? null : _routers.first);
   String? get stackLabel => _primary?.stack?.label;
   String? get transportKind => _primary?.transportKind;

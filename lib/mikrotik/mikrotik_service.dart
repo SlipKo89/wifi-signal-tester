@@ -77,6 +77,13 @@ class MikrotikService {
   String? apNameForBssid(String? bssid) =>
       bssid == null ? null : _bssidToAp[bssid.toLowerCase()];
 
+  /// Reads any menu directly (read-only) — used by the config audit.
+  Future<List<Map<String, String>>> readMenu(String path) async {
+    final t = _transport;
+    if (t == null) throw RouterOsException('Not connected');
+    return t.read(path);
+  }
+
   /// Noise floor for the band of [mhz], falling back to the other band.
   int? noiseFloorForFreq(int? mhz) {
     if (mhz != null && mhz >= 4900) return _nf5g ?? _nf2g;

@@ -7,8 +7,10 @@ import '../models/phone_signal.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import 'about_dialog.dart';
+import 'audit_screen.dart';
 import 'delta_info.dart';
 import 'history_screen.dart';
+import 'reference_screen.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
 import 'widgets/connection_form.dart';
@@ -67,6 +69,10 @@ class HomeScreen extends StatelessWidget {
           PopupMenuButton<String>(
             onSelected: (v) {
               switch (v) {
+                case 'audit':
+                  open(const AuditScreen());
+                case 'reference':
+                  open(const ReferenceScreen());
                 case 'history':
                   open(const HistoryScreen());
                 case 'settings':
@@ -76,6 +82,15 @@ class HomeScreen extends StatelessWidget {
               }
             },
             itemBuilder: (_) => [
+              if (connected)
+                PopupMenuItem(
+                  value: 'audit',
+                  child: Text(l.t('Config audit', 'Аудит настроек')),
+                ),
+              PopupMenuItem(
+                value: 'reference',
+                child: Text(l.t('Reference', 'Справка')),
+              ),
               PopupMenuItem(
                 value: 'history',
                 child: Text(l.t('History', 'История')),
@@ -174,12 +189,17 @@ class _Dashboard extends StatelessWidget {
               value: ctrl.phoneSnr?.toString() ?? '—',
               unit: 'dB',
               color: AppTheme.snrColor(ctrl.phoneSnr),
+              helpKey: 'snr',
             ),
-            MetricTile(label: 'Band', value: phone?.band ?? '—'),
+            MetricTile(
+                label: l.t('Band', 'Диапазон'),
+                value: phone?.band ?? '—',
+                helpKey: 'band'),
             MetricTile(
                 label: 'Freq',
                 value: phone?.frequencyMhz?.toString() ?? '—',
-                unit: 'MHz'),
+                unit: 'MHz',
+                helpKey: 'band'),
           ],
         ),
         const SizedBox(height: 12),
@@ -213,32 +233,56 @@ class _Dashboard extends StatelessWidget {
               value: ctrl.apSnr?.toString() ?? '—',
               unit: 'dB',
               color: AppTheme.snrColor(ctrl.apSnr),
+              helpKey: 'snr',
             ),
             if (ctrl.downKbps != null)
               MetricTile(
                   label: l.t('Down', 'Загрузка'),
-                  value: _fmtKbps(ctrl.downKbps!)),
+                  value: _fmtKbps(ctrl.downKbps!),
+                  helpKey: 'throughput'),
             if (ctrl.upKbps != null)
               MetricTile(
-                  label: l.t('Up', 'Отдача'), value: _fmtKbps(ctrl.upKbps!)),
-            MetricTile(label: 'TX rate', value: ap?.txRate ?? '—'),
-            MetricTile(label: 'RX rate', value: ap?.rxRate ?? '—'),
+                  label: l.t('Up', 'Отдача'),
+                  value: _fmtKbps(ctrl.upKbps!),
+                  helpKey: 'throughput'),
+            MetricTile(
+                label: 'TX rate', value: ap?.txRate ?? '—', helpKey: 'rate'),
+            MetricTile(
+                label: 'RX rate', value: ap?.rxRate ?? '—', helpKey: 'rate'),
             if (ap?.pThroughputKbps != null)
               MetricTile(
                   label: l.t('Est. thr', 'Оц. пропуск'),
-                  value: _fmtKbps(ap!.pThroughputKbps!)),
+                  value: _fmtKbps(ap!.pThroughputKbps!),
+                  helpKey: 'throughput'),
             if (ap?.signalCh0 != null)
               MetricTile(
-                  label: 'Ch0', value: '${ap!.signalCh0}', unit: 'dBm'),
+                  label: 'Ch0',
+                  value: '${ap!.signalCh0}',
+                  unit: 'dBm',
+                  helpKey: 'signal'),
             if (ap?.signalCh1 != null)
               MetricTile(
-                  label: 'Ch1', value: '${ap!.signalCh1}', unit: 'dBm'),
+                  label: 'Ch1',
+                  value: '${ap!.signalCh1}',
+                  unit: 'dBm',
+                  helpKey: 'signal'),
             if (ap?.txCcq != null)
-              MetricTile(label: 'TX CCQ', value: '${ap!.txCcq}', unit: '%'),
+              MetricTile(
+                  label: 'TX CCQ',
+                  value: '${ap!.txCcq}',
+                  unit: '%',
+                  helpKey: 'ccq'),
             if (ap?.rxCcq != null)
-              MetricTile(label: 'RX CCQ', value: '${ap!.rxCcq}', unit: '%'),
+              MetricTile(
+                  label: 'RX CCQ',
+                  value: '${ap!.rxCcq}',
+                  unit: '%',
+                  helpKey: 'ccq'),
             if (ap?.uptime != null)
-              MetricTile(label: l.t('Uptime', 'Аптайм'), value: ap!.uptime!),
+              MetricTile(
+                  label: l.t('Uptime', 'Аптайм'),
+                  value: ap!.uptime!,
+                  helpKey: 'uptime'),
           ],
         ),
         const SizedBox(height: 12),
