@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,16 @@ import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Bundled font — declare its licence for the in-app licences page.
+  LicenseRegistry.addLicense(() async* {
+    yield const LicenseEntryWithLineBreaks(
+      ['Noto Sans'],
+      'Noto Sans is licensed under the SIL Open Font License, Version 1.1.\n'
+      'https://openfontlicense.org',
+    );
+  });
+
   final settings = SettingsController();
   await settings.load();
   runApp(WifiApkApp(settings: settings));

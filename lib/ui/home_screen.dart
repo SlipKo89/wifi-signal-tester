@@ -9,6 +9,7 @@ import '../state/monitor_controller.dart';
 import 'about_dialog.dart';
 import 'audit_screen.dart';
 import 'delta_info.dart';
+import 'devices_screen.dart';
 import 'history_screen.dart';
 import 'reference_screen.dart';
 import 'settings_screen.dart';
@@ -107,6 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   open(const AuditScreen());
                 case 'phone_audit':
                   open(const AuditScreen(phone: true));
+                case 'devices':
+                  open(const DevicesScreen());
                 case 'reference':
                   open(const ReferenceScreen());
                 case 'history':
@@ -130,6 +133,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   value: 'phone_audit',
                   child: Text(
                       l.t('Network audit (phone)', 'Аудит сети (телефон)')),
+                ),
+              if (connected && !ctrl.phoneOnly)
+                PopupMenuItem(
+                  value: 'devices',
+                  child: Text(l.t('Devices', 'Устройства')),
                 ),
               PopupMenuItem(
                 value: 'reference',

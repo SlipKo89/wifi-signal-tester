@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Inspect any device** (⋮ → Devices): pick a device from the routers' DHCP
+  leases (by IP / name / MAC) and see how the APs hear it — signal, AP, rates,
+  uptime. Great for checking a TV, laptop or a neighbour's phone.
+- **Open-source licenses** page (About → Licenses) listing all bundled
+  components; the bundled Noto Sans font's OFL licence is registered.
+- "Built with AI" note in About and the READMEs.
+- A small easter egg (tap the version in About seven times).
 - **Phone-only mode** — "Just view my network (no router)" on the connection
   form shows the device's own Wi-Fi (SSID, band, channel, signal, link speed,
   standard, security) without connecting to any MikroTik.

@@ -11,8 +11,49 @@ void showAboutSheet(BuildContext context) {
   showDialog<void>(context: context, builder: (_) => const _AboutDialog());
 }
 
-class _AboutDialog extends StatelessWidget {
+class _AboutDialog extends StatefulWidget {
   const _AboutDialog();
+
+  @override
+  State<_AboutDialog> createState() => _AboutDialogState();
+}
+
+class _AboutDialogState extends State<_AboutDialog> {
+  int _taps = 0;
+
+  void _tapVersion() {
+    _taps++;
+    if (_taps >= 7) {
+      _taps = 0;
+      HapticFeedback.mediumImpact();
+      _showEgg();
+    }
+  }
+
+  void _showEgg() {
+    final l = context.read<SettingsController>().l;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text(l.t('73! 📡', '73! 📡')),
+        content: Text(
+          l.t(
+              '»)) ))) • ((( (( — may your SNR be high and your delta near '
+                  'zero. Made by SlipKo & an AI, over many dBm.',
+              '»)) ))) • ((( (( — пусть SNR будет высоким, а дельта — около '
+                  'нуля. Сделано SlipKo и ИИ, на многих dBm.'),
+          style: const TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l.t('Nice', 'Круто')),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,16 +79,21 @@ class _AboutDialog extends StatelessWidget {
                       color: AppTheme.accent, size: 26),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(kAppName,
+                      const Text(kAppName,
                           style: TextStyle(
                               fontSize: 17, fontWeight: FontWeight.w700)),
-                      Text('v$kAppVersion',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFF7D8590))),
+                      // Tap 7× for an easter egg.
+                      GestureDetector(
+                        onTap: _tapVersion,
+                        behavior: HitTestBehavior.opaque,
+                        child: const Text('v$kAppVersion',
+                            style: TextStyle(
+                                fontSize: 12, color: Color(0xFF7D8590))),
+                      ),
                     ],
                   ),
                 ),
@@ -68,6 +114,22 @@ class _AboutDialog extends StatelessWidget {
                       'устройство слышит точку. Только чтение, только по твоему '
                       'MAC.'),
               style: const TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.smart_toy_outlined,
+                    size: 13, color: Color(0xFF7D8590)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    l.t('Built with Claude (AI): code, docs and design.',
+                        'Собрано с Claude (ИИ): код, документация и дизайн.'),
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF7D8590)),
+                  ),
+                ),
+              ],
             ),
             const Divider(height: 28, color: Color(0xFF232B36)),
             Text(l.t('AUTHOR', 'АВТОР'),
@@ -92,13 +154,24 @@ class _AboutDialog extends StatelessWidget {
               label: 'Telegram $kAuthorTelegram',
               copyText: kAuthorTelegram,
             ),
-            const SizedBox(height: 18),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(l.t('Close', 'Закрыть')),
-              ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton(
+                  onPressed: () => showLicensePage(
+                    context: context,
+                    applicationName: kAppName,
+                    applicationVersion: 'v$kAppVersion',
+                    applicationLegalese: '© 2026 SlipKo · MIT',
+                  ),
+                  child: Text(l.t('Licenses', 'Лицензии')),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(l.t('Close', 'Закрыть')),
+                ),
+              ],
             ),
           ],
         ),

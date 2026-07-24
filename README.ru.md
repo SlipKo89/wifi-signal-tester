@@ -120,6 +120,13 @@ flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.ap
 - [TODO.md](TODO.md) — бэклог / роадмап
 - [docs/](docs/) — архитектура, настройка MikroTik и Android
 
+## Сделано с ИИ
+
+Это приложение — код, документация и дизайн — собрано с Claude (ИИ от Anthropic)
+в паре с автором.
+
 ## Лицензия
 
 [MIT](LICENSE) © 2026 SlipKo
+
+Лицензии open-source компонентов — в приложении: About → Лицензии.

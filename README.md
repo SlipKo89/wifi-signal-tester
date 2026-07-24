@@ -121,6 +121,13 @@ that MAC → show both sides side by side.
 - [TODO.md](TODO.md) — backlog / roadmap
 - [docs/](docs/) — architecture, MikroTik & Android setup
 
+## Built with AI
+
+This app — code, documentation and design — was built with Claude (an AI) by
+Anthropic, working alongside the author.
+
 ## License
 
 [MIT](LICENSE) © 2026 SlipKo
+
+Open-source components are listed in-app under About → Licenses.

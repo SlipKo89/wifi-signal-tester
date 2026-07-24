@@ -54,6 +54,12 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       topic wireless/caps" hint. Deferred
 - [ ] Roaming handoff time (proper reconnect-speed measurement, not just count)
 - [ ] Verify PDF export on a real device (built, not yet field-tested)
+- [x] Phone-only mode + phone-side audit (native WifiManager facts)
+- [x] Inspect third-party devices from DHCP leases (AP-side signal)
+- [x] In-app changelog + "what's new on update"
+- [x] Open-source licenses page + "built with AI" note + easter egg
+- [ ] LTE mode for LHG LTE (RSRP/RSRQ/SINR alignment) — high value, next
+- [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
 
 ## Later (v0.3+)
 - [ ] iOS build pass + platform-specific Wi-Fi permission flows
