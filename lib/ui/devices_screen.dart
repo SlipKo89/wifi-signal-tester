@@ -7,16 +7,18 @@ import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import 'theme.dart';
 
-class _Lease {
-  final String ip;
-  final String mac;
+class _Dev {
+  final StationSignal station;
+  final String? ip;
   final String name;
-  final bool bound;
-  const _Lease(this.ip, this.mac, this.name, this.bound);
+  const _Dev(this.station, this.ip, this.name);
+
+  String get mac => station.macAddress;
 }
 
-/// Lists devices from the routers' DHCP leases and shows the AP-side signal for
-/// any one you pick — so you can check how the APs hear a TV, laptop, etc.
+/// Lists the devices currently on Wi-Fi (from the routers' registration tables),
+/// enriched with IP and name from DHCP leases. Tap one to see how the APs hear
+/// it — handy for checking a TV, laptop, a guest's phone, etc.
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
 
@@ -25,7 +27,7 @@ class DevicesScreen extends StatefulWidget {
 }
 
 class _DevicesScreenState extends State<DevicesScreen> {
-  late Future<List<_Lease>> _future;
+  late Future<List<_Dev>> _future;
   String _query = '';
 
   @override
@@ -34,24 +36,40 @@ class _DevicesScreenState extends State<DevicesScreen> {
     _future = _load();
   }
 
-  Future<List<_Lease>> _load() async {
+  Future<List<_Dev>> _load() async {
     final ctrl = context.read<MonitorController>();
-    final byMac = <String, _Lease>{};
+
+    // MAC -> (ip, name) from DHCP leases.
+    final leaseIp = <String, String>{};
+    final leaseName = <String, String>{};
     for (final svc in ctrl.routers) {
       try {
         for (final r in await svc.readMenu('/ip/dhcp-server/lease')) {
-          final ip = r['address'] ?? '';
-          final mac = r['mac-address'] ?? '';
-          if (ip.isEmpty || mac.isEmpty) continue;
-          final name = _clean(r['host-name']) ??
-              _clean(r['comment']) ??
-              mac;
-          byMac[mac.toUpperCase()] =
-              _Lease(ip, mac, name, r['status'] == 'bound');
+          final mac = (r['mac-address'] ?? '').toUpperCase();
+          if (mac.isEmpty) continue;
+          final ip = r['address'];
+          if (ip != null && ip.isNotEmpty) leaseIp[mac] = ip;
+          final name = _clean(r['host-name']) ?? _clean(r['comment']);
+          if (name != null) leaseName[mac] = name;
         }
       } catch (_) {}
     }
-    final list = byMac.values.toList()..sort((a, b) => _ipCmp(a.ip, b.ip));
+
+    // Devices currently associated on Wi-Fi.
+    final devs = <String, _Dev>{};
+    for (final svc in ctrl.routers) {
+      try {
+        for (final st in await svc.fetchAllStations()) {
+          final mac = st.macAddress.toUpperCase();
+          if (mac.isEmpty || devs.containsKey(mac)) continue;
+          devs[mac] = _Dev(st, leaseIp[mac], leaseName[mac] ?? st.macAddress);
+        }
+      } catch (_) {}
+    }
+
+    final list = devs.values.toList()
+      ..sort((a, b) =>
+          (b.station.signalDbm ?? -999).compareTo(a.station.signalDbm ?? -999));
     return list;
   }
 
@@ -61,22 +79,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
     return t.isEmpty ? null : t;
   }
 
-  int _ipCmp(String a, String b) {
-    final pa = a.split('.').map((x) => int.tryParse(x) ?? 0).toList();
-    final pb = b.split('.').map((x) => int.tryParse(x) ?? 0).toList();
-    for (var i = 0; i < 4 && i < pa.length && i < pb.length; i++) {
-      final c = pa[i].compareTo(pb[i]);
-      if (c != 0) return c;
-    }
-    return 0;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
     return Scaffold(
       appBar: AppBar(
-        title: Text(l.t('Devices', 'Устройства')),
+        title: Text(l.t('Devices on Wi-Fi', 'Устройства в Wi-Fi')),
+        actions: [
+          IconButton(
+            tooltip: l.t('Refresh', 'Обновить'),
+            icon: const Icon(Icons.refresh),
+            onPressed: () => setState(() => _future = _load()),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -85,14 +100,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
             child: TextField(
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
-                hintText: l.t('Search by name / IP / MAC', 'Поиск по имени / IP / MAC'),
+                hintText: l.t('Search name / IP / MAC', 'Поиск имя / IP / MAC'),
                 isDense: true,
               ),
               onChanged: (v) => setState(() => _query = v.toLowerCase()),
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<_Lease>>(
+            child: FutureBuilder<List<_Dev>>(
               future: _future,
               builder: (context, snap) {
                 if (!snap.hasData) {
@@ -104,12 +119,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
                     : all
                         .where((d) =>
                             d.name.toLowerCase().contains(_query) ||
-                            d.ip.contains(_query) ||
+                            (d.ip ?? '').contains(_query) ||
                             d.mac.toLowerCase().contains(_query))
                         .toList();
                 if (items.isEmpty) {
                   return Center(
-                    child: Text(l.t('No devices.', 'Устройств нет.'),
+                    child: Text(
+                        l.t('No devices on Wi-Fi right now.',
+                            'Сейчас в Wi-Fi никого нет.'),
                         style: const TextStyle(color: Color(0xFF7D8590))),
                   );
                 }
@@ -117,20 +134,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   itemCount: items.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, color: Color(0xFF232B36)),
-                  itemBuilder: (context, i) {
-                    final d = items[i];
-                    return ListTile(
-                      leading: Icon(Icons.devices_other,
-                          color: d.bound
-                              ? AppTheme.phoneAccent
-                              : const Color(0xFF7D8590)),
-                      title: Text(d.name),
-                      subtitle: Text('${d.ip}  ·  ${d.mac}',
-                          style: const TextStyle(fontSize: 12)),
-                      trailing: const Icon(Icons.chevron_right, size: 18),
-                      onTap: () => _openDevice(d),
-                    );
-                  },
+                  itemBuilder: (context, i) => _row(l, items[i]),
                 );
               },
             ),
@@ -140,60 +144,41 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
   }
 
-  void _openDevice(_Lease d) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppTheme.surface,
-      showDragHandle: true,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+  Widget _row(L10n l, _Dev d) {
+    final sig = d.station.signalDbm;
+    final color = AppTheme.signalColor(sig);
+    return ListTile(
+      leading: Icon(Icons.devices_other, color: color),
+      title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+          '${d.ip ?? d.mac}  ·  ${d.station.interfaceName ?? '—'}',
+          style: const TextStyle(fontSize: 12)),
+      trailing: Text(sig == null ? '—' : '$sig',
+          style: TextStyle(
+              fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+      onTap: () => showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: AppTheme.surface,
+        showDragHandle: true,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => _DeviceSheet(dev: d),
       ),
-      builder: (_) => _DeviceSheet(lease: d),
     );
   }
 }
 
-class _DeviceSheet extends StatefulWidget {
-  final _Lease lease;
-  const _DeviceSheet({required this.lease});
-
-  @override
-  State<_DeviceSheet> createState() => _DeviceSheetState();
-}
-
-class _DeviceSheetState extends State<_DeviceSheet> {
-  StationSignal? _station;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _lookup();
-  }
-
-  Future<void> _lookup() async {
-    final ctrl = context.read<MonitorController>();
-    StationSignal? found;
-    for (final svc in ctrl.routers) {
-      try {
-        found = await svc.fetchStation(widget.lease.mac);
-      } catch (_) {}
-      if (found != null) break;
-    }
-    if (mounted) {
-      setState(() {
-        _station = found;
-        _loading = false;
-      });
-    }
-  }
+class _DeviceSheet extends StatelessWidget {
+  final _Dev dev;
+  const _DeviceSheet({required this.dev});
 
   @override
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
-    final d = widget.lease;
-    final s = _station;
+    final s = dev.station;
+    final color = AppTheme.signalColor(s.signalDbm);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
@@ -201,80 +186,51 @@ class _DeviceSheetState extends State<_DeviceSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(d.name,
+            Text(dev.name,
                 style:
                     const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text('${d.ip}  ·  ${d.mac}',
+            Text('${dev.ip ?? '—'}  ·  ${dev.mac}',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF7D8590))),
             const SizedBox(height: 16),
-            if (_loading)
-              const Center(child: CircularProgressIndicator())
-            else if (s == null)
-              _empty(l)
-            else
-              _signal(l, s),
+            Row(
+              children: [
+                const Icon(Icons.router, size: 16, color: AppTheme.apAccent),
+                const SizedBox(width: 6),
+                Text(l.t('AP → hears device', 'Точка → слышит устройство'),
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.apAccent)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(s.signalDbm?.toString() ?? '—',
+                    style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        color: color)),
+                const SizedBox(width: 4),
+                const Text('dBm',
+                    style: TextStyle(color: Color(0xFF7D8590), fontSize: 12)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 20, runSpacing: 12, children: [
+              _tile(l.t('On AP', 'Точка'), s.interfaceName ?? '—'),
+              if (s.ssid != null) _tile('SSID', s.ssid!),
+              if (s.txRate != null) _tile('TX rate', s.txRate!),
+              if (s.rxRate != null) _tile('RX rate', s.rxRate!),
+              if (s.rxCcq != null) _tile('RX CCQ', '${s.rxCcq}%'),
+              if (s.uptime != null) _tile(l.t('Uptime', 'Аптайм'), s.uptime!),
+            ]),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _empty(L10n l) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceAlt,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          l.t(
-              'Not on a managed AP right now — the device is offline, wired, or '
-              'on an AP this router doesn\'t manage.',
-              'Сейчас не на управляемой точке — устройство офлайн, по кабелю или '
-              'на точке, которой этот роутер не управляет.'),
-          style: const TextStyle(fontSize: 12.5, color: Color(0xFF9DA7B3)),
-        ),
-      );
-
-  Widget _signal(L10n l, StationSignal s) {
-    final color = AppTheme.signalColor(s.signalDbm);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.router, size: 16, color: AppTheme.apAccent),
-            const SizedBox(width: 6),
-            Text(l.t('AP → hears device', 'Точка → слышит устройство'),
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.apAccent)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(s.signalDbm?.toString() ?? '—',
-                style: TextStyle(
-                    fontSize: 34, fontWeight: FontWeight.w800, color: color)),
-            const SizedBox(width: 4),
-            const Text('dBm',
-                style: TextStyle(color: Color(0xFF7D8590), fontSize: 12)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Wrap(spacing: 20, runSpacing: 12, children: [
-          _tile(l.t('On AP', 'Точка'), s.interfaceName ?? '—'),
-          if (s.ssid != null) _tile('SSID', s.ssid!),
-          if (s.txRate != null) _tile('TX rate', s.txRate!),
-          if (s.rxRate != null) _tile('RX rate', s.rxRate!),
-          if (s.uptime != null) _tile(l.t('Uptime', 'Аптайм'), s.uptime!),
-        ]),
-      ],
     );
   }
 

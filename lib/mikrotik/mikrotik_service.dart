@@ -280,6 +280,24 @@ class MikrotikService {
     return null;
   }
 
+  /// Every currently-associated station across all available registration
+  /// tables (deduped by MAC) — the devices on Wi-Fi right now.
+  Future<List<StationSignal>> fetchAllStations() async {
+    final t = _transport!;
+    final result = <StationSignal>[];
+    final seen = <String>{};
+    for (final stack in _availableStacks) {
+      final rows = await t.read(stack.registrationPath);
+      for (final row in rows) {
+        final mac = (row['mac-address'] ?? '').toLowerCase();
+        if (mac.isEmpty || seen.contains(mac)) continue;
+        seen.add(mac);
+        result.add(StationSignal.fromRecord(row, stack));
+      }
+    }
+    return result;
+  }
+
   Future<void> close() async {
     await _transport?.close();
     _transport = null;
