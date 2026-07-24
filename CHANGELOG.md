@@ -25,7 +25,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data — connection is judged by IP, SSID is shown when available. The Android
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
+### Changed
+- **Config audit reworked to be accurate and deeper.** It now audits the
+  *operating state* (`current-channel` → real width / TX power / frequency) and
+  only *applied* CAPsMAN configs, and reads security both inline and via named
+  profiles — fixing two false-positive classes (unapplied "open" configs and
+  local 2.4 GHz width overridden by CAPsMAN). New checks grounded in MikroTik
+  best practices: real 2.4 GHz width, high TX power, co-channel / non-1-6-11
+  channels, `tx-power-mode=all-rates-fixed`, missing country, WMM, legacy basic
+  rates, and open/WEP/WPA1/TKIP vs WPA2/WPA3. Configs not on air are listed once
+  as info instead of flagged.
+
 ### Added
+- **PDF audit report**: export the audit as a shareable PDF (bundled NotoSans
+  font for Cyrillic). Adds a 512×512 icon export alongside the source.
 - **App icon**: a "two-sided signal" mark — a green source (phone) and a blue
   source (AP) with waves meeting in the middle, on a dark blue-tinted
   background. Drawn as SVG, with Android adaptive + iOS icons generated via

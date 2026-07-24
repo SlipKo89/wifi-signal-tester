@@ -25,74 +25,234 @@ class Finding {
   });
 }
 
-/// Reads Wi-Fi config (read-only) from the connected routers and flags common
-/// misconfigurations for someone who sets up MikroTik APs without deep RF
-/// knowledge.
+/// Parsed CAPsMAN `current-channel`, e.g. `5260/20-Ceee/ac/DP(20dBm)`.
+class _Channel {
+  final int? freq;
+  final int? width;
+  final int? txPowerDbm;
+  const _Channel(this.freq, this.width, this.txPowerDbm);
+
+  bool get is24 => freq != null && freq! < 2500;
+}
+
+/// Reads Wi-Fi config and operating state (read-only) from the connected
+/// routers and flags common misconfigurations, aimed at people who set up
+/// MikroTik APs without deep RF knowledge.
+///
+/// Design notes learned from real routers:
+///  * REST returns only explicitly-set fields, so "field absent" ≠ "disabled".
+///    Where possible we audit the *operating state* (`current-channel`), not the
+///    config.
+///  * A CAPsMAN configuration that isn't applied to a running radio is not on
+///    air — we don't raise it as a live risk.
+///  * Security can be inline on the configuration or via a named profile.
 class AuditEngine {
   Future<List<Finding>> run(List<MikrotikService> routers) async {
     final out = <Finding>[];
     for (final svc in routers) {
-      // Radios driven by CAPsMAN: their local /interface/wireless config is
-      // overridden by the manager, so auditing it would produce false results.
-      final managed = await _capsmanRadioMacs(svc);
-      await _wireless(svc, out, managed);
-      await _capsman(svc, out);
+      final c = await _gather(svc);
+      _deviceChecks(c, out);
+      _capsmanChecks(c, out);
+      _standaloneChecks(c, out);
     }
     out.sort((a, b) => a.sev.index.compareTo(b.sev.index));
     return out;
   }
 
-  Future<Set<String>> _capsmanRadioMacs(MikrotikService svc) async {
-    final ifaces = await _safe(svc, '/caps-man/interface');
-    return {
-      for (final i in ifaces)
+  Future<_Ctx> _gather(MikrotikService svc) async {
+    Future<List<Map<String, String>>> read(String m) async {
+      try {
+        return await svc.readMenu(m);
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    return _Ctx(
+      capsIfaces: await read('/caps-man/interface'),
+      capsConfigs: await read('/caps-man/configuration'),
+      capsSecs: {
+        for (final s in await read('/caps-man/security')) s['name'] ?? '': s
+      },
+      wireless: await read('/interface/wireless'),
+      wirelessProfiles: {
+        for (final p in await read('/interface/wireless/security-profiles'))
+          p['name'] ?? '': p
+      },
+    );
+  }
+
+  // --- device-level (physical radio) checks --------------------------------
+
+  void _deviceChecks(_Ctx c, List<Finding> out) {
+    for (final w in c.wireless) {
+      final name = w['name'] ?? '?';
+      final country = w['country'] ?? '';
+      if (country.isEmpty || country == 'no_country_set') {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: 'Regulatory country not set',
+            titleRu: 'Не задана страна',
+            detailEn:
+                'No country on $name — power limits and allowed channels may be '
+                'wrong, and modern clients may even ignore the radio.',
+            detailRu:
+                'На $name не задана страна — лимиты мощности и разрешённые '
+                'каналы могут быть неверными, а новые клиенты могут вообще '
+                'игнорировать радио.',
+            fixEn: 'Set your real country on every radio (2.4 and 5 GHz).',
+            fixRu: 'Укажи реальную страну на каждом радио (2.4 и 5 ГГц).',
+            where: name));
+      }
+      if ((w['tx-power-mode'] ?? '') == 'all-rates-fixed') {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: 'tx-power-mode = all-rates-fixed',
+            titleRu: 'tx-power-mode = all-rates-fixed',
+            detailEn:
+                '$name forces one TX power on all rates. High-order rates can\'t '
+                'take full power — this degrades throughput. Not recommended.',
+            detailRu:
+                '$name задаёт одну мощность на все скорости. Высокие MCS не '
+                'тянут полную мощность — падает пропускная. Не рекомендуется.',
+            fixEn: 'Use tx-power-mode=default; reduce power via country/antenna '
+                'gain if needed.',
+            fixRu: 'Используй tx-power-mode=default; снижай мощность через '
+                'страну/antenna-gain при необходимости.',
+            where: name));
+      }
+    }
+  }
+
+  // --- CAPsMAN (operating state + applied configs) -------------------------
+
+  void _capsmanChecks(_Ctx c, List<Finding> out) {
+    if (c.capsIfaces.isEmpty) return;
+
+    final active = c.capsIfaces.where((i) => i['running'] == 'true').toList();
+    final activeConfigs = <String>{
+      for (final i in active)
+        if ((i['configuration'] ?? '').isNotEmpty) i['configuration']!
+    };
+
+    // Operating-state RF checks per active radio.
+    final freq24 = <int, int>{}; // freq -> count (2.4 GHz)
+    for (final i in active) {
+      final name = i['name'] ?? '?';
+      final ch = _parseChannel(i['current-channel']);
+      if (ch.is24) {
+        if (ch.width != null && ch.width! > 20) {
+          out.add(Finding(AuditSeverity.warn,
+              titleEn: '2.4 GHz running ${ch.width} MHz',
+              titleRu: '2.4 ГГц на ${ch.width} МГц',
+              detailEn:
+                  '$name is on a ${ch.width} MHz channel at 2.4 GHz, where only '
+                  '3 channels fit. Wider = more interference, not more speed.',
+              detailRu:
+                  '$name на канале ${ch.width} МГц в 2.4 ГГц, где помещается '
+                  'всего 3 канала. Шире = больше помех, а не скорости.',
+              fixEn: 'Use 20 MHz on 2.4 GHz.',
+              fixRu: 'Поставь 20 МГц на 2.4 ГГц.',
+              where: name));
+        }
+        if (ch.freq != null) {
+          freq24[ch.freq!] = (freq24[ch.freq!] ?? 0) + 1;
+        }
+      }
+      if (ch.txPowerDbm != null && ch.txPowerDbm! > 23) {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: 'High TX power (${ch.txPowerDbm} dBm)',
+            titleRu: 'Высокая мощность (${ch.txPowerDbm} dBm)',
+            detailEn:
+                '$name transmits at ${ch.txPowerDbm} dBm. Too much power causes '
+                'asymmetry (AP shouts, clients can\'t answer) and co-channel '
+                'noise; it can even overheat the radio.',
+            detailRu:
+                '$name передаёт на ${ch.txPowerDbm} dBm. Избыток мощности даёт '
+                'асимметрию (точка «кричит», клиенты не отвечают) и шум на '
+                'канале, вплоть до перегрева радио.',
+            fixEn: 'Leave tx-power at default or lower it; don\'t inflate it.',
+            fixRu: 'Оставь мощность по умолчанию или снизь; не задирай.',
+            where: name));
+      }
+    }
+
+    // Co-channel: same 2.4 GHz frequency on more than one active radio.
+    freq24.forEach((freq, count) {
+      if (count > 1) {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: 'Co-channel on 2.4 GHz ($freq)',
+            titleRu: 'Совпадение канала 2.4 ГГц ($freq)',
+            detailEn:
+                '$count of your radios share 2.4 GHz channel $freq. They talk '
+                'over each other. Spread APs across channels 1, 6 and 11.',
+            detailRu:
+                '$count твоих радио сидят на одном канале 2.4 ГГц $freq и '
+                'глушат друг друга. Разнеси точки по каналам 1, 6 и 11.',
+            fixEn: 'Assign non-overlapping channels (1 / 6 / 11).',
+            fixRu: 'Назначь непересекающиеся каналы (1 / 6 / 11).'));
+      } else if (![2412, 2437, 2462].contains(freq)) {
+        out.add(Finding(AuditSeverity.info,
+            titleEn: 'Non-standard 2.4 channel ($freq)',
+            titleRu: 'Нестандартный канал 2.4 ($freq)',
+            detailEn:
+                'Channel $freq overlaps its neighbours. On 2.4 GHz only 1, 6 '
+                'and 11 don\'t overlap.',
+            detailRu:
+                'Канал $freq пересекается с соседними. В 2.4 ГГц не '
+                'пересекаются только 1, 6 и 11.'));
+      }
+    });
+
+    // Security of applied configurations only.
+    final notOnAir = <String>[];
+    for (final cfg in c.capsConfigs) {
+      final name = cfg['name'] ?? '';
+      final ssid = cfg['ssid'] ?? name;
+      if (!activeConfigs.contains(name)) {
+        notOnAir.add(ssid);
+        continue;
+      }
+      _securityFinding(_resolveSecurity(cfg, c.capsSecs), ssid, out);
+    }
+    if (notOnAir.isNotEmpty) {
+      final list = notOnAir.join(', ');
+      out.add(Finding(AuditSeverity.info,
+          titleEn: '${notOnAir.length} config(s) not on air',
+          titleRu: 'Конфигов не в эфире: ${notOnAir.length}',
+          detailEn:
+              'Defined but not assigned to any running radio, so not '
+              'broadcasting (not audited): $list.',
+          detailRu:
+              'Заданы, но не назначены ни на одно активное радио, значит не '
+              'вещают (в аудит не идут): $list.'));
+    }
+  }
+
+  // --- standalone /interface/wireless (not CAPsMAN-managed) ----------------
+
+  void _standaloneChecks(_Ctx c, List<Finding> out) {
+    final managed = <String>{
+      for (final i in c.capsIfaces)
         if ((i['radio-mac'] ?? '').isNotEmpty &&
             i['radio-mac'] != '00:00:00:00:00:00')
           i['radio-mac']!.toLowerCase()
     };
-  }
 
-  Future<List<Map<String, String>>> _safe(
-      MikrotikService svc, String menu) async {
-    try {
-      return await svc.readMenu(menu);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  // --- classic /interface/wireless ----------------------------------------
-
-  Future<void> _wireless(
-      MikrotikService svc, List<Finding> out, Set<String> managed) async {
-    final ifaces = await _safe(svc, '/interface/wireless');
-    if (ifaces.isEmpty) return;
-    final profiles = await _safe(svc, '/interface/wireless/security-profiles');
-    final byName = {for (final p in profiles) p['name']: p};
-
-    for (final w in ifaces) {
-      // Skip CAPsMAN-managed radios — the manager overrides this config.
+    for (final w in c.wireless) {
       if (managed.contains((w['mac-address'] ?? '').toLowerCase())) continue;
-
       final name = w['name'] ?? '?';
       final band = w['band'] ?? '';
       final width = w['channel-width'] ?? '';
 
       if (band.startsWith('2ghz') && width.contains('40')) {
         out.add(Finding(AuditSeverity.warn,
-            titleEn: '2.4 GHz using 40 MHz',
+            titleEn: '2.4 GHz set to 40 MHz',
             titleRu: '2.4 ГГц на 40 МГц',
-            detailEn:
-                '$name runs a 40 MHz channel on 2.4 GHz, where only 3 channels '
-                "don't overlap. This interferes with itself and neighbours.",
-            detailRu:
-                '$name работает на 40 МГц в 2.4 ГГц, где всего 3 непересекающихся '
-                'канала. Это создаёт помехи себе и соседям.',
-            fixEn: 'Set channel width to 20 MHz on 2.4 GHz.',
-            fixRu: 'Поставь ширину канала 20 МГц на 2.4 ГГц.',
+            detailEn: '$name is configured for 40 MHz on 2.4 GHz — use 20 MHz.',
+            detailRu: '$name настроен на 40 МГц в 2.4 ГГц — используй 20 МГц.',
+            fixEn: 'Set channel width to 20 MHz.',
+            fixRu: 'Поставь ширину 20 МГц.',
             where: name));
       }
-
       if ((w['wmm-support'] ?? '') == 'disabled') {
         out.add(Finding(AuditSeverity.warn,
             titleEn: 'WMM disabled',
@@ -103,165 +263,152 @@ class AuditEngine {
             detailRu:
                 'У $name выключен WMM. WMM (QoS) нужен для высоких скоростей '
                 '802.11n/ac и ровного трафика.',
-            fixEn: 'Enable WMM support on the interface.',
-            fixRu: 'Включи поддержку WMM на интерфейсе.',
+            fixEn: 'Enable WMM support.',
+            fixRu: 'Включи поддержку WMM.',
             where: name));
       }
-
-      final country = w['country'] ?? '';
-      if (country.isEmpty || country == 'no_country_set') {
-        out.add(Finding(AuditSeverity.warn,
-            titleEn: 'Regulatory country not set',
-            titleRu: 'Не задана страна',
-            detailEn:
-                '$name has no country set — power limits and allowed channels '
-                'may be wrong.',
-            detailRu:
-                'У $name не задана страна — лимиты мощности и разрешённые '
-                'каналы могут быть неверными.',
-            fixEn: 'Set the correct country on the interface.',
-            fixRu: 'Укажи правильную страну на интерфейсе.',
-            where: name));
-      }
-
       final basic = '${w['basic-rates-a/g'] ?? ''},${w['basic-rates-b'] ?? ''}';
       if (RegExp(r'(^|,)(1Mbps|2Mbps|5\.5Mbps|11Mbps)').hasMatch(basic)) {
         out.add(Finding(AuditSeverity.warn,
             titleEn: 'Legacy basic rates enabled',
             titleRu: 'Включены legacy-рейты',
             detailEn:
-                '$name allows 1/2/5.5/11 Mbps as basic rates. Old slow rates '
-                'drag down the whole cell.',
+                '$name allows 1/2/5.5/11 Mbps basic rates — old slow rates drag '
+                'down the whole cell.',
             detailRu:
-                '$name разрешает 1/2/5.5/11 Мбит/с как базовые. Старые медленные '
+                '$name разрешает базовые 1/2/5.5/11 Мбит/с — старые медленные '
                 'рейты тормозят всю соту.',
-            fixEn: 'Raise the basic rate (e.g. drop rates below 6–12 Mbps).',
-            fixRu: 'Подними базовый рейт (убери скорости ниже 6–12 Мбит/с).',
+            fixEn: 'Raise the basic rate (drop rates below ~6–12 Mbps).',
+            fixRu: 'Подними базовый рейт (убери ниже ~6–12 Мбит/с).',
             where: name));
       }
+      _securityFinding(_wirelessSecurity(w, c.wirelessProfiles), name, out);
+    }
+  }
 
-      final tp = int.tryParse(w['tx-power'] ?? '');
-      if (tp != null && tp >= 24) {
+  // --- security helpers -----------------------------------------------------
+
+  /// Resolves a CAPsMAN config's security, inline or via a named profile.
+  Map<String, String> _resolveSecurity(
+      Map<String, String> cfg, Map<String, Map<String, String>> named) {
+    if (cfg.containsKey('security.authentication-types') ||
+        cfg.containsKey('security.passphrase')) {
+      return {
+        'auth': cfg['security.authentication-types'] ??
+            (cfg.containsKey('security.passphrase') ? 'wpa2-psk' : ''),
+        'enc':
+            '${cfg['security.encryption'] ?? ''},${cfg['security.group-encryption'] ?? ''}',
+        'mode': 'dynamic-keys',
+      };
+    }
+    final ref = cfg['security'] ?? '';
+    if (ref.isNotEmpty && named.containsKey(ref)) {
+      final p = named[ref]!;
+      return {
+        'auth': p['authentication-types'] ?? '',
+        'enc':
+            '${p['encryption'] ?? ''},${p['group-encryption'] ?? ''}',
+        'mode': 'dynamic-keys',
+      };
+    }
+    return {'auth': '', 'enc': '', 'mode': 'none'};
+  }
+
+  Map<String, String> _wirelessSecurity(
+      Map<String, String> w, Map<String, Map<String, String>> profiles) {
+    final p = profiles[w['security-profile']];
+    if (p == null) return {'auth': '', 'enc': '', 'mode': 'none'};
+    return {
+      'auth': p['authentication-types'] ?? '',
+      'enc': '${p['unicast-ciphers'] ?? ''},${p['group-ciphers'] ?? ''}',
+      'mode': p['mode'] ?? '',
+    };
+  }
+
+  void _securityFinding(
+      Map<String, String> s, String where, List<Finding> out) {
+    final auth = s['auth'] ?? '';
+    final enc = s['enc'] ?? '';
+    final mode = s['mode'] ?? '';
+
+    if (mode == 'static-keys') {
+      out.add(Finding(AuditSeverity.critical,
+          titleEn: 'WEP / static keys',
+          titleRu: 'WEP / статические ключи',
+          detailEn: '"$where" uses WEP-style static keys — cracked in minutes.',
+          detailRu:
+              '«$where» использует WEP-подобные ключи — взламывается за минуты.',
+          fixEn: 'Switch to WPA2/WPA3.',
+          fixRu: 'Перейди на WPA2/WPA3.',
+          where: where));
+    } else if (mode == 'none' && auth.isEmpty) {
+      out.add(Finding(AuditSeverity.critical,
+          titleEn: 'Open network',
+          titleRu: 'Открытая сеть',
+          detailEn:
+              '"$where" has no encryption — anyone nearby can join and sniff.',
+          detailRu:
+              '«$where» без шифрования — любой рядом может подключиться и '
+              'слушать.',
+          fixEn: 'Add WPA2 (or WPA2/WPA3) with a strong passphrase.',
+          fixRu: 'Включи WPA2 (или WPA2/WPA3) с надёжным паролем.',
+          where: where));
+    } else if (auth.contains('wpa-psk') || auth.contains('wpa-eap')) {
+      if (!auth.contains('wpa2') && !auth.contains('wpa3')) {
         out.add(Finding(AuditSeverity.warn,
-            titleEn: 'Very high TX power',
-            titleRu: 'Очень высокая мощность',
-            detailEn:
-                '$name TX power is $tp dBm. Too high power makes the AP shout '
-                'while clients can\'t answer as loud (asymmetry) and raises '
-                'co-channel noise.',
-            detailRu:
-                'Мощность $name — $tp dBm. Слишком высокая мощность: точка '
-                '«кричит», а клиенты не отвечают так же громко (асимметрия), '
-                'плюс растёт шум на канале.',
-            fixEn: 'Lower TX power so both directions are balanced.',
-            fixRu: 'Снизь мощность, чтобы обе стороны были сбалансированы.',
-            where: name));
+            titleEn: 'WPA1 only',
+            titleRu: 'Только WPA1',
+            detailEn: '"$where" allows WPA1 — deprecated and weak.',
+            detailRu: '«$where» разрешает WPA1 — устарел и слаб.',
+            fixEn: 'Require WPA2-PSK (drop WPA1).',
+            fixRu: 'Оставь только WPA2-PSK (убери WPA1).',
+            where: where));
       }
-
-      _checkWirelessProfile(byName[w['security-profile']], name, out);
-    }
-  }
-
-  void _checkWirelessProfile(
-      Map<String, String>? prof, String where, List<Finding> out) {
-    if (prof == null) return;
-    final mode = prof['mode'] ?? '';
-    final auth = prof['authentication-types'] ?? '';
-    final ciphers =
-        '${prof['unicast-ciphers'] ?? ''},${prof['group-ciphers'] ?? ''}';
-
-    if (mode == 'none') {
-      out.add(_openFinding(where));
-    } else if (mode == 'static-keys') {
-      out.add(_wepFinding(where));
-    } else if (auth.contains('wpa-psk') && !auth.contains('wpa2')) {
-      out.add(_wpa1Finding(where));
-    } else if (ciphers.contains('tkip')) {
-      out.add(_tkipFinding(where));
+    } else if (enc.contains('tkip')) {
+      out.add(Finding(AuditSeverity.warn,
+          titleEn: 'TKIP encryption',
+          titleRu: 'Шифрование TKIP',
+          detailEn:
+              '"$where" allows TKIP — insecure and caps the link at 54 Mbps.',
+          detailRu:
+              '«$where» разрешает TKIP — небезопасно и режет линк до 54 Мбит/с.',
+          fixEn: 'Use AES-CCM (CCMP) only.',
+          fixRu: 'Оставь только AES-CCM (CCMP).',
+          where: where));
     } else if (auth.contains('wpa2') || auth.contains('wpa3')) {
-      out.add(_secOkFinding(where));
+      out.add(Finding(AuditSeverity.ok,
+          titleEn: 'WPA2/WPA3 + AES',
+          titleRu: 'WPA2/WPA3 + AES',
+          detailEn: '"$where" uses modern encryption. Good.',
+          detailRu: '«$where» использует современное шифрование. Хорошо.',
+          where: where));
     }
   }
 
-  // --- CAPsMAN --------------------------------------------------------------
-
-  Future<void> _capsman(MikrotikService svc, List<Finding> out) async {
-    final configs = await _safe(svc, '/caps-man/configuration');
-    if (configs.isEmpty) return;
-    final secs = await _safe(svc, '/caps-man/security');
-    final byName = {for (final s in secs) s['name']: s};
-
-    for (final c in configs) {
-      final ssid = c['ssid'] ?? c['name'] ?? '?';
-      final secName = c['security'] ?? '';
-      if (secName.isEmpty) {
-        out.add(_openFinding(ssid));
-        continue;
-      }
-      final sec = byName[secName];
-      if (sec == null) continue;
-      final auth = sec['authentication-types'] ?? '';
-      final enc = '${sec['encryption'] ?? ''},${sec['group-encryption'] ?? ''}';
-      if (auth.isEmpty) {
-        out.add(_openFinding(ssid));
-      } else if (auth.contains('wpa-psk') && !auth.contains('wpa2')) {
-        out.add(_wpa1Finding(ssid));
-      } else if (enc.contains('tkip')) {
-        out.add(_tkipFinding(ssid));
-      } else if (auth.contains('wpa2') || auth.contains('wpa3')) {
-        out.add(_secOkFinding(ssid));
-      }
-    }
+  _Channel _parseChannel(String? raw) {
+    if (raw == null || raw.isEmpty) return const _Channel(null, null, null);
+    final freq = RegExp(r'^(\d+)').firstMatch(raw);
+    final width = RegExp(r'^\d+/(\d+)').firstMatch(raw);
+    final power = RegExp(r'\((\d+)dBm\)').firstMatch(raw);
+    return _Channel(
+      freq == null ? null : int.tryParse(freq.group(1)!),
+      width == null ? null : int.tryParse(width.group(1)!),
+      power == null ? null : int.tryParse(power.group(1)!),
+    );
   }
+}
 
-  // --- shared security findings --------------------------------------------
-
-  Finding _openFinding(String where) => Finding(AuditSeverity.critical,
-      titleEn: 'Open network',
-      titleRu: 'Открытая сеть',
-      detailEn:
-          '"$where" has no encryption — anyone nearby can join and sniff.',
-      detailRu:
-          '«$where» без шифрования — любой рядом может подключиться и слушать.',
-      fixEn: 'Add WPA2 (or WPA2/WPA3) with a strong passphrase.',
-      fixRu: 'Включи WPA2 (или WPA2/WPA3) с надёжным паролем.',
-      where: where);
-
-  Finding _wepFinding(String where) => Finding(AuditSeverity.critical,
-      titleEn: 'WEP / static keys',
-      titleRu: 'WEP / статические ключи',
-      detailEn: '"$where" uses WEP-style static keys — broken, cracked in '
-          'minutes.',
-      detailRu:
-          '«$where» использует WEP-подобные статические ключи — взламывается '
-          'за минуты.',
-      fixEn: 'Switch to WPA2/WPA3.',
-      fixRu: 'Перейди на WPA2/WPA3.',
-      where: where);
-
-  Finding _wpa1Finding(String where) => Finding(AuditSeverity.warn,
-      titleEn: 'WPA1 only',
-      titleRu: 'Только WPA1',
-      detailEn: '"$where" allows WPA1 — deprecated and weak. Use WPA2+.',
-      detailRu: '«$where» разрешает WPA1 — устарел и слаб. Нужен WPA2+.',
-      fixEn: 'Require WPA2-PSK (drop WPA1).',
-      fixRu: 'Оставь только WPA2-PSK (убери WPA1).',
-      where: where);
-
-  Finding _tkipFinding(String where) => Finding(AuditSeverity.warn,
-      titleEn: 'TKIP encryption',
-      titleRu: 'Шифрование TKIP',
-      detailEn: '"$where" allows TKIP — insecure and caps the link to 54 Mbps.',
-      detailRu:
-          '«$where» разрешает TKIP — небезопасно и режет линк до 54 Мбит/с.',
-      fixEn: 'Use AES-CCM (CCMP) only.',
-      fixRu: 'Оставь только AES-CCM (CCMP).',
-      where: where);
-
-  Finding _secOkFinding(String where) => Finding(AuditSeverity.ok,
-      titleEn: 'WPA2/WPA3 + AES',
-      titleRu: 'WPA2/WPA3 + AES',
-      detailEn: '"$where" uses modern encryption. Good.',
-      detailRu: '«$where» использует современное шифрование. Хорошо.',
-      where: where);
+class _Ctx {
+  final List<Map<String, String>> capsIfaces;
+  final List<Map<String, String>> capsConfigs;
+  final Map<String, Map<String, String>> capsSecs;
+  final List<Map<String, String>> wireless;
+  final Map<String, Map<String, String>> wirelessProfiles;
+  _Ctx({
+    required this.capsIfaces,
+    required this.capsConfigs,
+    required this.capsSecs,
+    required this.wireless,
+    required this.wirelessProfiles,
+  });
 }

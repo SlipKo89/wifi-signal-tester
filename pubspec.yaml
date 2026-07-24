@@ -45,6 +45,10 @@ dependencies:
   # Audible alert on signal asymmetry
   audioplayers: ^6.1.0
 
+  # PDF audit report + share/print
+  pdf: ^3.11.0
+  printing: ^5.13.0
+
   # MD5 challenge-response for legacy RouterOS binary-API login
   crypto: ^3.0.3
 
@@ -70,3 +74,6 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/NotoSans-Bold.ttf

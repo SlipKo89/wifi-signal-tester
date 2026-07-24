@@ -38,12 +38,14 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Live throughput, CCQ, p-throughput, uptime metrics
 
 ## v0.2 — added mid-cycle ✅
-- [x] Config audit (read-only): open/weak security, RF best-practices, with
-      fixes; skips CAPsMAN-managed radios to avoid false positives
+- [x] Config audit (read-only): audits operating state (current-channel) and
+      applied configs only; inline+named security; RF best-practices with fixes
+- [x] Audit: co-channel / non-1-6-11 check across a router's own APs
 - [x] Reference / help for every metric (tap-a-number + Reference screen)
-- [ ] Audit: extend to WifiWave2 config + infer real channel width from client
-      rates (config is unreliable under CAPsMAN)
-- [ ] Audit: co-channel overlap check across a router's own APs
+- [x] Audit: PDF export (NotoSans for Cyrillic)
+- [ ] Audit: extend to WifiWave2 (/interface/wifi) config
+- [ ] Audit: PMF/802.11w recommendation (careful — "required" drops old clients)
+- [ ] Verify PDF export on a real device (built, not yet field-tested)
 
 ## Later (v0.3+)
 - [ ] iOS build pass + platform-specific Wi-Fi permission flows

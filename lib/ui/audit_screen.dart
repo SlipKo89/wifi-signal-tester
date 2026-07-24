@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../audit/audit.dart';
+import '../audit/audit_pdf.dart';
 import '../l10n/l10n.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
@@ -25,6 +27,20 @@ class _AuditScreenState extends State<AuditScreen> {
   Future<List<Finding>> _run() =>
       AuditEngine().run(context.read<MonitorController>().routers);
 
+  Future<void> _exportPdf() async {
+    final ctrl = context.read<MonitorController>();
+    final l = context.read<SettingsController>().l;
+    final findings = await (_future ?? _run());
+    final hosts = ctrl.routers.map((r) => r.host ?? '?').join(', ');
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final date = '${now.year}-${two(now.month)}-${two(now.day)} '
+        '${two(now.hour)}:${two(now.minute)}';
+    final bytes = await buildAuditPdf(findings,
+        l: l, subtitle: '${l.t('Routers', 'Роутеры')}: $hosts • $date');
+    await Printing.sharePdf(bytes: bytes, filename: 'wifi-audit.pdf');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
@@ -32,6 +48,11 @@ class _AuditScreenState extends State<AuditScreen> {
       appBar: AppBar(
         title: Text(l.t('Config audit', 'Аудит настроек')),
         actions: [
+          IconButton(
+            tooltip: l.t('Export PDF', 'Экспорт PDF'),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: _exportPdf,
+          ),
           IconButton(
             tooltip: l.t('Re-run', 'Перепроверить'),
             icon: const Icon(Icons.refresh),
