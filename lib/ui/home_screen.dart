@@ -42,6 +42,27 @@ class HomeScreen extends StatelessWidget {
         actions: [
           if (connected)
             IconButton(
+              tooltip: settings.alertsEnabled
+                  ? l.t('Alerts on', 'Оповещения вкл')
+                  : l.t('Alerts off', 'Оповещения выкл'),
+              icon: Icon(
+                settings.alertsEnabled
+                    ? Icons.notifications_active
+                    : Icons.notifications_off_outlined,
+                color: settings.alertsEnabled ? AppTheme.apAccent : null,
+              ),
+              onPressed: () {
+                settings.setAlertsEnabled(!settings.alertsEnabled);
+                ctrl.applySettings(
+                  pollSeconds: settings.pollSeconds,
+                  historyLength: settings.historyLength,
+                  alertsEnabled: settings.alertsEnabled,
+                  alertThresholdDb: settings.alertThresholdDb,
+                );
+              },
+            ),
+          if (connected)
+            IconButton(
               tooltip: ctrl.recording
                   ? l.t('Stop recording', 'Остановить запись')
                   : l.t('Record', 'Запись'),
@@ -118,6 +139,8 @@ class HomeScreen extends StatelessWidget {
                     ctrl.applySettings(
                       pollSeconds: settings.pollSeconds,
                       historyLength: settings.historyLength,
+                      alertsEnabled: settings.alertsEnabled,
+                      alertThresholdDb: settings.alertThresholdDb,
                     );
                     ctrl.connect(routers);
                   },

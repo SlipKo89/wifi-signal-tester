@@ -12,11 +12,15 @@ class SettingsController extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
   int _pollSeconds = 2;
   int _historyLength = 60;
+  bool _alertsEnabled = false;
+  int _alertThresholdDb = 12;
 
   String get lang => _lang;
   ThemeMode get themeMode => _themeMode;
   int get pollSeconds => _pollSeconds;
   int get historyLength => _historyLength;
+  bool get alertsEnabled => _alertsEnabled;
+  int get alertThresholdDb => _alertThresholdDb;
 
   /// Resolved locale for MaterialApp (null = follow system).
   Locale? get locale => _lang == 'system' ? null : Locale(_lang);
@@ -40,6 +44,20 @@ class SettingsController extends ChangeNotifier {
     );
     _pollSeconds = p.getInt('pollSeconds') ?? 2;
     _historyLength = p.getInt('historyLength') ?? 60;
+    _alertsEnabled = p.getBool('alertsEnabled') ?? false;
+    _alertThresholdDb = p.getInt('alertThresholdDb') ?? 12;
+    notifyListeners();
+  }
+
+  Future<void> setAlertsEnabled(bool v) async {
+    _alertsEnabled = v;
+    await _prefs?.setBool('alertsEnabled', v);
+    notifyListeners();
+  }
+
+  Future<void> setAlertThresholdDb(int v) async {
+    _alertThresholdDb = v.clamp(4, 30);
+    await _prefs?.setInt('alertThresholdDb', _alertThresholdDb);
     notifyListeners();
   }
 

@@ -42,6 +42,9 @@ dependencies:
   share_plus: ^9.0.0
   path_provider: ^2.1.3
 
+  # Audible alert on signal asymmetry
+  audioplayers: ^6.1.0
+
   # MD5 challenge-response for legacy RouterOS binary-API login
   crypto: ^3.0.3
 

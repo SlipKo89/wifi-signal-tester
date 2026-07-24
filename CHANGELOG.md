@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
 ### Added
+- **Audible asymmetry alert**: a bell toggle in the app bar beeps (and vibrates)
+  whenever the AP−phone signal divergence exceeds a threshold — a hands-free
+  walk-test aid. Threshold is configurable in Settings → Alerts. The tone is
+  synthesised in memory (no bundled audio asset).
 - **Config audit** (⋮ menu, when connected): reads Wi-Fi config read-only from
   the routers and flags common mistakes for non-experts — open networks,
   WPA1/TKIP/WEP, 2.4 GHz 40 MHz, WMM off, no country, legacy basic rates, very

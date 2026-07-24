@@ -8,6 +8,7 @@ import '../mikrotik/mikrotik_service.dart';
 import '../models/phone_signal.dart';
 import '../models/station_signal.dart';
 import '../models/wireless_stack.dart';
+import '../services/beeper.dart';
 import '../services/phone_wifi_service.dart';
 
 enum MonitorState { idle, connecting, connected, error }
@@ -45,6 +46,11 @@ class MonitorController extends ChangeNotifier {
   /// Whether we have the location access Android needs to reveal SSID/BSSID.
   bool locationGranted = true;
   bool locationServiceOn = true;
+
+  /// Audible alert when the AP−phone asymmetry exceeds [alertThresholdDb].
+  final Beeper _beeper = Beeper();
+  bool alertsEnabled = false;
+  int alertThresholdDb = 12;
 
   /// Rolling RSSI (phone) / signal (AP) history, newest last.
   final List<int> phoneHistory = [];
@@ -210,6 +216,13 @@ class MonitorController extends ChangeNotifier {
       _computeThroughput();
       _push(phoneHistory, phone.rssiDbm);
       _push(apHistory, stationSignal?.signalDbm);
+
+      // Beep when the two sides diverge past the threshold (walk-test aid).
+      final d = signalDelta;
+      if (alertsEnabled && d != null && d.abs() >= alertThresholdDb) {
+        _beeper.beep();
+      }
+
       await _recordIfNeeded();
       error = null;
     } catch (e) {
@@ -278,9 +291,16 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Applies changed settings (poll interval / history length) live.
-  void applySettings({required int pollSeconds, required int historyLength}) {
+  /// Applies changed settings (poll interval / history length / alerts) live.
+  void applySettings({
+    required int pollSeconds,
+    required int historyLength,
+    bool? alertsEnabled,
+    int? alertThresholdDb,
+  }) {
     historyLimit = historyLength;
+    if (alertsEnabled != null) this.alertsEnabled = alertsEnabled;
+    if (alertThresholdDb != null) this.alertThresholdDb = alertThresholdDb;
     while (phoneHistory.length > historyLimit) {
       phoneHistory.removeAt(0);
     }
@@ -360,6 +380,7 @@ class MonitorController extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    _beeper.dispose();
     _closeRouters();
     super.dispose();
   }

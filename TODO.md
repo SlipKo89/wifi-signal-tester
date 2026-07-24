@@ -16,9 +16,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Graceful error banners for each failure mode (auth, timeout, no-station)
 
 ## Next (v0.2) — agreed with user ✅
-- [ ] **Threshold alerts** — user-set targets (signal / SNR / delta); colour the
-      dashboard good/warn/bad and vibrate+beep when a metric crosses the line,
-      for hands-free walk testing
+- [~] **Threshold alerts** — done: beep + vibrate when AP−phone asymmetry
+      exceeds a configurable threshold (bell toggle + Settings). Left: alerts on
+      signal/SNR thresholds too, and colour the dashboard good/warn/bad
 - [~] **Asymmetry diagnosis with advice** — turn the AP−phone delta into a
       verdict. Done: tap the Δ badge for explanation + rule-based advice.
       Left: fold in rate/CCQ ("strong signal but low rate → interference") and

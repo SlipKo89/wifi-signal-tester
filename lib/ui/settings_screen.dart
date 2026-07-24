@@ -16,6 +16,8 @@ class SettingsScreen extends StatelessWidget {
     void applyToMonitor() => monitor.applySettings(
           pollSeconds: s.pollSeconds,
           historyLength: s.historyLength,
+          alertsEnabled: s.alertsEnabled,
+          alertThresholdDb: s.alertThresholdDb,
         );
 
     return Scaffold(
@@ -48,6 +50,34 @@ class SettingsScreen extends StatelessWidget {
             onChanged: (v) => s.setHistoryLength((v / 20).round() * 20),
             onDone: applyToMonitor,
           ),
+          const SizedBox(height: 20),
+          _section(l.t('Alerts', 'Оповещения')),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l.t('Beep on signal asymmetry',
+                'Бип при асимметрии сигнала')),
+            subtitle: Text(
+              l.t('Sounds when the AP and phone signal differ past the '
+                  'threshold', 'Звук, когда сигнал точки и телефона расходятся '
+                  'сверх порога'),
+              style: const TextStyle(fontSize: 12),
+            ),
+            value: s.alertsEnabled,
+            onChanged: (v) {
+              s.setAlertsEnabled(v);
+              applyToMonitor();
+            },
+          ),
+          if (s.alertsEnabled)
+            _sliderTile(
+              title: l.t('Asymmetry threshold', 'Порог асимметрии'),
+              value: s.alertThresholdDb.toDouble(),
+              min: 4,
+              max: 30,
+              label: '${s.alertThresholdDb} dB',
+              onChanged: (v) => s.setAlertThresholdDb(v.round()),
+              onDone: applyToMonitor,
+            ),
         ],
       ),
     );
