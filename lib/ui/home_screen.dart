@@ -169,7 +169,16 @@ class _Dashboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (ctrl.error != null) _ErrorBanner(message: ctrl.error!),
+        if (ctrl.error != null)
+          _ErrorBanner(
+              message: ctrl.offWifi
+                  ? l.t(
+                      'Phone is off Wi-Fi (mobile data?). Connect to a network '
+                          'served by one of your MikroTiks to see the AP side.',
+                      'Телефон не в Wi-Fi (мобильный интернет?). Подключись к '
+                          'сети одного из твоих MikroTik, чтобы видеть сторону '
+                          'точки.')
+                  : ctrl.error!),
         _ConnectionSummary(
           phone: phone,
           delta: ctrl.signalDelta,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../app_info.dart';
+import '../settings/settings_controller.dart';
 import 'theme.dart';
 
 /// Opens the About dialog.
@@ -14,6 +16,7 @@ class _AboutDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
     return Dialog(
       backgroundColor: AppTheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -51,19 +54,24 @@ class _AboutDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            const Text(
-              kAppTagline,
-              style: TextStyle(fontSize: 13, color: Color(0xFFAAB2BD)),
+            Text(
+              l.t(kAppTagline, 'Двусторонний тестер Wi-Fi для MikroTik'),
+              style: const TextStyle(fontSize: 13, color: Color(0xFFAAB2BD)),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'See how the access point hears your device, not just how your '
-              'device hears the access point. Read-only, for your MAC only.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
+            Text(
+              l.t(
+                  'See how the access point hears your device, not just how '
+                      'your device hears the access point. Read-only, for your '
+                      'MAC only.',
+                  'Видно, как точка слышит твоё устройство, а не только как '
+                      'устройство слышит точку. Только чтение, только по твоему '
+                      'MAC.'),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
             ),
             const Divider(height: 28, color: Color(0xFF232B36)),
-            const Text('AUTHOR',
-                style: TextStyle(
+            Text(l.t('AUTHOR', 'АВТОР'),
+                style: const TextStyle(
                     fontSize: 10,
                     letterSpacing: 1.1,
                     color: Color(0xFF7D8590),
@@ -89,7 +97,7 @@ class _AboutDialog extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
+                child: Text(l.t('Close', 'Закрыть')),
               ),
             ),
           ],

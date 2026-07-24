@@ -44,7 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counters — works even on CAPsMAN), TX/RX CCQ where reported, RouterOS's own
   `p-throughput` estimate, and session uptime.
 - Lightweight RU/EN localization for the main UI (full i18n framework still on
-  the backlog).
+  the backlog). Covers the connection form, the Δ asymmetry sheet and its
+  advice, About, and the off-Wi-Fi banner (previously English-only).
 - Tap the Δ AP−phone badge for an explanation of the signal-asymmetry metric
   plus rule-based advice from the current numbers (e.g. "AP hears you 24 dB
   weaker → lower AP TX power / move closer").

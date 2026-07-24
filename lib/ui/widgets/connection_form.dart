@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../l10n/l10n.dart';
 import '../../mikrotik/mikrotik_service.dart';
 import '../../services/credentials_store.dart';
+import '../../settings/settings_controller.dart';
 import '../theme.dart';
 
 /// Router connection form supporting several routers (e.g. a central CAPsMAN
@@ -99,19 +102,24 @@ class _ConnectionFormState extends State<ConnectionForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('MikroTik connection',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            Text(l.t('MikroTik connection', 'Подключение к MikroTik'),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            const Text(
-              'Read-only. Add every router whose APs you want to see '
-              '(central CAPsMAN + standalone APs).',
-              style: TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
+            Text(
+              l.t(
+                  'Read-only. Add every router whose APs you want to see '
+                      '(central CAPsMAN + standalone APs).',
+                  'Только чтение. Добавь каждый роутер, чьи точки хочешь видеть '
+                      '(центральный CAPsMAN + отдельные точки).'),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
             ),
             if (_routers.isNotEmpty) ...[
               const SizedBox(height: 14),
@@ -130,9 +138,9 @@ class _ConnectionFormState extends State<ConnectionForm> {
             const SizedBox(height: 12),
             TextField(
               controller: _user,
-              decoration: const InputDecoration(
-                labelText: 'Username',
-                prefixIcon: Icon(Icons.person_outline),
+              decoration: InputDecoration(
+                labelText: l.t('Username', 'Пользователь'),
+                prefixIcon: const Icon(Icons.person_outline),
               ),
             ),
             const SizedBox(height: 12),
@@ -140,7 +148,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
               controller: _pass,
               obscureText: _obscure,
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: l.t('Password', 'Пароль'),
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -156,17 +164,19 @@ class _ConnectionFormState extends State<ConnectionForm> {
                   child: DropdownButtonFormField<TransportPreference>(
                     initialValue: _transport,
                     decoration:
-                        const InputDecoration(labelText: 'Transport'),
-                    items: const [
+                        InputDecoration(labelText: l.t('Transport', 'Транспорт')),
+                    items: [
                       DropdownMenuItem(
                           value: TransportPreference.auto,
-                          child: Text('Auto (REST → API)')),
+                          child: Text(l.t('Auto (REST → API)',
+                              'Авто (REST → API)'))),
                       DropdownMenuItem(
                           value: TransportPreference.rest,
-                          child: Text('REST only')),
+                          child: Text(l.t('REST only', 'Только REST'))),
                       DropdownMenuItem(
                           value: TransportPreference.binary,
-                          child: Text('Binary API only')),
+                          child: Text(
+                              l.t('Binary API only', 'Только бинарный API'))),
                     ],
                     onChanged: (v) => setState(
                         () => _transport = v ?? TransportPreference.auto),
@@ -190,7 +200,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
             OutlinedButton.icon(
               onPressed: _addRouter,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add another router'),
+              label: Text(l.t('Add another router', 'Добавить ещё роутер')),
             ),
             const SizedBox(height: 10),
             FilledButton.icon(
@@ -203,8 +213,8 @@ class _ConnectionFormState extends State<ConnectionForm> {
                     )
                   : const Icon(Icons.wifi_find),
               label: Text(widget.busy
-                  ? 'Connecting…'
-                  : _connectLabel()),
+                  ? l.t('Connecting…', 'Подключение…')
+                  : _connectLabel(l)),
             ),
           ],
         ),
@@ -212,12 +222,14 @@ class _ConnectionFormState extends State<ConnectionForm> {
     );
   }
 
-  String _connectLabel() {
+  String _connectLabel(L10n l) {
     final n = _routers.length + (_currentInput() != null &&
             !_routers.any((r) => r.host == _currentInput()!.host)
         ? 1
         : 0);
-    return n > 1 ? 'Connect ($n routers)' : 'Connect';
+    return n > 1
+        ? l.t('Connect ($n routers)', 'Подключить ($n роутеров)')
+        : l.t('Connect', 'Подключить');
   }
 
   Widget _routerChip(RouterConnection r) {
