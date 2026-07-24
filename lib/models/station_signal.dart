@@ -27,6 +27,14 @@ class StationSignal {
   final String? ssid;
   final String? uptime;
 
+  /// Cumulative bytes the AP has sent to / received from the client
+  /// (download / upload for the client). Used to derive live throughput.
+  final int? apTxBytes;
+  final int? apRxBytes;
+
+  /// RouterOS's own estimated client throughput, in kbps, where reported.
+  final int? pThroughputKbps;
+
   const StationSignal({
     required this.macAddress,
     this.signalDbm,
@@ -40,12 +48,16 @@ class StationSignal {
     this.interfaceName,
     this.ssid,
     this.uptime,
+    this.apTxBytes,
+    this.apRxBytes,
+    this.pThroughputKbps,
   });
 
   factory StationSignal.fromRecord(
     Map<String, String> r,
     WirelessStack stack,
   ) {
+    final bytes = _pair(_first(r, ['bytes']));
     return StationSignal(
       macAddress: _first(r, ['mac-address']) ?? '',
       // WifiWave2 uses `signal`; classic wireless `signal-strength`;
@@ -61,7 +73,21 @@ class StationSignal {
       interfaceName: _first(r, ['interface', 'name']),
       ssid: _first(r, ['ssid']),
       uptime: _first(r, ['uptime']),
+      apTxBytes: bytes?.$1,
+      apRxBytes: bytes?.$2,
+      pThroughputKbps: _int(_first(r, ['p-throughput'])),
     );
+  }
+
+  /// Parses a `"sent,received"` counter pair.
+  static (int, int)? _pair(String? raw) {
+    if (raw == null) return null;
+    final parts = raw.split(',');
+    if (parts.length < 2) return null;
+    final a = int.tryParse(parts[0].trim());
+    final b = int.tryParse(parts[1].trim());
+    if (a == null || b == null) return null;
+    return (a, b);
   }
 
   static String? _first(Map<String, String> r, List<String> keys) {

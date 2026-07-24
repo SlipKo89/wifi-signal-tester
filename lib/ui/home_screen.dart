@@ -4,13 +4,21 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../models/phone_signal.dart';
+import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import 'about_dialog.dart';
 import 'delta_info.dart';
+import 'history_screen.dart';
+import 'settings_screen.dart';
 import 'theme.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/signal_card.dart';
+
+/// Formats a kbps value as Kbps/Mbps.
+String _fmtKbps(int kbps) => kbps >= 1000
+    ? '${(kbps / 1000).toStringAsFixed(1)} Mbps'
+    : '$kbps Kbps';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -18,7 +26,12 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<MonitorController>();
+    final settings = context.watch<SettingsController>();
+    final l = settings.l;
     final connected = ctrl.state == MonitorState.connected;
+
+    void open(Widget screen) => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => screen));
 
     return Scaffold(
       appBar: AppBar(
@@ -27,20 +40,55 @@ class HomeScreen extends StatelessWidget {
         actions: [
           if (connected)
             IconButton(
-              tooltip: ctrl.isLive ? 'Pause' : 'Resume',
+              tooltip: ctrl.recording
+                  ? l.t('Stop recording', 'Остановить запись')
+                  : l.t('Record', 'Запись'),
+              icon: Icon(
+                ctrl.recording ? Icons.stop_circle : Icons.fiber_manual_record,
+                color: ctrl.recording ? const Color(0xFFF85149) : null,
+              ),
+              onPressed: () =>
+                  ctrl.recording ? ctrl.stopRecording() : ctrl.startRecording(),
+            ),
+          if (connected)
+            IconButton(
+              tooltip: ctrl.isLive
+                  ? l.t('Pause', 'Пауза')
+                  : l.t('Resume', 'Продолжить'),
               icon: Icon(ctrl.isLive ? Icons.pause : Icons.play_arrow),
               onPressed: ctrl.isLive ? ctrl.stopLive : ctrl.startLive,
             ),
           if (connected)
             IconButton(
-              tooltip: 'Disconnect',
+              tooltip: l.t('Disconnect', 'Отключить'),
               icon: const Icon(Icons.logout),
               onPressed: ctrl.disconnect,
             ),
-          IconButton(
-            tooltip: 'About',
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => showAboutSheet(context),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              switch (v) {
+                case 'history':
+                  open(const HistoryScreen());
+                case 'settings':
+                  open(const SettingsScreen());
+                case 'about':
+                  showAboutSheet(context);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'history',
+                child: Text(l.t('History', 'История')),
+              ),
+              PopupMenuItem(
+                value: 'settings',
+                child: Text(l.t('Settings', 'Настройки')),
+              ),
+              PopupMenuItem(
+                value: 'about',
+                child: Text(l.t('About', 'О программе')),
+              ),
+            ],
           ),
         ],
       ),
@@ -51,7 +99,13 @@ class HomeScreen extends StatelessWidget {
               ? _Dashboard(ctrl: ctrl)
               : ConnectionForm(
                   busy: ctrl.state == MonitorState.connecting,
-                  onConnect: ctrl.connect,
+                  onConnect: (routers) {
+                    ctrl.applySettings(
+                      pollSeconds: settings.pollSeconds,
+                      historyLength: settings.historyLength,
+                    );
+                    ctrl.connect(routers);
+                  },
                 ),
         ),
       ),
@@ -64,10 +118,12 @@ class _TitleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<MonitorController>();
+    final l = context.watch<SettingsController>().l;
     final parts = <String>[
       if (ctrl.transportKind != null) ctrl.transportKind!,
       if (ctrl.stackLabel != null) ctrl.stackLabel!,
-      if (ctrl.routerCount > 1) '${ctrl.routerCount} routers',
+      if (ctrl.routerCount > 1)
+        '${ctrl.routerCount} ${l.t('routers', 'роутеров')}',
     ];
     final sub = ctrl.state == MonitorState.connected && parts.isNotEmpty
         ? parts.join(' · ')
@@ -93,6 +149,7 @@ class _Dashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final phone = ctrl.phoneSignal;
     final ap = ctrl.stationSignal;
+    final l = context.watch<SettingsController>().l;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,7 +164,7 @@ class _Dashboard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SignalCard(
-          title: 'PHONE → hears AP',
+          title: l.t('PHONE → hears AP', 'ТЕЛЕФОН → слышит точку'),
           icon: Icons.smartphone,
           accent: AppTheme.phoneAccent,
           signalDbm: phone?.rssiDbm,
@@ -127,37 +184,61 @@ class _Dashboard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SignalCard(
-          title: 'AP → hears PHONE',
+          title: l.t('AP → hears PHONE', 'ТОЧКА → слышит телефон'),
           icon: Icons.router,
           accent: AppTheme.apAccent,
           signalDbm: ap?.signalDbm,
           emptyHint: ctrl.apUnmanaged
               ? (ctrl.connectedApName != null
-                  ? 'On ${ctrl.connectedApName} — waiting for the router to '
-                      'report this client…'
-                  : "This client isn't on a MikroTik-managed AP (standalone / "
-                      'non-CAPsMAN). No AP-side signal — only the phone side.')
+                  ? l.t(
+                      'On ${ctrl.connectedApName} — waiting for the router to '
+                          'report this client…',
+                      'На точке ${ctrl.connectedApName} — ждём данные от '
+                          'роутера…')
+                  : l.t(
+                      "This client isn't on a MikroTik-managed AP (standalone / "
+                          'non-CAPsMAN). No AP-side signal — only the phone side.',
+                      'Клиент не на управляемой точке MikroTik (standalone / '
+                          'не CAPsMAN). Сигнала с точки нет — только сторона '
+                          'телефона.'))
               : null,
           metrics: [
-            MetricTile(label: 'On AP', value: ap?.interfaceName ?? '—'),
+            MetricTile(
+                label: l.t('On AP', 'Точка'),
+                value: ap?.interfaceName ?? '—'),
             if (ctrl.servingHost != null && ctrl.routerCount > 1)
-              MetricTile(label: 'Via', value: ctrl.servingHost!),
+              MetricTile(label: l.t('Via', 'Через'), value: ctrl.servingHost!),
             MetricTile(
               label: ctrl.apSnrIsEstimate ? 'SNR est.' : 'SNR',
               value: ctrl.apSnr?.toString() ?? '—',
               unit: 'dB',
               color: AppTheme.snrColor(ctrl.apSnr),
             ),
+            if (ctrl.downKbps != null)
+              MetricTile(
+                  label: l.t('Down', 'Загрузка'),
+                  value: _fmtKbps(ctrl.downKbps!)),
+            if (ctrl.upKbps != null)
+              MetricTile(
+                  label: l.t('Up', 'Отдача'), value: _fmtKbps(ctrl.upKbps!)),
             MetricTile(label: 'TX rate', value: ap?.txRate ?? '—'),
             MetricTile(label: 'RX rate', value: ap?.rxRate ?? '—'),
+            if (ap?.pThroughputKbps != null)
+              MetricTile(
+                  label: l.t('Est. thr', 'Оц. пропуск'),
+                  value: _fmtKbps(ap!.pThroughputKbps!)),
             if (ap?.signalCh0 != null)
               MetricTile(
                   label: 'Ch0', value: '${ap!.signalCh0}', unit: 'dBm'),
             if (ap?.signalCh1 != null)
               MetricTile(
                   label: 'Ch1', value: '${ap!.signalCh1}', unit: 'dBm'),
+            if (ap?.txCcq != null)
+              MetricTile(label: 'TX CCQ', value: '${ap!.txCcq}', unit: '%'),
             if (ap?.rxCcq != null)
               MetricTile(label: 'RX CCQ', value: '${ap!.rxCcq}', unit: '%'),
+            if (ap?.uptime != null)
+              MetricTile(label: l.t('Uptime', 'Аптайм'), value: ap!.uptime!),
           ],
         ),
         const SizedBox(height: 12),
@@ -185,10 +266,13 @@ class _ConnectionSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
     // We're connected if we have an IP — SSID may be hidden without location.
     final connected = phone?.ipAddress != null;
     final title = phone?.ssid ??
-        (connected ? 'Wi-Fi connected' : 'Not connected to Wi-Fi');
+        (connected
+            ? l.t('Wi-Fi connected', 'Wi-Fi подключён')
+            : l.t('Not connected to Wi-Fi', 'Нет подключения к Wi-Fi'));
     final sub = [
       if (phone?.ipAddress != null) phone!.ipAddress!,
       if (phone?.bssid != null) phone!.bssid!,
@@ -235,22 +319,26 @@ class _ConnectionSummary extends StatelessWidget {
               InkWell(
                 onTap: openAppSettings,
                 borderRadius: BorderRadius.circular(8),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
                     children: [
-                      Icon(Icons.location_on_outlined,
+                      const Icon(Icons.location_on_outlined,
                           size: 14, color: AppTheme.apAccent),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Grant location & turn on GPS to show the Wi-Fi name',
-                          style: TextStyle(
+                          l.t(
+                              'Grant location & turn on GPS to show the Wi-Fi '
+                                  'name',
+                              'Дай геолокацию и включи GPS, чтобы видеть имя '
+                                  'сети'),
+                          style: const TextStyle(
                               fontSize: 11, color: AppTheme.apAccent),
                         ),
                       ),
-                      Text('Settings',
-                          style: TextStyle(
+                      Text(l.t('Settings', 'Настройки'),
+                          style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: AppTheme.apAccent)),
@@ -313,20 +401,25 @@ class _HistoryChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                _Legend(color: AppTheme.phoneAccent, label: 'Phone'),
-                SizedBox(width: 16),
-                _Legend(color: AppTheme.apAccent, label: 'Access point'),
-                Spacer(),
-                Text('signal history',
-                    style: TextStyle(
+                _Legend(
+                    color: AppTheme.phoneAccent,
+                    label: l.t('Phone', 'Телефон')),
+                const SizedBox(width: 16),
+                _Legend(
+                    color: AppTheme.apAccent,
+                    label: l.t('Access point', 'Точка')),
+                const Spacer(),
+                Text(l.t('signal history', 'история сигнала'),
+                    style: const TextStyle(
                         fontSize: 10, color: Color(0xFF7D8590))),
               ],
             ),

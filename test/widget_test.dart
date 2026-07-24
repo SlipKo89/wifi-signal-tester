@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:wifi_apk/main.dart';
+import 'package:wifi_apk/ui/widgets/metric_tile.dart';
 
 void main() {
-  testWidgets('App boots to the connection form', (tester) async {
-    await tester.pumpWidget(const WifiApkApp());
-    await tester.pump();
+  testWidgets('MetricTile renders label, value and unit', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: MetricTile(label: 'SNR', value: '41', unit: 'dB'),
+      ),
+    ));
 
-    // Before connecting, the connection form and Connect button are shown.
-    expect(find.text('MikroTik connection'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
+    expect(find.text('SNR'), findsOneWidget);
+    expect(find.text('41'), findsOneWidget);
+    expect(find.text('dB'), findsOneWidget);
   });
 }

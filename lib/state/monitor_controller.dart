@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../history/history_store.dart';
 import '../mikrotik/mikrotik_service.dart';
 import '../models/phone_signal.dart';
 import '../models/station_signal.dart';
@@ -48,7 +49,19 @@ class MonitorController extends ChangeNotifier {
   /// Rolling RSSI (phone) / signal (AP) history, newest last.
   final List<int> phoneHistory = [];
   final List<int> apHistory = [];
-  static const int historyLength = 60;
+  int historyLimit = 60;
+
+  /// Live throughput derived from the AP's byte counters (kbps).
+  int? downKbps;
+  int? upKbps;
+  int? _lastTxBytes;
+  int? _lastRxBytes;
+  String? _lastBytesMac;
+
+  /// Persistent recording (our own app data only).
+  final HistoryStore history = HistoryStore();
+  int? _recordingSessionId;
+  bool get recording => _recordingSessionId != null;
 
   Timer? _timer;
   Duration pollInterval = const Duration(seconds: 2);
@@ -193,11 +206,90 @@ class MonitorController extends ChangeNotifier {
       }
       apUnmanaged = phone.ipAddress != null && stationSignal == null;
 
+      _computeThroughput();
       _push(phoneHistory, phone.rssiDbm);
       _push(apHistory, stationSignal?.signalDbm);
+      await _recordIfNeeded();
       error = null;
     } catch (e) {
       error = _friendlyError(e);
+    }
+    notifyListeners();
+  }
+
+  /// Live throughput from the AP's cumulative byte counters between polls.
+  void _computeThroughput() {
+    final s = stationSignal;
+    if (s == null || s.apTxBytes == null || s.apRxBytes == null) {
+      downKbps = upKbps = null;
+      _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
+      return;
+    }
+    final secs = pollInterval.inMilliseconds / 1000.0;
+    if (_lastBytesMac == s.macAddress &&
+        _lastTxBytes != null &&
+        _lastRxBytes != null &&
+        secs > 0) {
+      final dTx = s.apTxBytes! - _lastTxBytes!;
+      final dRx = s.apRxBytes! - _lastRxBytes!;
+      // Ignore counter resets (roam / reconnect).
+      downKbps = dTx >= 0 ? (dTx * 8 / 1000 / secs).round() : null;
+      upKbps = dRx >= 0 ? (dRx * 8 / 1000 / secs).round() : null;
+    } else {
+      downKbps = upKbps = null;
+    }
+    _lastTxBytes = s.apTxBytes;
+    _lastRxBytes = s.apRxBytes;
+    _lastBytesMac = s.macAddress;
+  }
+
+  Future<void> _recordIfNeeded() async {
+    final id = _recordingSessionId;
+    if (id == null) return;
+    final ph = phoneSignal;
+    final ap = stationSignal;
+    await history.addSample(
+      id,
+      Sample(
+        tsMs: DateTime.now().millisecondsSinceEpoch,
+        ssid: ph?.ssid,
+        apName: ap?.interfaceName ?? connectedApName,
+        phoneRssi: ph?.rssiDbm,
+        apSignal: ap?.signalDbm,
+        apSnr: apSnr,
+        delta: signalDelta,
+        txRate: ap?.txRate,
+        rxRate: ap?.rxRate,
+        downKbps: downKbps,
+        upKbps: upKbps,
+      ),
+    );
+  }
+
+  Future<void> startRecording() async {
+    _recordingSessionId =
+        await history.startSession(DateTime.now().millisecondsSinceEpoch);
+    notifyListeners();
+  }
+
+  void stopRecording() {
+    _recordingSessionId = null;
+    notifyListeners();
+  }
+
+  /// Applies changed settings (poll interval / history length) live.
+  void applySettings({required int pollSeconds, required int historyLength}) {
+    historyLimit = historyLength;
+    while (phoneHistory.length > historyLimit) {
+      phoneHistory.removeAt(0);
+    }
+    while (apHistory.length > historyLimit) {
+      apHistory.removeAt(0);
+    }
+    final next = Duration(seconds: pollSeconds);
+    if (next != pollInterval) {
+      pollInterval = next;
+      if (isLive) startLive();
     }
     notifyListeners();
   }
@@ -237,7 +329,7 @@ class MonitorController extends ChangeNotifier {
   void _push(List<int> buffer, int? value) {
     if (value == null) return;
     buffer.add(value);
-    if (buffer.length > historyLength) buffer.removeAt(0);
+    if (buffer.length > historyLimit) buffer.removeAt(0);
   }
 
   Future<void> _closeRouters() async {
@@ -249,12 +341,15 @@ class MonitorController extends ChangeNotifier {
 
   Future<void> disconnect() async {
     stopLive();
+    _recordingSessionId = null;
     await _closeRouters();
     phoneSignal = null;
     stationSignal = null;
     _serving = null;
     connectedApName = null;
     _ourMac = null;
+    downKbps = upKbps = null;
+    _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
     phoneHistory.clear();
     apHistory.clear();
     state = MonitorState.idle;

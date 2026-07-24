@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `02:00:00:00:00:00` BSSID placeholder is hidden instead of displayed.
 
 ### Added
+- **Settings screen** (⋮ menu): language (System / English / Русский, applied
+  live), poll interval and chart-history length.
+- **Persistent measurement history**: a Record button on the dashboard stores
+  each pass to a local SQLite DB (our own app data). A History screen lists
+  sessions, exports any session to CSV (share sheet), and deletes / clears.
+- **More signal metrics**: live throughput (down/up, derived from the AP byte
+  counters — works even on CAPsMAN), TX/RX CCQ where reported, RouterOS's own
+  `p-throughput` estimate, and session uptime.
+- Lightweight RU/EN localization for the main UI (full i18n framework still on
+  the backlog).
 - Tap the Δ AP−phone badge for an explanation of the signal-asymmetry metric
   plus rule-based advice from the current numbers (e.g. "AP hears you 24 dB
   weaker → lower AP TX power / move closer").

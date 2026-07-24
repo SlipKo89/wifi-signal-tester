@@ -26,14 +26,16 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 
 ## Next (v0.2)
 - [ ] Per-MIMO-chain view (signal-strength-ch0/ch1) with bar visualization
-- [ ] Persistent measurement history — store each pass (timestamp, both-side
-      signal/SNR/rates, SSID/BSSID) in a local DB (sqflite/drift), our own app
-      data only. Session list, view past runs, clear, export CSV/JSON
-- [ ] Roaming test mode: log signal vs timestamp while walking, export CSV
+- [x] Persistent measurement history — SQLite store, Record button, session
+      list, CSV export (share), delete/clear
+- [ ] Roaming test mode: log signal vs timestamp while walking (history covers
+      the storage; left: dedicated walk UI + per-AP timeline)
 - [ ] Floor-map / heatmap capture (drop pins, record both-side signal)
 - [ ] Multi-AP view when CAPsMAN reports the client on several radios
-- [ ] Configurable poll interval and history length in settings
-- [ ] Dark/light theme toggle
+- [x] Configurable poll interval and history length in settings
+- [ ] Dark/light theme toggle (needs theme-aware colors across widgets)
+- [x] Settings screen + language selection (RU/EN, lightweight i18n)
+- [x] Live throughput, CCQ, p-throughput, uptime metrics
 
 ## Later (v0.3+)
 - [ ] iOS build pass + platform-specific Wi-Fi permission flows
@@ -48,8 +50,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 > when we decide to build them.
 
 ### A. Squeeze more from data we already fetch
-- [ ] Real noise-floor from `/interface/wireless/monitor` (and wifi equivalent)
-      → honest SNR on both sides + on-channel interference level
+- [x] Real noise-floor from `/interface/wireless/monitor` (and wifi equivalent)
+      → honest SNR on both sides (done as AP-side SNR estimate)
 - [ ] `p-throughput` (RouterOS's own estimated client throughput) as a headline
       metric — more honest than raw dBm
 - [ ] Highlight signal↔rate/CCQ mismatch (strong signal but low rate = interference)
@@ -77,3 +79,6 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] wifi_iot RSSI availability varies by OEM ROM — needs field testing
 - [ ] AGP pinned to 8.7.3 / Gradle 8.11.1 — revisit once Flutter fully supports
       AGP 9 (default toolchain installs 9.0.1, which broke the build)
+- [ ] Bump Kotlin from 2.1.0 (build warns it will be dropped; wants ≥2.2.20)
+- [ ] Full i18n framework (gen-l10n/.arb) — currently a lightweight inline
+      L10n.t table covers the main strings only
