@@ -24,6 +24,15 @@ String _fmtKbps(int kbps) => kbps >= 1000
     ? '${(kbps / 1000).toStringAsFixed(1)} Mbps'
     : '$kbps Kbps';
 
+/// Colour for a ping RTT (ms) / loss (%).
+Color _pingColor(int? ms, int? loss) {
+  if ((loss ?? 0) >= 20) return const Color(0xFFF85149);
+  if (ms == null) return Colors.grey;
+  if (ms < 20) return const Color(0xFF3FB950);
+  if (ms < 80) return const Color(0xFFD29922);
+  return const Color(0xFFF85149);
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -267,6 +276,15 @@ class _Dashboard extends StatelessWidget {
               color: AppTheme.snrColor(ctrl.phoneSnr),
               helpKey: 'snr',
             ),
+            if (ctrl.pingMs != null || ctrl.pingLossPct != null)
+              MetricTile(
+                label: l.t('Ping', 'Пинг'),
+                value: ctrl.pingMs?.toString() ??
+                    ((ctrl.pingLossPct ?? 0) >= 100 ? '✕' : '—'),
+                unit: 'ms',
+                color: _pingColor(ctrl.pingMs, ctrl.pingLossPct),
+                helpKey: 'ping',
+              ),
             MetricTile(
                 label: l.t('Band', 'Диапазон'),
                 value: phone?.band ?? '—',

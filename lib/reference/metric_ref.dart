@@ -120,6 +120,24 @@ const Map<String, MetricRef> kMetricRefs = {
     whatRu: 'Реальные байты прямо сейчас, из счётчиков AP. Это фактическое '
         'использование, а не потолок — около 0 в простое, и это нормально.',
   ),
+  'ping': MetricRef(
+    key: 'ping',
+    titleEn: 'Ping (ms)',
+    titleRu: 'Пинг (мс)',
+    whatEn: 'Round-trip time to your gateway over Wi-Fi. Lower is snappier. '
+        'Spikes or packet loss while the signal looks strong point to '
+        'interference or a busy/overloaded AP.',
+    whatRu: 'Время туда-обратно до шлюза по Wi-Fi. Меньше — отзывчивее. Скачки '
+        'или потери при «сильном» сигнале намекают на помехи или '
+        'перегруженную точку.',
+    bands: [
+      RefBand(_green, '< 20', '< 20', 'Snappy.', 'Шустро.'),
+      RefBand(_amber, '20–80', '20–80', 'OK for most use.',
+          'Норм для большинства задач.'),
+      RefBand(_red, '> 80 / loss', '> 80 / потери', 'Laggy — check the link.',
+          'Тормозит — проверь линк.'),
+    ],
+  ),
   'delta': MetricRef(
     key: 'delta',
     titleEn: 'Δ AP−phone (asymmetry)',

@@ -10,6 +10,7 @@ import '../models/station_signal.dart';
 import '../models/wireless_stack.dart';
 import '../services/beeper.dart';
 import '../services/phone_wifi_service.dart';
+import '../services/ping_service.dart';
 
 enum MonitorState { idle, connecting, connected, error }
 
@@ -44,6 +45,24 @@ class MonitorController extends ChangeNotifier {
   String? _lastApName;
   int roamCount = 0;
   String? lastRoam;
+
+  /// Latency to the gateway (last RTT, plus a rolling window for avg / loss).
+  final PingService _ping = PingService();
+  int? pingMs;
+  bool _pinging = false;
+  final List<int?> _pingWindow = [];
+
+  int? get pingAvgMs {
+    final ok = _pingWindow.whereType<int>().toList();
+    if (ok.isEmpty) return null;
+    return (ok.reduce((a, b) => a + b) / ok.length).round();
+  }
+
+  int? get pingLossPct {
+    if (_pingWindow.isEmpty) return null;
+    final lost = _pingWindow.where((e) => e == null).length;
+    return (lost * 100 / _pingWindow.length).round();
+  }
 
   /// Our MAC as last resolved from ARP (re-resolved every poll).
   String? _ourMac;
@@ -255,6 +274,9 @@ class MonitorController extends ChangeNotifier {
       // Router health from whichever router serves the client.
       routerResource = _serving == null ? null : await _serving!.readResource();
 
+      // Latency to the gateway (non-blocking).
+      _pingTarget(phone.gatewayIp ?? _serving?.host);
+
       _computeThroughput();
       _push(phoneHistory, phone.rssiDbm);
       _push(apHistory, stationSignal?.signalDbm);
@@ -357,6 +379,18 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _pingTarget(String? host) {
+    if (host == null || _pinging) return;
+    _pinging = true;
+    _ping.pingOnce(host).then((ms) {
+      pingMs = ms;
+      _pingWindow.add(ms);
+      if (_pingWindow.length > 20) _pingWindow.removeAt(0);
+      _pinging = false;
+      notifyListeners();
+    });
+  }
+
   String? _apNameForBssid(String? bssid) {
     if (bssid == null) return null;
     for (final svc in _routers) {
@@ -418,6 +452,9 @@ class MonitorController extends ChangeNotifier {
     _lastApName = null;
     roamCount = 0;
     lastRoam = null;
+    pingMs = null;
+    _pingWindow.clear();
+    _pinging = false;
     phoneHistory.clear();
     apHistory.clear();
     state = MonitorState.idle;

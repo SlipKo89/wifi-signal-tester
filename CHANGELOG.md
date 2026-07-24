@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Ping / latency to the gateway** on the dashboard — a real ICMP round-trip
+  measured over Wi-Fi each poll (colour-coded, with a reference entry). Latency
+  spikes or loss under a strong signal flag interference / a busy AP.
 - **Inspect any device** (⋮ → Devices): pick a device from the routers' DHCP
   leases (by IP / name / MAC) and see how the APs hear it — signal, AP, rates,
   uptime. Great for checking a TV, laptop or a neighbour's phone.
