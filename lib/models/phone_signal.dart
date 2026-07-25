@@ -47,6 +47,17 @@ class PhoneSignal {
     return ((f - 2412) ~/ 5) + 1;
   }
 
+  /// Channel number for any band (2.4 / 5 / 6 GHz) from the frequency.
+  int? get channel {
+    final f = frequencyMhz;
+    if (f == null) return null;
+    if (f == 2484) return 14;
+    if (f >= 2412 && f <= 2472) return ((f - 2412) ~/ 5) + 1;
+    if (f >= 5000 && f < 5900) return (f - 5000) ~/ 5; // 5 GHz
+    if (f >= 5955 && f <= 7115) return ((f - 5950) ~/ 5); // 6 GHz
+    return null;
+  }
+
   /// Rough SNR estimate: RSSI above an assumed noise floor. The AP-side SNR
   /// from MikroTik is the trustworthy one; this is only a hint.
   int? get estimatedSnr {

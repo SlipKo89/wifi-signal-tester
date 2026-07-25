@@ -294,6 +294,11 @@ class _Dashboard extends StatelessWidget {
                 value: phone?.frequencyMhz?.toString() ?? '—',
                 unit: 'MHz',
                 helpKey: 'band'),
+            if (phone?.channel != null)
+              MetricTile(
+                  label: l.t('Ch', 'Канал'),
+                  value: phone!.channel.toString(),
+                  helpKey: 'band'),
             if (phone?.linkSpeedMbps != null)
               MetricTile(
                   label: l.t('Link', 'Линк'),
