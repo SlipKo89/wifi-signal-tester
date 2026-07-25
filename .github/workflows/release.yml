@@ -43,10 +43,16 @@ jobs:
       - name: Name the artifact after the version
         id: rename
         run: |
-          VERSION=$(cat VERSION)
+          VERSION=$(tr -d '[:space:]' < VERSION)
           cp build/app/outputs/flutter-apk/app-release.apk \
              "wifi-signal-tester-$VERSION.apk"
           echo "apk=wifi-signal-tester-$VERSION.apk" >> "$GITHUB_OUTPUT"
+          # On a tag push use that tag; on a manual run fall back to VERSION.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -54,10 +60,13 @@ jobs:
           name: apk
           path: ${{ steps.rename.outputs.apk }}
 
-      - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/')
+      # Publishes on a tag push and on a manual run alike: the tag is taken from
+      # the ref, or created from VERSION when there isn't one yet.
+      - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rename.outputs.tag }}
+          name: ${{ steps.rename.outputs.tag }}
           files: |
             ${{ steps.rename.outputs.apk }}
             build/app/outputs/flutter-apk/app-release.apk
