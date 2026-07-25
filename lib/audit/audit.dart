@@ -605,42 +605,45 @@ class AuditEngine {
       if (s['disabled'] == 'true') continue;
       if (_mgmtPorts[n] == s['port']) active[n] = s;
     }
+    final defaultDrop = _hasDefaultDrop(c.filter);
+
+    // Plaintext services — worth disabling regardless of the firewall.
     for (final n in ['ftp', 'telnet']) {
       if (active.containsKey(n)) {
-        out.add(Finding(AuditSeverity.warn,
+        out.add(Finding(AuditSeverity.info,
             titleEn: '$n is enabled',
             titleRu: '$n включён',
-            detailEn: '$n is plaintext and insecure — a legacy service you '
-                'almost never need.',
-            detailRu: '$n — открытый и небезопасный протокол, почти никогда не '
-                'нужен.',
-            fixEn: 'Disable $n in /ip service.',
-            fixRu: 'Отключи $n в /ip service.'));
+            detailEn: '$n is a plaintext protocol. If you don\'t use it, turn '
+                'it off to shrink the attack surface.',
+            detailRu: '$n — протокол без шифрования. Если не используешь — '
+                'выключи, чтобы сузить поверхность атаки.',
+            fixEn: 'Disable $n in /ip service if unused.',
+            fixRu: 'Отключи $n в /ip service, если не нужен.'));
       }
     }
-    final open = <String>[];
-    for (final n in ['ssh', 'www-ssl', 'winbox', 'api', 'api-ssl']) {
+
+    // Real exposure = no service-level ACL AND no catch-all drop on input.
+    // (A default-deny firewall gates services even when their address is empty.)
+    final noAcl = <String>[];
+    for (final n in ['ssh', 'www-ssl', 'winbox', 'api', 'api-ssl', 'ftp']) {
       final s = active[n];
-      if (s != null && (s['address'] ?? '').isEmpty) open.add(n);
+      if (s != null && (s['address'] ?? '').isEmpty) noAcl.add(n);
     }
-    if (open.isNotEmpty) {
-      out.add(Finding(AuditSeverity.info,
-          titleEn: 'Management open to any IP',
-          titleRu: 'Управление открыто всем IP',
-          detailEn:
-              '${open.join(', ')} accept connections from any address. Anyone '
-              'who reaches the router can try to log in.',
+    if (noAcl.isNotEmpty && !defaultDrop) {
+      out.add(Finding(AuditSeverity.warn,
+          titleEn: 'Management may be exposed',
+          titleRu: 'Управление может быть открыто',
+          detailEn: '${noAcl.join(', ')} have no service-level IP restriction, '
+              'and the input firewall has no catch-all drop — they may accept '
+              'connections from anywhere.',
           detailRu:
-              '${open.join(', ')} принимают подключения с любого адреса. Любой, '
-              'кто дотянется до роутера, может пробовать войти.',
-          fixEn: 'Restrict these services to your management subnet.',
-          fixRu: 'Ограничь эти сервисы своей управляющей подсетью.'));
-    } else if (active.isNotEmpty) {
-      out.add(const Finding(AuditSeverity.ok,
-          titleEn: 'Management services restricted',
-          titleRu: 'Управление ограничено по IP',
-          detailEn: 'Admin services are limited to specific addresses. Good.',
-          detailRu: 'Админ-сервисы ограничены по адресам. Хорошо.'));
+              '${noAcl.join(', ')} без ограничения по IP на уровне сервиса, и в '
+              'firewall на input нет финального drop — могут принимать '
+              'подключения откуда угодно.',
+          fixEn: 'Add a default-deny to the input chain and/or restrict these '
+              'services by address.',
+          fixRu: 'Добавь финальный drop в input и/или ограничь эти сервисы по '
+              'адресу.'));
     }
 
     // Default admin user.
@@ -656,25 +659,33 @@ class AuditEngine {
           fixRu: 'Заведи именованного админа, а admin убери/отключи.'));
     }
 
-    // Input firewall.
-    if (c.filter.isNotEmpty) {
-      final hasInput =
-          c.filter.any((f) => (f['chain'] ?? '').startsWith('input'));
-      if (hasInput) {
-        out.add(const Finding(AuditSeverity.ok,
-            titleEn: 'Input firewall present',
-            titleRu: 'Firewall на input есть',
-            detailEn: 'The router filters traffic aimed at itself. Good.',
-            detailRu: 'Роутер фильтрует трафик к самому себе. Хорошо.'));
-      } else {
-        out.add(const Finding(AuditSeverity.warn,
-            titleEn: 'No input firewall rules',
-            titleRu: 'Нет правил firewall на input',
-            detailEn: 'Nothing filters traffic to the router itself.',
-            detailRu: 'Ничто не фильтрует трафик к самому роутеру.',
-            fixEn: 'Add an input chain that drops unsolicited traffic.',
-            fixRu: 'Добавь цепочку input, отбрасывающую лишний трафик.'));
-      }
+    // Firewall posture on the input chain.
+    final hasInput =
+        c.filter.any((f) => (f['chain'] ?? '').startsWith('input'));
+    if (defaultDrop) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: 'Firewall: input default-deny',
+          titleRu: 'Firewall: default-deny на input',
+          detailEn: 'The input chain drops everything not explicitly allowed — '
+              'services are gated by the firewall, not just their address ACL.',
+          detailRu: 'Input-цепочка отбрасывает всё, что явно не разрешено — '
+              'сервисы гейтит firewall, а не только их address-ACL.'));
+    } else if (hasInput) {
+      out.add(const Finding(AuditSeverity.info,
+          titleEn: 'Input firewall: no catch-all drop found',
+          titleRu: 'Firewall input: нет финального drop',
+          detailEn: 'There are input rules but no default-deny was detected. '
+              'Verify the router doesn\'t accept unsolicited traffic.',
+          detailRu: 'Правила на input есть, но финального drop не нашла. '
+              'Проверь, что роутер не принимает лишний трафик.'));
+    } else {
+      out.add(const Finding(AuditSeverity.warn,
+          titleEn: 'No input firewall',
+          titleRu: 'Нет firewall на input',
+          detailEn: 'Nothing filters traffic to the router itself.',
+          detailRu: 'Ничто не фильтрует трафик к самому роутеру.',
+          fixEn: 'Add an input chain ending with a drop.',
+          fixRu: 'Добавь цепочку input с финальным drop.'));
     }
 
     // IP pool usage.
@@ -698,6 +709,36 @@ class AuditEngine {
             where: p['name']));
       }
     }
+  }
+
+  /// True if the input chain has a catch-all drop (default-deny) — a drop rule
+  /// with no matcher that would limit which traffic it catches.
+  bool _hasDefaultDrop(List<Map<String, String>> filter) {
+    const limiters = [
+      'protocol',
+      'dst-port',
+      'src-port',
+      'port',
+      'src-address',
+      'dst-address',
+      'src-address-list',
+      'dst-address-list',
+      'in-interface',
+      'in-interface-list',
+      'connection-state',
+      'src-address-type',
+      'dst-address-type',
+      'connection-nat-state',
+      'p2p',
+      'content',
+    ];
+    for (final r in filter) {
+      if ((r['chain'] ?? '') != 'input') continue;
+      if (r['action'] != 'drop' || r['disabled'] == 'true') continue;
+      final limited = limiters.any((k) => (r[k] ?? '').isNotEmpty);
+      if (!limited) return true;
+    }
+    return false;
   }
 
   int? _ipToInt(String ip) {
