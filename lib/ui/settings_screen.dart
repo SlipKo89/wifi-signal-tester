@@ -18,6 +18,8 @@ class SettingsScreen extends StatelessWidget {
           historyLength: s.historyLength,
           alertsEnabled: s.alertsEnabled,
           alertThresholdDb: s.alertThresholdDb,
+          minSignalDbm: s.minSignalDbm,
+          minSnrDb: s.minSnrDb,
         );
 
     return Scaffold(
@@ -51,15 +53,34 @@ class SettingsScreen extends StatelessWidget {
             onDone: applyToMonitor,
           ),
           const SizedBox(height: 20),
+          _section(l.t('Targets', 'Целевые значения')),
+          _sliderTile(
+            title: l.t('Minimum signal', 'Минимальный сигнал'),
+            value: s.minSignalDbm.toDouble(),
+            min: -90,
+            max: -40,
+            label: '${s.minSignalDbm} dBm',
+            onChanged: (v) => s.setMinSignalDbm(v.round()),
+            onDone: applyToMonitor,
+          ),
+          _sliderTile(
+            title: l.t('Minimum SNR', 'Минимальный SNR'),
+            value: s.minSnrDb.toDouble(),
+            min: 5,
+            max: 40,
+            label: '${s.minSnrDb} dB',
+            onChanged: (v) => s.setMinSnrDb(v.round()),
+            onDone: applyToMonitor,
+          ),
+          const SizedBox(height: 20),
           _section(l.t('Alerts', 'Оповещения')),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(l.t('Beep on signal asymmetry',
-                'Бип при асимметрии сигнала')),
+            title: Text(l.t('Beep when out of target',
+                'Бип при выходе за целевые значения')),
             subtitle: Text(
-              l.t('Sounds when the AP and phone signal differ past the '
-                  'threshold', 'Звук, когда сигнал точки и телефона расходятся '
-                  'сверх порога'),
+              l.t('Sounds when signal, SNR or asymmetry is out of target',
+                  'Звук, когда сигнал, SNR или асимметрия вне цели'),
               style: const TextStyle(fontSize: 12),
             ),
             value: s.alertsEnabled,

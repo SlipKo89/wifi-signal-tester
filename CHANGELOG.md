@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-26
+
+### Added
+- **Targets for signal and SNR** (Settings → Targets) and a dashboard strip that
+  reads "All metrics within target" or lists what's out of spec. Alerts now beep
+  for any breach — phone/AP signal, phone/AP SNR or asymmetry — not just
+  asymmetry, completing the threshold-alerts feature.
+
 ### Changed
 - The router audit is split into **Wi-Fi audit** and **System audit** (two menu
   entries), so RF checks and health/hardening checks are separate reports.
@@ -188,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://example.com/compare/v0.2.0...HEAD
+[Unreleased]: https://example.com/compare/v0.2.1...HEAD
+[0.2.1]: https://example.com/compare/v0.2.0...v0.2.1
 [0.2.0]: https://example.com/compare/v0.1.0...v0.2.0
 [0.1.0]: https://example.com/releases/tag/v0.1.0

@@ -14,6 +14,9 @@ import '../services/ping_service.dart';
 
 enum MonitorState { idle, connecting, connected, error }
 
+/// A metric that fell outside its configured target.
+enum ThresholdBreach { phoneSignal, apSignal, phoneSnr, apSnr, asymmetry }
+
 /// Drives one measurement loop across one or more routers: read the phone side,
 /// resolve our MAC, find the AP side on whichever router currently serves the
 /// client, and keep a short history for the sparkline.
@@ -85,6 +88,14 @@ class MonitorController extends ChangeNotifier {
   final Beeper _beeper = Beeper();
   bool alertsEnabled = false;
   int alertThresholdDb = 12;
+  int minSignalDbm = -72;
+  int minSnrDb = 20;
+
+  /// Which targets are currently breached (empty = everything within target).
+  List<ThresholdBreach> breaches = const [];
+
+  /// Overall pass/warn state for the walk test: green when nothing is breached.
+  bool get thresholdsOk => breaches.isEmpty;
 
   /// Rolling RSSI (phone) / signal (AP) history, newest last.
   final List<int> phoneHistory = [];
@@ -281,11 +292,7 @@ class MonitorController extends ChangeNotifier {
       _push(phoneHistory, phone.rssiDbm);
       _push(apHistory, stationSignal?.signalDbm);
 
-      // Beep when the two sides diverge past the threshold (walk-test aid).
-      final d = signalDelta;
-      if (alertsEnabled && d != null && d.abs() >= alertThresholdDb) {
-        _beeper.beep();
-      }
+      _evaluateThresholds();
 
       await _recordIfNeeded();
       error = null;
@@ -361,10 +368,14 @@ class MonitorController extends ChangeNotifier {
     required int historyLength,
     bool? alertsEnabled,
     int? alertThresholdDb,
+    int? minSignalDbm,
+    int? minSnrDb,
   }) {
     historyLimit = historyLength;
     if (alertsEnabled != null) this.alertsEnabled = alertsEnabled;
     if (alertThresholdDb != null) this.alertThresholdDb = alertThresholdDb;
+    if (minSignalDbm != null) this.minSignalDbm = minSignalDbm;
+    if (minSnrDb != null) this.minSnrDb = minSnrDb;
     while (phoneHistory.length > historyLimit) {
       phoneHistory.removeAt(0);
     }
@@ -377,6 +388,32 @@ class MonitorController extends ChangeNotifier {
       if (isLive) startLive();
     }
     notifyListeners();
+  }
+
+  /// Compares the live metrics against the configured targets and beeps when
+  /// something is out of spec (hands-free walk testing).
+  void _evaluateThresholds() {
+    final found = <ThresholdBreach>[];
+
+    final ph = phoneSignal?.rssiDbm;
+    if (ph != null && ph < minSignalDbm) found.add(ThresholdBreach.phoneSignal);
+
+    final ap = stationSignal?.signalDbm;
+    if (ap != null && ap < minSignalDbm) found.add(ThresholdBreach.apSignal);
+
+    final phSnr = phoneSnr;
+    if (phSnr != null && phSnr < minSnrDb) found.add(ThresholdBreach.phoneSnr);
+
+    final apS = apSnr;
+    if (apS != null && apS < minSnrDb) found.add(ThresholdBreach.apSnr);
+
+    final d = signalDelta;
+    if (d != null && d.abs() >= alertThresholdDb) {
+      found.add(ThresholdBreach.asymmetry);
+    }
+
+    breaches = found;
+    if (alertsEnabled && found.isNotEmpty) _beeper.beep();
   }
 
   void _pingTarget(String? host) {
@@ -455,6 +492,7 @@ class MonitorController extends ChangeNotifier {
     pingMs = null;
     _pingWindow.clear();
     _pinging = false;
+    breaches = const [];
     phoneHistory.clear();
     apHistory.clear();
     state = MonitorState.idle;

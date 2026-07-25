@@ -82,6 +82,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   historyLength: settings.historyLength,
                   alertsEnabled: settings.alertsEnabled,
                   alertThresholdDb: settings.alertThresholdDb,
+                  minSignalDbm: settings.minSignalDbm,
+                  minSnrDb: settings.minSnrDb,
                 );
               },
             ),
@@ -193,6 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       historyLength: settings.historyLength,
                       alertsEnabled: settings.alertsEnabled,
                       alertThresholdDb: settings.alertThresholdDb,
+                      minSignalDbm: settings.minSignalDbm,
+                      minSnrDb: settings.minSnrDb,
                     );
                     ctrl.connect(routers);
                   },
@@ -202,6 +206,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       historyLength: settings.historyLength,
                       alertsEnabled: settings.alertsEnabled,
                       alertThresholdDb: settings.alertThresholdDb,
+                      minSignalDbm: settings.minSignalDbm,
+                      minSnrDb: settings.minSnrDb,
                     );
                     ctrl.startPhoneOnly();
                   },
@@ -263,6 +269,7 @@ class _Dashboard extends StatelessWidget {
                           'сети одного из твоих MikroTik, чтобы видеть сторону '
                           'точки.')
                   : ctrl.error!),
+        if (!ctrl.offWifi) _StatusBanner(ctrl: ctrl),
         _ConnectionSummary(
           phone: phone,
           delta: ctrl.signalDelta,
@@ -415,6 +422,60 @@ class _Dashboard extends StatelessWidget {
         _HistoryChart(
             phone: ctrl.phoneHistory, ap: ctrl.apHistory),
       ],
+    );
+  }
+}
+
+/// Overall pass/fail strip for a walk test: green when every metric is inside
+/// the configured targets, amber listing what's out of spec otherwise.
+class _StatusBanner extends StatelessWidget {
+  final MonitorController ctrl;
+  const _StatusBanner({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
+    final ok = ctrl.thresholdsOk;
+    final color =
+        ok ? const Color(0xFF3FB950) : const Color(0xFFD29922);
+
+    String nameOf(ThresholdBreach b) => switch (b) {
+          ThresholdBreach.phoneSignal =>
+            l.t('phone signal', 'сигнал телефона'),
+          ThresholdBreach.apSignal => l.t('AP signal', 'сигнал точки'),
+          ThresholdBreach.phoneSnr => l.t('phone SNR', 'SNR телефона'),
+          ThresholdBreach.apSnr => l.t('AP SNR', 'SNR точки'),
+          ThresholdBreach.asymmetry => l.t('asymmetry', 'асимметрия'),
+        };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.check_circle : Icons.warning_amber,
+              size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              ok
+                  ? l.t('All metrics within target',
+                      'Все показатели в пределах цели')
+                  : '${l.t('Out of target', 'Вне цели')}: '
+                      '${ctrl.breaches.map(nameOf).join(', ')}',
+              style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

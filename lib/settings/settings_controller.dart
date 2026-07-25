@@ -14,6 +14,8 @@ class SettingsController extends ChangeNotifier {
   int _historyLength = 60;
   bool _alertsEnabled = false;
   int _alertThresholdDb = 12;
+  int _minSignalDbm = -72;
+  int _minSnrDb = 20;
   String _lastSeenVersion = '';
 
   String get lang => _lang;
@@ -22,6 +24,10 @@ class SettingsController extends ChangeNotifier {
   int get historyLength => _historyLength;
   bool get alertsEnabled => _alertsEnabled;
   int get alertThresholdDb => _alertThresholdDb;
+
+  /// Target signal / SNR: below these the dashboard warns (and alerts beep).
+  int get minSignalDbm => _minSignalDbm;
+  int get minSnrDb => _minSnrDb;
 
   /// Last app version whose "What's new" the user has already seen ('' = never).
   String get lastSeenVersion => _lastSeenVersion;
@@ -50,7 +56,21 @@ class SettingsController extends ChangeNotifier {
     _historyLength = p.getInt('historyLength') ?? 60;
     _alertsEnabled = p.getBool('alertsEnabled') ?? false;
     _alertThresholdDb = p.getInt('alertThresholdDb') ?? 12;
+    _minSignalDbm = p.getInt('minSignalDbm') ?? -72;
+    _minSnrDb = p.getInt('minSnrDb') ?? 20;
     _lastSeenVersion = p.getString('lastSeenVersion') ?? '';
+    notifyListeners();
+  }
+
+  Future<void> setMinSignalDbm(int v) async {
+    _minSignalDbm = v.clamp(-90, -40);
+    await _prefs?.setInt('minSignalDbm', _minSignalDbm);
+    notifyListeners();
+  }
+
+  Future<void> setMinSnrDb(int v) async {
+    _minSnrDb = v.clamp(5, 40);
+    await _prefs?.setInt('minSnrDb', _minSnrDb);
     notifyListeners();
   }
 

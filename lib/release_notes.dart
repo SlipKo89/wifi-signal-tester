@@ -9,6 +9,24 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.2.1', '2026-07-26', [
+    'Targets for signal and SNR, with a pass/fail strip on the dashboard',
+    'Alerts now beep for signal, SNR or asymmetry out of target',
+    'Phone-only mode — view your network without a router',
+    'Audit split into Wi-Fi and System, plus router health & hardening checks',
+    'Audit judges exposure by the firewall, not just the service ACL',
+    'Devices on Wi-Fi list, enriched from DHCP leases',
+    'Ping to the gateway, channel number, in-app changelog and licenses',
+  ], [
+    'Целевые значения сигнала и SNR + строка «в норме / вне цели» на дашборде',
+    'Оповещения бипают при выходе сигнала, SNR или асимметрии за цель',
+    'Режим без роутера — смотреть свою сеть с телефона',
+    'Аудит разделён на Wi-Fi и системный, добавлены проверки здоровья и '
+        'безопасности роутера',
+    'Аудит оценивает открытость по firewall, а не только по ACL сервиса',
+    'Список устройств в Wi-Fi с именами и IP из DHCP',
+    'Пинг до шлюза, номер канала, история версий и лицензии в приложении',
+  ]),
   Release('0.2.0', '2026-07-24', [
     'Connect to several MikroTiks at once — signal follows you as you roam',
     'Two-sided SNR from the real radio noise floor',
