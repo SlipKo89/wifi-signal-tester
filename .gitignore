@@ -79,3 +79,4 @@ app.*.map.json
 # Secrets — never commit real router credentials
 *.secrets
 secrets.env
+my_screen.jpg

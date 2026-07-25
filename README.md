@@ -9,25 +9,23 @@ device** — signal, SNR, rates. This app reads that from a MikroTik (running
 CAPsMAN or plain Wi-Fi) **read-only**, for **your device's MAC only**, and puts
 it next to your phone's own readings.
 
-```
-┌──────────────────────────────────────────────┐
-│ Wi-Fi Signal Tester            API · WifiWave2 │
-├──────────────────────────────────────────────┤
-│ HomeNet_5G     192.168.88.42     Δ AP−phone    │
-│ e8:9f:..:1a                        +6 dB       │
-├──────────────────────────────────────────────┤
-│ PHONE → hears AP                               │
-│  -48 dBm  ██████████████░░░░                   │
-│  SNR est. 47 dB   Band 5 GHz   Freq 5180 MHz   │
-├──────────────────────────────────────────────┤
-│ AP → hears PHONE                               │
-│  -42 dBm  ████████████████░░                   │
-│  SNR 51 dB  TX 866Mbps  RX 780Mbps  Ch0 -44    │
-├──────────────────────────────────────────────┤
-│  ╱╲    signal history   ── phone  ── AP        │
-│ ╱  ╲__╱╲___╱──                                 │
-└──────────────────────────────────────────────┘
-```
+<table>
+<tr>
+<td width="33%"><img src="docs/screenshots/dashboard.png" alt="Two-sided dashboard"></td>
+<td width="33%"><img src="docs/screenshots/audit.png" alt="Wi-Fi audit"></td>
+<td width="33%"><img src="docs/screenshots/devices.png" alt="Devices on Wi-Fi"></td>
+</tr>
+<tr>
+<td align="center"><b>Both sides at once</b><br/>the phone hears the AP at −48 dBm, the AP hears the phone at −45 dBm</td>
+<td align="center"><b>Read-only audit</b><br/>Wi-Fi and system checks with plain-language fixes, exportable to PDF</td>
+<td align="center"><b>Any device on Wi-Fi</b><br/>see how the APs hear a TV, laptop or a guest's phone</td>
+</tr>
+</table>
+
+## Download
+
+Grab the latest APK from the [Releases page](../../releases/latest) — download
+`app-release.apk` under *Assets* and install it on your Android device.
 
 ## Features
 
