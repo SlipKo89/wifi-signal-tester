@@ -43,7 +43,7 @@ const Map<String, MetricRef> kMetricRefs = {
   'purpose': MetricRef(
     key: 'purpose',
     titleEn: 'What this app is for',
-    titleRu: 'это приложение',
+    titleRu: 'Зачем это приложение',
     whatEn: 'It tests Wi-Fi from both sides on MikroTik: how your device hears '
         'the access point AND how the AP hears your device — the reverse '
         'direction normal analyzers can\'t show. It also runs a read-only '
