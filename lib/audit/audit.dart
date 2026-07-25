@@ -56,6 +56,7 @@ class AuditEngine {
       _capsmanChecks(c, out);
       _standaloneChecks(c, out);
       _bestPractices(c, out);
+      _hardeningChecks(c, out);
     }
     out.sort((a, b) => a.sev.index.compareTo(b.sev.index));
     return out;
@@ -173,6 +174,8 @@ class AuditEngine {
     }
 
     final resource = await read('/system/resource');
+    final ntp = await read('/system/ntp/client');
+    final update = await read('/system/package/update');
     return _Ctx(
       capsIfaces: await read('/caps-man/interface'),
       capsConfigs: await read('/caps-man/configuration'),
@@ -193,6 +196,13 @@ class AuditEngine {
       ],
       resource: resource.isEmpty ? null : resource.first,
       host: svc.host,
+      ntp: ntp.isEmpty ? null : ntp.first,
+      update: update.isEmpty ? null : update.first,
+      services: await read('/ip/service'),
+      users: await read('/user'),
+      pools: await read('/ip/pool'),
+      leases: await read('/ip/dhcp-server/lease'),
+      filter: await read('/ip/firewall/filter'),
     );
   }
 
@@ -529,6 +539,226 @@ class AuditEngine {
       power == null ? null : int.tryParse(power.group(1)!),
     );
   }
+
+  // --- router hardening / health -------------------------------------------
+
+  static const _mgmtPorts = {
+    'ftp': '21',
+    'telnet': '23',
+    'ssh': '22',
+    'www': '80',
+    'www-ssl': '443',
+    'api': '8728',
+    'api-ssl': '8729',
+    'winbox': '8291',
+  };
+
+  void _hardeningChecks(_Ctx c, List<Finding> out) {
+    // NTP time sync.
+    final ntp = c.ntp;
+    if (ntp != null) {
+      if (ntp['enabled'] == 'true') {
+        out.add(Finding(AuditSeverity.ok,
+            titleEn: 'NTP time sync on',
+            titleRu: 'Синхронизация времени (NTP)',
+            detailEn:
+                'Clock is synced (${ntp['status'] ?? 'ok'}) — certificates, '
+                'logs and schedules stay correct.',
+            detailRu:
+                'Часы синхронизированы (${ntp['status'] ?? 'ok'}) — сертификаты, '
+                'логи и расписания корректны.'));
+      } else {
+        out.add(const Finding(AuditSeverity.warn,
+            titleEn: 'NTP time sync off',
+            titleRu: 'NTP выключен',
+            detailEn: 'The clock drifts without NTP — this breaks TLS certs, '
+                'log timestamps and scheduled tasks.',
+            detailRu: 'Без NTP часы плывут — ломаются TLS-сертификаты, время в '
+                'логах и задачи по расписанию.',
+            fixEn: 'Enable the NTP client with a couple of servers.',
+            fixRu: 'Включи NTP-клиент с парой серверов.'));
+      }
+    }
+
+    // Software update.
+    final upd = c.update;
+    if (upd != null) {
+      final installed = upd['installed-version'] ?? '';
+      final latest = upd['latest-version'] ?? '';
+      if (latest.isNotEmpty &&
+          latest != installed &&
+          (upd['status'] ?? '').toLowerCase().contains('new')) {
+        out.add(Finding(AuditSeverity.info,
+            titleEn: 'RouterOS update available',
+            titleRu: 'Доступно обновление RouterOS',
+            detailEn: '$installed → $latest. Updates fix security bugs; plan an '
+                'upgrade.',
+            detailRu: '$installed → $latest. Обновления чинят уязвимости — '
+                'запланируй апгрейд.'));
+      }
+    }
+
+    // Active management services (dedupe by standard port).
+    final active = <String, Map<String, String>>{};
+    for (final s in c.services) {
+      final n = s['name'] ?? '';
+      if (s['disabled'] == 'true') continue;
+      if (_mgmtPorts[n] == s['port']) active[n] = s;
+    }
+    for (final n in ['ftp', 'telnet']) {
+      if (active.containsKey(n)) {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: '$n is enabled',
+            titleRu: '$n включён',
+            detailEn: '$n is plaintext and insecure — a legacy service you '
+                'almost never need.',
+            detailRu: '$n — открытый и небезопасный протокол, почти никогда не '
+                'нужен.',
+            fixEn: 'Disable $n in /ip service.',
+            fixRu: 'Отключи $n в /ip service.'));
+      }
+    }
+    final open = <String>[];
+    for (final n in ['ssh', 'www-ssl', 'winbox', 'api', 'api-ssl']) {
+      final s = active[n];
+      if (s != null && (s['address'] ?? '').isEmpty) open.add(n);
+    }
+    if (open.isNotEmpty) {
+      out.add(Finding(AuditSeverity.info,
+          titleEn: 'Management open to any IP',
+          titleRu: 'Управление открыто всем IP',
+          detailEn:
+              '${open.join(', ')} accept connections from any address. Anyone '
+              'who reaches the router can try to log in.',
+          detailRu:
+              '${open.join(', ')} принимают подключения с любого адреса. Любой, '
+              'кто дотянется до роутера, может пробовать войти.',
+          fixEn: 'Restrict these services to your management subnet.',
+          fixRu: 'Ограничь эти сервисы своей управляющей подсетью.'));
+    } else if (active.isNotEmpty) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: 'Management services restricted',
+          titleRu: 'Управление ограничено по IP',
+          detailEn: 'Admin services are limited to specific addresses. Good.',
+          detailRu: 'Админ-сервисы ограничены по адресам. Хорошо.'));
+    }
+
+    // Default admin user.
+    if (c.users
+        .any((u) => u['name'] == 'admin' && u['disabled'] != 'true')) {
+      out.add(const Finding(AuditSeverity.warn,
+          titleEn: "Default 'admin' user present",
+          titleRu: 'Есть дефолтный пользователь admin',
+          detailEn: 'The well-known admin account is enabled — a common attack '
+              'target.',
+          detailRu: 'Включена стандартная учётка admin — частая цель атак.',
+          fixEn: 'Create a named admin user and remove/disable admin.',
+          fixRu: 'Заведи именованного админа, а admin убери/отключи.'));
+    }
+
+    // Input firewall.
+    if (c.filter.isNotEmpty) {
+      final hasInput =
+          c.filter.any((f) => (f['chain'] ?? '').startsWith('input'));
+      if (hasInput) {
+        out.add(const Finding(AuditSeverity.ok,
+            titleEn: 'Input firewall present',
+            titleRu: 'Firewall на input есть',
+            detailEn: 'The router filters traffic aimed at itself. Good.',
+            detailRu: 'Роутер фильтрует трафик к самому себе. Хорошо.'));
+      } else {
+        out.add(const Finding(AuditSeverity.warn,
+            titleEn: 'No input firewall rules',
+            titleRu: 'Нет правил firewall на input',
+            detailEn: 'Nothing filters traffic to the router itself.',
+            detailRu: 'Ничто не фильтрует трафик к самому роутеру.',
+            fixEn: 'Add an input chain that drops unsolicited traffic.',
+            fixRu: 'Добавь цепочку input, отбрасывающую лишний трафик.'));
+      }
+    }
+
+    // IP pool usage.
+    for (final p in c.pools) {
+      final ranges = p['ranges'] ?? '';
+      final size = _rangeSize(ranges);
+      if (size == null || size == 0) continue;
+      final used =
+          c.leases.where((l) => _inRanges(l['address'] ?? '', ranges)).length;
+      final pct = (used * 100 / size).round();
+      if (pct >= 85) {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: "IP pool '${p['name']}' almost full",
+            titleRu: 'IP-пул «${p['name']}» почти заполнен',
+            detailEn: '$used of $size addresses used ($pct%). New devices may '
+                'fail to get an IP.',
+            detailRu: 'Занято $used из $size адресов ($pct%). Новые устройства '
+                'могут не получить IP.',
+            fixEn: 'Enlarge the pool range.',
+            fixRu: 'Расширь диапазон пула.',
+            where: p['name']));
+      }
+    }
+  }
+
+  int? _ipToInt(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) return null;
+    var v = 0;
+    for (final p in parts) {
+      final n = int.tryParse(p);
+      if (n == null || n < 0 || n > 255) return null;
+      v = v * 256 + n;
+    }
+    return v;
+  }
+
+  int? _rangeSize(String ranges) {
+    var total = 0;
+    var any = false;
+    for (final raw in ranges.split(',')) {
+      final t = raw.trim();
+      if (t.contains('-')) {
+        final ab = t.split('-');
+        final a = _ipToInt(ab.first);
+        final b = _ipToInt(ab.last);
+        if (a != null && b != null && b >= a) {
+          total += b - a + 1;
+          any = true;
+        }
+      } else if (t.contains('/')) {
+        final cidr = t.split('/');
+        final bits = int.tryParse(cidr.last);
+        if (bits != null && bits >= 0 && bits <= 32) {
+          total += 1 << (32 - bits);
+          any = true;
+        }
+      }
+    }
+    return any ? total : null;
+  }
+
+  bool _inRanges(String ip, String ranges) {
+    final v = _ipToInt(ip);
+    if (v == null) return false;
+    for (final raw in ranges.split(',')) {
+      final t = raw.trim();
+      if (t.contains('-')) {
+        final ab = t.split('-');
+        final a = _ipToInt(ab.first);
+        final b = _ipToInt(ab.last);
+        if (a != null && b != null && v >= a && v <= b) return true;
+      } else if (t.contains('/')) {
+        final cidr = t.split('/');
+        final base = _ipToInt(cidr.first);
+        final bits = int.tryParse(cidr.last);
+        if (base != null && bits != null && bits >= 0 && bits <= 32) {
+          final mask = bits == 0 ? 0 : (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF;
+          if ((v & mask) == (base & mask)) return true;
+        }
+      }
+    }
+    return false;
+  }
 }
 
 class _Ctx {
@@ -541,6 +771,13 @@ class _Ctx {
   final List<Map<String, String>> accessList;
   final Map<String, String>? resource;
   final String? host;
+  final Map<String, String>? ntp;
+  final Map<String, String>? update;
+  final List<Map<String, String>> services;
+  final List<Map<String, String>> users;
+  final List<Map<String, String>> pools;
+  final List<Map<String, String>> leases;
+  final List<Map<String, String>> filter;
   _Ctx({
     required this.capsIfaces,
     required this.capsConfigs,
@@ -551,5 +788,12 @@ class _Ctx {
     required this.accessList,
     required this.resource,
     required this.host,
+    required this.ntp,
+    required this.update,
+    required this.services,
+    required this.users,
+    required this.pools,
+    required this.leases,
+    required this.filter,
   });
 }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Audit expansion — router health & hardening** (beyond Wi-Fi): NTP time sync,
+  RouterOS update available, FTP/Telnet enabled, management services open to any
+  IP, default `admin` user, input firewall present, and IP-pool exhaustion —
+  each read-only, with plain explanations and fixes.
+- **Scan-throttling tip** in the Reference: Android limits Wi-Fi scan frequency;
+  how to disable it in Developer options.
 - **Ping / latency to the gateway** on the dashboard — a real ICMP round-trip
   measured over Wi-Fi each poll (colour-coded, with a reference entry). Latency
   spikes or loss under a strong signal flag interference / a busy AP.

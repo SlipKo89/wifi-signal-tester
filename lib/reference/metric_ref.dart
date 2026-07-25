@@ -174,4 +174,21 @@ const Map<String, MetricRef> kMetricRefs = {
     whatRu: 'Как долго клиент держится на этой точке. Частые сбросы — роуминг '
         'или нестабильный линк.',
   ),
+  'scan_throttle': MetricRef(
+    key: 'scan_throttle',
+    titleEn: 'Wi-Fi scan throttling (Android)',
+    titleRu: 'Тротлинг сканирования Wi-Fi (Android)',
+    whatEn: 'Since Android 9, the system limits how often apps can scan for '
+        'nearby Wi-Fi (about 4 scans per 2 minutes), so signal/BSSID updates '
+        'can lag.',
+    whatRu: 'С Android 9 система ограничивает, как часто приложения сканируют '
+        'Wi-Fi вокруг (примерно 4 скана за 2 минуты), поэтому обновления '
+        'сигнала/BSSID могут запаздывать.',
+    tipEn: 'To scan faster: enable Developer options (tap Build number 7×), '
+        'then turn off "Wi-Fi scan throttling". It resets on reboot on some '
+        'phones.',
+    tipRu: 'Чтобы сканить чаще: включи «Для разработчиков» (тапни 7× по «Номер '
+        'сборки»), затем выключи «Ограничение поиска сетей Wi-Fi». На части '
+        'телефонов сбрасывается после перезагрузки.',
+  ),
 };
