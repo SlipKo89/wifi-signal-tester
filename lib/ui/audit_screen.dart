@@ -12,7 +12,11 @@ import '../state/monitor_controller.dart';
 class AuditScreen extends StatefulWidget {
   /// When true, audits the phone's own view instead of the routers.
   final bool phone;
-  const AuditScreen({super.key, this.phone = false});
+
+  /// For router audits: which slice of checks (Wi-Fi vs system).
+  final AuditScope? scope;
+
+  const AuditScreen({super.key, this.phone = false, this.scope});
 
   @override
   State<AuditScreen> createState() => _AuditScreenState();
@@ -30,7 +34,8 @@ class _AuditScreenState extends State<AuditScreen> {
   Future<List<Finding>> _run() {
     final ctrl = context.read<MonitorController>();
     if (widget.phone) return Future.value(PhoneAudit().run(ctrl.phoneSignal));
-    return AuditEngine().run(ctrl.routers);
+    return AuditEngine()
+        .run(ctrl.routers, scope: widget.scope ?? AuditScope.wifi);
   }
 
   Future<void> _exportPdf() async {
@@ -47,9 +52,12 @@ class _AuditScreenState extends State<AuditScreen> {
         : '${l.t('Routers', 'Роутеры')}: '
             '${ctrl.routers.map((r) => r.host ?? '?').join(', ')} • $date';
     final bytes = await buildAuditPdf(findings, l: l, subtitle: subtitle);
-    await Printing.sharePdf(
-        bytes: bytes,
-        filename: widget.phone ? 'phone-audit.pdf' : 'wifi-audit.pdf');
+    final file = widget.phone
+        ? 'phone-audit.pdf'
+        : widget.scope == AuditScope.system
+            ? 'system-audit.pdf'
+            : 'wifi-audit.pdf';
+    await Printing.sharePdf(bytes: bytes, filename: file);
   }
 
   @override
@@ -59,7 +67,9 @@ class _AuditScreenState extends State<AuditScreen> {
       appBar: AppBar(
         title: Text(widget.phone
             ? l.t('Network audit (phone)', 'Аудит сети (телефон)')
-            : l.t('Config audit', 'Аудит настроек')),
+            : widget.scope == AuditScope.system
+                ? l.t('System audit', 'Системный аудит')
+                : l.t('Wi-Fi audit', 'Аудит Wi-Fi')),
         actions: [
           IconButton(
             tooltip: l.t('Export PDF', 'Экспорт PDF'),

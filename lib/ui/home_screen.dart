@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../audit/audit.dart';
 import '../models/phone_signal.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
@@ -113,8 +114,10 @@ class _HomeScreenState extends State<HomeScreen> {
           PopupMenuButton<String>(
             onSelected: (v) {
               switch (v) {
-                case 'audit':
-                  open(const AuditScreen());
+                case 'audit_wifi':
+                  open(const AuditScreen(scope: AuditScope.wifi));
+                case 'audit_system':
+                  open(const AuditScreen(scope: AuditScope.system));
                 case 'phone_audit':
                   open(const AuditScreen(phone: true));
                 case 'devices':
@@ -134,8 +137,13 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (_) => [
               if (connected && !ctrl.phoneOnly)
                 PopupMenuItem(
-                  value: 'audit',
-                  child: Text(l.t('Config audit', 'Аудит настроек')),
+                  value: 'audit_wifi',
+                  child: Text(l.t('Wi-Fi audit', 'Аудит Wi-Fi')),
+                ),
+              if (connected && !ctrl.phoneOnly)
+                PopupMenuItem(
+                  value: 'audit_system',
+                  child: Text(l.t('System audit', 'Системный аудит')),
                 ),
               if (connected && ctrl.phoneOnly)
                 PopupMenuItem(

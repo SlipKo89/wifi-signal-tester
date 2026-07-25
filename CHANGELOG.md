@@ -6,7 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The router audit is split into **Wi-Fi audit** and **System audit** (two menu
+  entries), so RF checks and health/hardening checks are separate reports.
+- The default-`admin` check now reports OK when the account is disabled, and
+  when it's active advises changing its password (rename/disable).
+
 ### Added
+- A "What this app is for" intro at the top of the Reference.
 - **Audit expansion — router health & hardening** (beyond Wi-Fi): NTP time sync,
   RouterOS update available, FTP/Telnet enabled, management services open to any
   IP, default `admin` user, input firewall present, and IP-pool exhaustion —

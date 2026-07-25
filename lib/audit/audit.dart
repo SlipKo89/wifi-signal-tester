@@ -2,6 +2,9 @@ import '../mikrotik/mikrotik_service.dart';
 
 enum AuditSeverity { critical, warn, info, ok }
 
+/// Which slice of checks to run.
+enum AuditScope { wifi, system }
+
 /// One audit result. Text is bilingual; the UI resolves via L10n.
 class Finding {
   final AuditSeverity sev;
@@ -47,16 +50,22 @@ class _Channel {
 ///    air — we don't raise it as a live risk.
 ///  * Security can be inline on the configuration or via a named profile.
 class AuditEngine {
-  Future<List<Finding>> run(List<MikrotikService> routers) async {
+  Future<List<Finding>> run(
+    List<MikrotikService> routers, {
+    AuditScope scope = AuditScope.wifi,
+  }) async {
     final out = <Finding>[];
     for (final svc in routers) {
       final c = await _gather(svc);
       _routerInfo(c, out);
-      _deviceChecks(c, out);
-      _capsmanChecks(c, out);
-      _standaloneChecks(c, out);
-      _bestPractices(c, out);
-      _hardeningChecks(c, out);
+      if (scope == AuditScope.wifi) {
+        _deviceChecks(c, out);
+        _capsmanChecks(c, out);
+        _standaloneChecks(c, out);
+        _bestPractices(c, out);
+      } else {
+        _hardeningChecks(c, out);
+      }
     }
     out.sort((a, b) => a.sev.index.compareTo(b.sev.index));
     return out;
@@ -647,16 +656,29 @@ class AuditEngine {
     }
 
     // Default admin user.
-    if (c.users
-        .any((u) => u['name'] == 'admin' && u['disabled'] != 'true')) {
-      out.add(const Finding(AuditSeverity.warn,
-          titleEn: "Default 'admin' user present",
-          titleRu: 'Есть дефолтный пользователь admin',
-          detailEn: 'The well-known admin account is enabled — a common attack '
-              'target.',
-          detailRu: 'Включена стандартная учётка admin — частая цель атак.',
-          fixEn: 'Create a named admin user and remove/disable admin.',
-          fixRu: 'Заведи именованного админа, а admin убери/отключи.'));
+    final admin = c.users.where((u) => u['name'] == 'admin').toList();
+    if (admin.isNotEmpty) {
+      if (admin.first['disabled'] == 'true') {
+        out.add(const Finding(AuditSeverity.ok,
+            titleEn: "Default 'admin' disabled",
+            titleRu: 'Дефолтный admin отключён',
+            detailEn: 'The well-known admin account is disabled — good.',
+            detailRu: 'Стандартная учётка admin отключена — хорошо.'));
+      } else {
+        out.add(const Finding(AuditSeverity.warn,
+            titleEn: "Default 'admin' account is active",
+            titleRu: 'Учётка admin активна',
+            detailEn: 'The well-known admin account is enabled — a common '
+                'attack target. Make sure its password was changed from the '
+                'default (blank), or rename/disable it.',
+            detailRu: 'Включена стандартная учётка admin — частая цель атак. '
+                'Убедись, что пароль сменён с дефолтного (пустого), либо '
+                'переименуй/отключи её.',
+            fixEn: 'Change the admin password, or create a named admin and '
+                'disable admin.',
+            fixRu: 'Смени пароль admin, либо заведи именованного админа и '
+                'отключи admin.'));
+      }
     }
 
     // Firewall posture on the input chain.

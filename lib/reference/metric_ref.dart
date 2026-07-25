@@ -40,6 +40,27 @@ class MetricRef {
 }
 
 const Map<String, MetricRef> kMetricRefs = {
+  'purpose': MetricRef(
+    key: 'purpose',
+    titleEn: 'What this app is for',
+    titleRu: 'Зачем это приложение',
+    whatEn: 'It tests Wi-Fi from both sides on MikroTik: how your device hears '
+        'the access point AND how the AP hears your device — the reverse '
+        'direction normal analyzers can\'t show. It also runs a read-only '
+        'Wi-Fi and system audit of your MikroTik, checks other devices on the '
+        'network, and measures latency. Built for installers and anyone tuning '
+        'MikroTik Wi-Fi. Read-only — it never changes your router.',
+    whatRu: 'Тестирует Wi-Fi с двух сторон на MikroTik: как твоё устройство '
+        'слышит точку И как точка слышит устройство — обратную сторону обычные '
+        'анализаторы не показывают. Ещё делает read-only аудит Wi-Fi и системы '
+        'MikroTik, смотрит другие устройства сети и меряет задержку. Для '
+        'монтажников и всех, кто настраивает Wi-Fi на MikroTik. Только чтение '
+        '— роутер не меняется.',
+    tipEn: 'Tap any number in the app for a plain-language explanation like '
+        'these.',
+    tipRu: 'Тапни по любой цифре в приложении — получишь такое же понятное '
+        'объяснение.',
+  ),
   'signal': MetricRef(
     key: 'signal',
     titleEn: 'Signal (dBm)',
