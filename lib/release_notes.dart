@@ -9,6 +9,21 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.2.2', '2026-08-01', [
+    'SSH transport for RouterOS 6/7 when REST or the binary API is unavailable',
+    'SSH reconnects after a background pause; incomplete audits no longer guess',
+    'System audit detects management services on standard and custom ports',
+    'Plain FTP, Telnet, HTTP/WebFig and binary API are highlighted with real ports',
+    'Bilingual user guide and GitHub, guide and release links inside the app',
+    'Least-privilege Android permissions and the correct Wi-Fi Signal Tester system name',
+  ], [
+    'SSH-транспорт для RouterOS 6/7, когда REST или бинарный API недоступны',
+    'SSH переподключается после фона; неполный аудит больше не делает догадок',
+    'Системный аудит видит сервисы управления на стандартных и любых других портах',
+    'FTP, Telnet, HTTP/WebFig и бинарный API без шифрования показаны с реальными портами',
+    'Двуязычная инструкция и ссылки на GitHub, руководство и релизы в приложении',
+    'Минимальные Android-разрешения и правильное системное имя Wi-Fi Signal Tester',
+  ]),
   Release('0.2.1', '2026-07-26', [
     'Targets for signal and SNR, with a pass/fail strip on the dashboard',
     'Alerts now beep for signal, SNR or asymmetry out of target',

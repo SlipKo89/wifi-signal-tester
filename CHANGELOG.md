@@ -6,6 +6,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-01
+
+### Added
+- **SSH transport** — a third way into RouterOS, next to REST and the binary API:
+  the app runs console reads over SSH. It is the rescue path for routers where
+  REST doesn't exist (RouterOS 6) and the API service is switched off, and needs
+  nothing enabled beyond the `ssh` policy on the read-only user. `Auto` now tries
+  REST → API → SSH; the connection form gained an **SSH** option and an optional
+  **Port** field.
+  - Still read-only, enforced in code because a console *could* write: commands
+    are composed by the app from a menu path plus a fixed verb, only `print` and
+    `monitor once` pass the whitelist, console metacharacters are refused, and
+    `monitor` without `once` is rejected.
+  - Console output is normalised back into the rows REST returns: unquoted terse
+    values with spaces, `print stats` for the runtime numbers registration tables
+    hide from `print terse`, aligned `label: value` blocks for single-record
+    menus, flag letters → `disabled`/`dynamic`/`running`, and `yes`/`no` →
+    `true`/`false`. Verified by running the full audit over REST and over SSH
+    against the same router: 16 findings each, identical.
+  - Measured on a hAP ac³: connect ~0.9 s, poll ~124 ms (REST ~0.4 s / ~62 ms).
+- **User guide** — [docs/usage.md](docs/usage.md) and
+  [docs/usage.ru.md](docs/usage.ru.md): router preparation, connecting, reading
+  both sides and the Δ badge, what good numbers look like, typical jobs, audits,
+  history, targets/alerts, settings, and a troubleshooting table. Linked from
+  both READMEs.
+- **Links to the project in-app**: About now has a PROJECT block (GitHub, the
+  usage guide in the UI language, latest release), the Reference screen has a
+  guide button, and ⋮ gained *How to use (GitHub)*. Tapping opens a browser;
+  long-press copies the URL, and if no browser answers the link is copied instead.
+
+### Fixed
+- **System audit now sees management services on non-standard ports.** FTP,
+  Telnet, plain HTTP/WebFig, SSH, WinBox and both APIs are audited by service
+  state rather than by matching their default port; findings show the actual
+  port, and unrestricted custom-port services are still checked against the
+  input firewall. Plain `www` and the unencrypted binary `api` are now called
+  out alongside FTP/Telnet.
+- **The audit no longer draws conclusions from data it couldn't read.** Found on
+  a real device: after the app had been in the background the SSH session was
+  gone, every menu read failed, and the report cheerfully announced "No input
+  firewall" on a router with a default-deny chain. Now a failed read is *unknown*
+  rather than *empty* — the checks that infer absence are skipped, a "Report
+  incomplete: N menu(s) unreadable" warning names them, and if nothing at all can
+  be read the audit reports that instead of producing a report.
+- **The SSH transport reconnects once** when the session died between commands
+  (Android suspends sockets in the background; RouterOS drops idle sessions).
+  Before this, everything after a resume failed silently.
+- Editing a saved router in the connection form and pressing *Connect* now uses
+  what's in the fields; previously the saved entry with the same host won, so a
+  changed transport or password was quietly ignored.
+
+### Changed
+- Android now uses a verified least-privilege manifest: transitive
+  `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` and `WRITE_SETTINGS` permissions
+  are rejected, the unused `NEARBY_WIFI_DEVICES` declaration is gone, and the
+  launcher/system label is now **Wi-Fi Signal Tester** instead of `wifi_apk`.
+- The audit treats a CAPsMAN interface as on-air when `current-state` says
+  `running-…`, not only when `running=true` — the two transports report that
+  state differently, and the verdict must not depend on how we connected.
+- Android Gradle plugin 8.7.3 → 8.9.1 (`url_launcher` pulls androidx.browser 1.9
+  / core 1.17, which refuse anything older). AGP 9.x still breaks Flutter 3.44.
+
 ## [0.2.1] - 2026-07-26
 
 ### Added
@@ -196,7 +258,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://example.com/compare/v0.2.1...HEAD
-[0.2.1]: https://example.com/compare/v0.2.0...v0.2.1
-[0.2.0]: https://example.com/compare/v0.1.0...v0.2.0
-[0.1.0]: https://example.com/releases/tag/v0.1.0
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/SlipKo89/wifi-signal-tester/releases/tag/v0.1.0

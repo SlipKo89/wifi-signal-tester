@@ -27,6 +27,13 @@ CAPsMAN или обычным Wi-Fi) **только на чтение**, **то�
 Свежий APK — на [странице релизов](../../releases/latest): скачай
 `app-release.apk` в разделе *Assets* и установи на Android-устройство.
 
+## Как пользоваться
+
+**[docs/usage.ru.md](docs/usage.ru.md)** — руководство пользователя: подготовка
+роутера, подключение, чтение двух сторон и плашки Δ, аудиты, запись обхода
+помещения, цели и оповещения, таблица «что делать, если не работает». То же
+руководство открывается из приложения: ⋮ → *Инструкция* и с экрана Справки.
+
 ## Возможности
 
 - **Две стороны**: RSSI телефона против сигнала точки по вашей станции, плюс
@@ -34,7 +41,10 @@ CAPsMAN или обычным Wi-Fi) **только на чтение**, **то�
 - **С MikroTik**: `signal-strength` (dBm), `signal-to-noise` (SNR),
   tx/rx-rate, сигнал по цепочкам MIMO, CCQ.
 - **Всё автоматически**: определяет стек Wi-Fi (WifiWave2 / новый CAPsMAN /
-  старый CAPsMAN / классический) и транспорт (REST → бинарный API).
+  старый CAPsMAN / классический) и транспорт (REST → бинарный API → SSH).
+- **Три способа подключения**: REST (RouterOS 7.1+), бинарный API (6 и 7) и
+  **консоль RouterOS по SSH** — для роутеров, где REST нет, а сервис API
+  выключен. По SSH выполняются только `print` / `monitor once`.
 - **Устойчиво к рандомизации MAC**: находит станцию по IP→MAC через ARP/DHCP,
   поэтому рандомизация MAC на Android 10+ не ломает поиск.
 - **Только чтение и по делу**: только `print`/`GET`, только ваш MAC.
@@ -87,10 +97,11 @@ flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.ap
 [docs/mikrotik-readonly-user.md](docs/mikrotik-readonly-user.md). Кратко:
 
 ```
-/user group add name=monitor policy=read,api,rest-api,winbox,test
+/user group add name=monitor policy=read,api,rest-api,ssh,winbox,test
 /user add name=monitor group=monitor password=СМЕНИ_МЕНЯ
 /ip service enable www-ssl     # для REST
 /ip service enable api         # для бинарного API
+                               # для SSH достаточно политики `ssh`
 ```
 
 ## Как это работает
@@ -103,10 +114,13 @@ flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.ap
 
 - **Роутер:** в коде нет ни одного пути записи; в интерфейсе транспорта только
   `read()`. В паре с read-only пользователем RouterOS запись невозможна в
-  принципе.
+  принципе. SSH-транспорт — это консоль, поэтому то же правило он держит в коде:
+  сам собирает каждую команду и принимает только `print` и `monitor once`,
+  отклоняя метасимволы консоли и любой другой глагол.
 - **Устройство:** приложение только читает Wi-Fi-модуль (RSSI, SSID, частота).
-  Оно не меняет, не подключает, не отключает и не забывает сети, не запрашивает
-  разрешение `CHANGE_WIFI_STATE`, не трогает файлы, контакты и медиа.
+  Оно не меняет, не подключает, не отключает и не забывает сети. Манифест явно
+  исключает `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` и `WRITE_SETTINGS`;
+  приложение не трогает файлы, контакты и медиа.
   Единственное, что оно хранит, — *свои же* креды роутера в Keystore.
 - Пароль хранится в Android Keystore / iOS Keychain, не в открытых настройках.
 - Самоподписанный TLS принимается (расчёт на LAN) — станет видимым
@@ -114,6 +128,8 @@ flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.ap
 
 ## Документы проекта
 
+- [docs/usage.ru.md](docs/usage.ru.md) — **руководство пользователя**
+  (EN: [usage.md](docs/usage.md))
 - [CHANGELOG.md](CHANGELOG.md) — история версий (SemVer)
 - [TODO.md](TODO.md) — бэклог / роадмап
 - [docs/](docs/) — архитектура, настройка MikroTik и Android

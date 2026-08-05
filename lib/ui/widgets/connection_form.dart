@@ -30,6 +30,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
   final _host = TextEditingController();
   final _user = TextEditingController(text: 'monitor');
   final _pass = TextEditingController();
+  final _port = TextEditingController();
 
   final List<RouterConnection> _routers = [];
 
@@ -53,6 +54,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
         _pass.text = first.password;
         _transport = first.transport;
         _useTls = first.useTls;
+        _port.text = first.port?.toString() ?? '';
       });
     });
   }
@@ -62,6 +64,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
     _host.dispose();
     _user.dispose();
     _pass.dispose();
+    _port.dispose();
     super.dispose();
   }
 
@@ -74,6 +77,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
       password: _pass.text,
       transport: _transport,
       useTls: _useTls,
+      port: int.tryParse(_port.text.trim()),
     );
   }
 
@@ -85,6 +89,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
       _routers.add(cfg);
       _host.clear();
       _pass.clear();
+      _port.clear();
     });
     _store.saveRouters(_routers);
   }
@@ -95,11 +100,18 @@ class _ConnectionFormState extends State<ConnectionForm> {
   }
 
   void _connect() {
-    // Include whatever is typed but not yet added.
+    // Include whatever is typed but not yet added. If it names a host already in
+    // the list, the fields win — otherwise editing the transport or password of
+    // a saved router would silently do nothing.
     final list = [..._routers];
     final current = _currentInput();
-    if (current != null && !list.any((r) => r.host == current.host)) {
-      list.add(current);
+    if (current != null) {
+      final at = list.indexWhere((r) => r.host == current.host);
+      if (at >= 0) {
+        list[at] = current;
+      } else {
+        list.add(current);
+      }
     }
     if (list.isEmpty) return;
     _store.saveRouters(list);
@@ -164,44 +176,74 @@ class _ConnectionFormState extends State<ConnectionForm> {
               ),
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<TransportPreference>(
+              initialValue: _transport,
+              decoration:
+                  InputDecoration(labelText: l.t('Transport', 'Транспорт')),
+              items: [
+                DropdownMenuItem(
+                    value: TransportPreference.auto,
+                    child: Text(l.t('Auto (REST → API → SSH)',
+                        'Авто (REST → API → SSH)'))),
+                DropdownMenuItem(
+                    value: TransportPreference.rest,
+                    child: Text(l.t('REST only', 'Только REST'))),
+                DropdownMenuItem(
+                    value: TransportPreference.binary,
+                    child:
+                        Text(l.t('Binary API only', 'Только бинарный API'))),
+                DropdownMenuItem(
+                    value: TransportPreference.ssh,
+                    child: Text(l.t('SSH (RouterOS console)',
+                        'SSH (консоль RouterOS)'))),
+              ],
+              onChanged: (v) =>
+                  setState(() => _transport = v ?? TransportPreference.auto),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<TransportPreference>(
-                    initialValue: _transport,
-                    decoration:
-                        InputDecoration(labelText: l.t('Transport', 'Транспорт')),
-                    items: [
-                      DropdownMenuItem(
-                          value: TransportPreference.auto,
-                          child: Text(l.t('Auto (REST → API)',
-                              'Авто (REST → API)'))),
-                      DropdownMenuItem(
-                          value: TransportPreference.rest,
-                          child: Text(l.t('REST only', 'Только REST'))),
-                      DropdownMenuItem(
-                          value: TransportPreference.binary,
-                          child: Text(
-                              l.t('Binary API only', 'Только бинарный API'))),
-                    ],
-                    onChanged: (v) => setState(
-                        () => _transport = v ?? TransportPreference.auto),
+                  child: TextField(
+                    controller: _port,
+                    enabled: _transport != TransportPreference.auto,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: l.t('Port', 'Порт'),
+                      prefixIcon: const Icon(Icons.numbers),
+                      hintText: _portHint(l),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Column(
-                  children: [
-                    const Text('TLS',
-                        style: TextStyle(
-                            fontSize: 11, color: Color(0xFF7D8590))),
-                    Switch(
-                      value: _useTls,
-                      onChanged: (v) => setState(() => _useTls = v),
-                    ),
-                  ],
-                ),
+                if (_transport != TransportPreference.ssh) ...[
+                  const SizedBox(width: 12),
+                  Column(
+                    children: [
+                      const Text('TLS',
+                          style: TextStyle(
+                              fontSize: 11, color: Color(0xFF7D8590))),
+                      Switch(
+                        value: _useTls,
+                        onChanged: (v) => setState(() => _useTls = v),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
+            if (_transport == TransportPreference.ssh) ...[
+              const SizedBox(height: 8),
+              Text(
+                l.t(
+                    'SSH runs only `print` and `monitor once` on the console — '
+                        'still read-only. The RouterOS user needs the `ssh` '
+                        'policy.',
+                    'По SSH выполняются только `print` и `monitor once` в '
+                        'консоли — по-прежнему только чтение. Пользователю '
+                        'RouterOS нужна политика `ssh`.'),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
+              ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _addRouter,
@@ -237,6 +279,20 @@ class _ConnectionFormState extends State<ConnectionForm> {
     );
   }
 
+  /// Default port of the selected transport, so the empty field is self-explanatory.
+  String _portHint(L10n l) {
+    switch (_transport) {
+      case TransportPreference.auto:
+        return l.t('default per transport', 'по умолчанию для транспорта');
+      case TransportPreference.rest:
+        return _useTls ? '443' : '80';
+      case TransportPreference.binary:
+        return _useTls ? '8729' : '8728';
+      case TransportPreference.ssh:
+        return '22';
+    }
+  }
+
   String _connectLabel(L10n l) {
     final n = _routers.length + (_currentInput() != null &&
             !_routers.any((r) => r.host == _currentInput()!.host)
@@ -245,6 +301,19 @@ class _ConnectionFormState extends State<ConnectionForm> {
     return n > 1
         ? l.t('Connect ($n routers)', 'Подключить ($n роутеров)')
         : l.t('Connect', 'Подключить');
+  }
+
+  /// `192.168.88.1 · monitor · SSH:2222` — the transport only shows when it was
+  /// pinned, since `auto` is the norm.
+  String _chipLabel(RouterConnection r) {
+    final parts = ['${r.host}  ·  ${r.username}'];
+    if (r.transport != TransportPreference.auto) {
+      final name = r.transport == TransportPreference.binary
+          ? 'API'
+          : r.transport.name.toUpperCase();
+      parts.add(r.port == null ? name : '$name:${r.port}');
+    }
+    return parts.join('  ·  ');
   }
 
   Widget _routerChip(RouterConnection r) {
@@ -260,8 +329,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
           const Icon(Icons.router, size: 16, color: AppTheme.accent),
           const SizedBox(width: 10),
           Expanded(
-            child: Text('${r.host}  ·  ${r.username}',
-                style: const TextStyle(fontSize: 13)),
+            child: Text(_chipLabel(r), style: const TextStyle(fontSize: 13)),
           ),
           InkWell(
             onTap: () => _removeRouter(r),

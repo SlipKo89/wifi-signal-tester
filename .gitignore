@@ -12,6 +12,7 @@
 .swiftpm/
 migrate_working_dir/
 TODO-me.md
+bugreport-*.zip
 
 # IntelliJ / Android Studio / VS Code
 *.iml

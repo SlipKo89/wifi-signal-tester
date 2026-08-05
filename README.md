@@ -27,6 +27,13 @@ it next to your phone's own readings.
 Grab the latest APK from the [Releases page](../../releases/latest) — download
 `app-release.apk` under *Assets* and install it on your Android device.
 
+## How to use it
+
+**[docs/usage.md](docs/usage.md)** is the user guide: preparing the router,
+connecting, reading the two sides and the Δ badge, running the audits, recording
+a walk-around survey, targets and alerts, and a troubleshooting table. The same
+guide is reachable in-app from ⋮ → *How to use* and from the Reference screen.
+
 ## Features
 
 - **Two-sided view**: phone RSSI vs. the AP's signal for your station, plus the
@@ -34,7 +41,10 @@ Grab the latest APK from the [Releases page](../../releases/latest) — download
 - **From MikroTik**: `signal-strength` (dBm), `signal-to-noise` (SNR),
   tx/rx-rate, per-MIMO-chain signal, CCQ.
 - **Auto everything**: detects the wireless stack (WifiWave2 / CAPsMAN new /
-  CAPsMAN legacy / classic) and the transport (REST → binary API).
+  CAPsMAN legacy / classic) and the transport (REST → binary API → SSH).
+- **Three ways in**: REST (RouterOS 7.1+), the binary API (6 & 7) and the
+  RouterOS **SSH console** — for routers where REST doesn't exist and the API
+  service is off. SSH runs only `print` / `monitor once`.
 - **Randomized-MAC safe**: finds your station by IP→MAC via ARP/DHCP, so
   Android 10+ MAC randomization doesn't break it.
 - **Read-only & scoped**: only `print`/`GET`, only your MAC.
@@ -87,10 +97,11 @@ Create a read-only user and enable the API/REST service — full steps in
 [docs/mikrotik-readonly-user.md](docs/mikrotik-readonly-user.md). Short version:
 
 ```
-/user group add name=monitor policy=read,api,rest-api,winbox,test
+/user group add name=monitor policy=read,api,rest-api,ssh,winbox,test
 /user add name=monitor group=monitor password=CHANGE_ME
 /ip service enable www-ssl     # for REST
 /ip service enable api         # for binary API
+                               # SSH needs nothing beyond the `ssh` policy
 ```
 
 ## How it works
@@ -103,10 +114,13 @@ that MAC → show both sides side by side.
 
 - **Router:** no write path exists in the code; the transport interface has only
   `read()`. Pair it with a read-only RouterOS user so writes are impossible even
-  in principle.
+  in principle. The SSH transport is a console, so it enforces the same rule in
+  code: it builds every command itself and accepts only `print` and
+  `monitor once`, refusing console metacharacters and any other verb.
 - **Device:** the app only reads the Wi-Fi chip (RSSI, SSID, frequency). It never
-  changes, connects, disconnects or forgets any network, requests no
-  `CHANGE_WIFI_STATE` permission, and touches no files, contacts or media. The
+  changes, connects, disconnects or forgets any network. The manifest explicitly
+  rejects `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` and `WRITE_SETTINGS`, and
+  the app touches no files, contacts or media. The
   only thing it stores is *its own* router credentials in the Keystore.
 - Credentials are stored in the Android Keystore / iOS Keychain, never in plain
   preferences.
@@ -115,6 +129,7 @@ that MAC → show both sides side by side.
 
 ## Project docs
 
+- [docs/usage.md](docs/usage.md) — **user guide** (RU: [usage.ru.md](docs/usage.ru.md))
 - [CHANGELOG.md](CHANGELOG.md) — versioned history (SemVer)
 - [TODO.md](TODO.md) — backlog / roadmap
 - [docs/](docs/) — architecture, MikroTik & Android setup

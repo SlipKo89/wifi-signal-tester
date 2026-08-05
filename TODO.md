@@ -45,6 +45,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Audit: PDF export (NotoSans for Cyrillic)
 - [x] Audit: show passed checks/policies (channel plan, country, TX, isolation,
       sticky-client, router info) — not just problems
+- [x] System audit: management services on standard and non-standard ports;
+      actual port shown, plaintext FTP/Telnet/HTTP/API highlighted, exposure
+      checked together with service ACL and input firewall
 - [x] Router health metric on dashboard (CPU / board / version / uptime)
 - [x] Roam counter (AP switches this session)
 - [ ] Audit: extend to WifiWave2 (/interface/wifi) config
@@ -60,6 +63,14 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Open-source licenses page + "built with AI" note + easter egg
 - [ ] LTE mode for LHG LTE (RSRP/RSRQ/SINR alignment) — high value, next
 - [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
+
+## Docs & discoverability
+- [x] User guide in both languages (docs/usage.md / usage.ru.md), linked from the
+      READMEs and from inside the app
+- [x] GitHub / guide / releases links in About, Reference and the ⋮ menu
+- [x] Field-test the SSH transport on Android (emulator against a live hAP ac³:
+      connect, poll, both audits, background/resume reconnect)
+- [ ] Short screen-recording / GIF of a walk-around survey for the README
 
 ## Later (v0.3+)
 - [ ] iOS build pass + platform-specific Wi-Fi permission flows
@@ -93,10 +104,16 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 ### C. Bigger directions
 - [ ] A/B before/after snapshots (channel / power / AP placement change) with diff
 - [ ] Two-sided heatmap over a floor plan
-- [ ] SSH as a third read-only transport (setups where only SSH is open)
+- [x] SSH as a third read-only transport (setups where only SSH is open) —
+      console reads with a `print`/`monitor once` whitelist; audit output
+      verified identical to REST on a live router
 - [ ] Exportable survey report (PDF/CSV with spots + verdicts) for clients
 
 ## Tech debt / risks
+- [ ] Binary API has the same dead-session problem SSH just got fixed: its socket
+      dies while the app is backgrounded and every later read fails. SSH now
+      reconnects once; the API transport should too (it needs its login state
+      replayed). REST is unaffected — each request opens its own connection.
 - [ ] Binary-API reader uses `List<int>` with O(n) removes — fine for tiny
       registration tables, revisit if we ever stream large menus
 - [ ] Self-signed TLS is accepted by default (LAN assumption) — make it a
@@ -107,4 +124,3 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Bump Kotlin from 2.1.0 (build warns it will be dropped; wants ≥2.2.20)
 - [ ] Full i18n framework (gen-l10n/.arb) — currently a lightweight inline
       L10n.t table covers the main strings only
-      

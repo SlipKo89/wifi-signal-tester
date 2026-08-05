@@ -3,6 +3,7 @@ import '../models/wireless_stack.dart';
 import 'binary_api_transport.dart';
 import 'rest_transport.dart';
 import 'router_os_transport.dart';
+import 'ssh_transport.dart';
 
 /// Connection settings for a router.
 class RouterConnection {
@@ -10,9 +11,13 @@ class RouterConnection {
   final String username;
   final String password;
 
-  /// Preferred transport; the service falls back to the other one on failure.
+  /// Preferred transport; the service falls back to the others on failure.
   final TransportPreference transport;
   final bool useTls;
+
+  /// Non-default port. Only meaningful with an explicit [transport] — in `auto`
+  /// mode each candidate uses its own standard port.
+  final int? port;
 
   const RouterConnection({
     required this.host,
@@ -20,6 +25,7 @@ class RouterConnection {
     required this.password,
     this.transport = TransportPreference.auto,
     this.useTls = true,
+    this.port,
   });
 
   Map<String, dynamic> toJson() => {
@@ -28,6 +34,7 @@ class RouterConnection {
         'password': password,
         'transport': transport.name,
         'useTls': useTls,
+        if (port != null) 'port': port,
       };
 
   factory RouterConnection.fromJson(Map<String, dynamic> j) => RouterConnection(
@@ -39,10 +46,11 @@ class RouterConnection {
           orElse: () => TransportPreference.auto,
         ),
         useTls: j['useTls'] as bool? ?? true,
+        port: (j['port'] as num?)?.toInt(),
       );
 }
 
-enum TransportPreference { auto, rest, binary }
+enum TransportPreference { auto, rest, binary, ssh }
 
 /// High-level, read-only orchestration over a [RouterOsTransport]:
 /// picks a transport, detects the wireless stack, and returns the signal for
@@ -111,9 +119,16 @@ class MikrotikService {
       case TransportPreference.binary:
         attempts.add(_binary(cfg));
         break;
+      case TransportPreference.ssh:
+        attempts.add(_ssh(cfg));
+        break;
       case TransportPreference.auto:
+        // SSH last: it is the slowest (a console command per read) but the most
+        // widely available — on RouterOS 6 with the API service off it's the
+        // only way in.
         attempts.add(_rest(cfg));
         attempts.add(_binary(cfg));
+        attempts.add(_ssh(cfg));
         break;
     }
 
@@ -134,11 +149,17 @@ class MikrotikService {
     throw RouterOsException('Could not connect: ${lastError ?? 'unknown'}');
   }
 
+  /// A custom port belongs to one protocol, so it is only honoured when the
+  /// user picked that transport explicitly.
+  int? _portFor(RouterConnection cfg, TransportPreference kind) =>
+      cfg.transport == kind ? cfg.port : null;
+
   RestTransport _rest(RouterConnection cfg) => RestTransport(
         host: cfg.host,
         username: cfg.username,
         password: cfg.password,
         useTls: cfg.useTls,
+        port: _portFor(cfg, TransportPreference.rest),
       );
 
   BinaryApiTransport _binary(RouterConnection cfg) => BinaryApiTransport(
@@ -146,6 +167,14 @@ class MikrotikService {
         username: cfg.username,
         password: cfg.password,
         useTls: cfg.useTls,
+        port: _portFor(cfg, TransportPreference.binary),
+      );
+
+  SshTransport _ssh(RouterConnection cfg) => SshTransport(
+        host: cfg.host,
+        username: cfg.username,
+        password: cfg.password,
+        port: _portFor(cfg, TransportPreference.ssh),
       );
 
   Future<void> _detectStacks() async {

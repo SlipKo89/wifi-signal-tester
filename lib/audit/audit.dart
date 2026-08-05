@@ -1,4 +1,5 @@
 import '../mikrotik/mikrotik_service.dart';
+import '../mikrotik/router_os_transport.dart';
 
 enum AuditSeverity { critical, warn, info, ok }
 
@@ -58,6 +59,7 @@ class AuditEngine {
     for (final svc in routers) {
       final c = await _gather(svc);
       _routerInfo(c, out);
+      _dataGaps(c, out);
       if (scope == AuditScope.wifi) {
         _deviceChecks(c, out);
         _capsmanChecks(c, out);
@@ -86,14 +88,34 @@ class AuditEngine {
         where: c.host));
   }
 
+  /// Says out loud which menus couldn't be read. A report that silently omits
+  /// half its checks looks exactly like a clean router — this makes the
+  /// difference visible.
+  void _dataGaps(_Ctx c, List<Finding> out) {
+    if (c.unreadable.isEmpty) return;
+    final list = (c.unreadable.toList()..sort()).join(', ');
+    out.add(Finding(AuditSeverity.warn,
+        titleEn: 'Report incomplete: ${c.unreadable.length} menu(s) unreadable',
+        titleRu: 'Отчёт неполный: не прочитано меню — ${c.unreadable.length}',
+        detailEn:
+            'Checks that depend on these were skipped rather than guessed: '
+            '$list. Usually a dropped session or a user without rights to them.',
+        detailRu: 'Проверки, зависящие от них, пропущены, а не угаданы: $list. '
+            'Обычно это оборванная сессия или пользователь без прав на них.',
+        fixEn: 'Reconnect and run the audit again; check the user\'s group has '
+            'the read policy.',
+        fixRu: 'Переподключись и прогони аудит снова; проверь, что у группы '
+            'пользователя есть политика read.',
+        where: c.host));
+  }
+
   /// Positive/pass checks and policies — so a healthy router still gets a
   /// substantive report, and good practices are confirmed.
   void _bestPractices(_Ctx c, List<Finding> out) {
     // Regulatory country.
     final countries =
         c.wireless.map((w) => w['country'] ?? '').where((s) => s.isNotEmpty);
-    if (countries.isNotEmpty &&
-        countries.every((s) => s != 'no_country_set')) {
+    if (countries.isNotEmpty && countries.every((s) => s != 'no_country_set')) {
       out.add(Finding(AuditSeverity.ok,
           titleEn: 'Regulatory country set',
           titleRu: 'Страна задана',
@@ -105,7 +127,8 @@ class AuditEngine {
 
     // TX-power mode.
     if (c.wireless.isNotEmpty &&
-        c.wireless.every((w) => (w['tx-power-mode'] ?? 'default') == 'default')) {
+        c.wireless
+            .every((w) => (w['tx-power-mode'] ?? 'default') == 'default')) {
       out.add(const Finding(AuditSeverity.ok,
           titleEn: 'TX power at default',
           titleRu: 'Мощность по умолчанию',
@@ -130,15 +153,15 @@ class AuditEngine {
           detailRu:
               '${signalRules.length} правил доступа с порогами сигнала — слабые '
               'клиенты сбрасываются и переходят на ближнюю точку.'));
-    } else {
+    } else if (!c.unreadable.contains('/caps-man/access-list') &&
+        !c.unreadable.contains('/interface/wireless/access-list')) {
       out.add(const Finding(AuditSeverity.info,
           titleEn: 'No signal-based access rules',
           titleRu: 'Нет правил по сигналу',
           detailEn:
               'Nothing forces weak clients to roam — a phone can cling to a far '
               'AP. Consider access-list signal-range + allow-signal-out-of-range.',
-          detailRu:
-              'Ничто не гонит слабых клиентов роумиться — телефон может '
+          detailRu: 'Ничто не гонит слабых клиентов роумиться — телефон может '
               'залипнуть на дальней точке. Рассмотри access-list signal-range + '
               'allow-signal-out-of-range.'));
     }
@@ -146,7 +169,7 @@ class AuditEngine {
     // Client isolation on active configs' datapaths.
     final activeConfigs = <String>{
       for (final i in c.capsIfaces)
-        if (i['running'] == 'true' && (i['configuration'] ?? '').isNotEmpty)
+        if (_isRunning(i) && (i['configuration'] ?? '').isNotEmpty)
           i['configuration']!
     };
     final isolated = <String>{};
@@ -174,15 +197,26 @@ class AuditEngine {
   }
 
   Future<_Ctx> _gather(MikrotikService svc) async {
+    // A menu that simply doesn't exist on this stack reads as empty — that's
+    // normal and the checks below cope. A menu that *failed* is different: it
+    // must not be mistaken for "the feature isn't configured", which is how an
+    // unreadable /ip/firewall/filter once turned into "no input firewall".
+    final failed = <String>{};
     Future<List<Map<String, String>>> read(String m) async {
       try {
         return await svc.readMenu(m);
       } catch (_) {
+        failed.add(m);
         return const [];
       }
     }
 
     final resource = await read('/system/resource');
+    if (failed.contains('/system/resource')) {
+      // Nothing readable at all — report that instead of inventing a report.
+      throw RouterOsException(
+          'Could not read the router — reconnect and run the audit again');
+    }
     final ntp = await read('/system/ntp/client');
     final update = await read('/system/package/update');
     return _Ctx(
@@ -212,6 +246,7 @@ class AuditEngine {
       pools: await read('/ip/pool'),
       leases: await read('/ip/dhcp-server/lease'),
       filter: await read('/ip/firewall/filter'),
+      unreadable: failed,
     );
   }
 
@@ -246,7 +281,8 @@ class AuditEngine {
             detailRu:
                 '$name задаёт одну мощность на все скорости. Высокие MCS не '
                 'тянут полную мощность — падает пропускная. Не рекомендуется.',
-            fixEn: 'Use tx-power-mode=default; reduce power via country/antenna '
+            fixEn:
+                'Use tx-power-mode=default; reduce power via country/antenna '
                 'gain if needed.',
             fixRu: 'Используй tx-power-mode=default; снижай мощность через '
                 'страну/antenna-gain при необходимости.',
@@ -260,7 +296,7 @@ class AuditEngine {
   void _capsmanChecks(_Ctx c, List<Finding> out) {
     if (c.capsIfaces.isEmpty) return;
 
-    final active = c.capsIfaces.where((i) => i['running'] == 'true').toList();
+    final active = c.capsIfaces.where(_isRunning).toList();
     final activeConfigs = <String>{
       for (final i in active)
         if ((i['configuration'] ?? '').isNotEmpty) i['configuration']!
@@ -335,8 +371,7 @@ class AuditEngine {
             detailEn:
                 'Channel $freq overlaps its neighbours. On 2.4 GHz only 1, 6 '
                 'and 11 don\'t overlap.',
-            detailRu:
-                'Канал $freq пересекается с соседними. В 2.4 ГГц не '
+            detailRu: 'Канал $freq пересекается с соседними. В 2.4 ГГц не '
                 'пересекаются только 1, 6 и 11.'));
       }
     });
@@ -346,11 +381,9 @@ class AuditEngine {
       out.add(const Finding(AuditSeverity.ok,
           titleEn: '2.4 GHz channel plan is clean',
           titleRu: 'Канал-план 2.4 ГГц в порядке',
-          detailEn:
-              'All 2.4 GHz radios run 20 MHz on non-overlapping channels '
+          detailEn: 'All 2.4 GHz radios run 20 MHz on non-overlapping channels '
               '(1 / 6 / 11) — textbook.',
-          detailRu:
-              'Все радио 2.4 ГГц — 20 МГц на непересекающихся каналах '
+          detailRu: 'Все радио 2.4 ГГц — 20 МГц на непересекающихся каналах '
               '(1 / 6 / 11) — как надо.'));
     }
 
@@ -370,8 +403,7 @@ class AuditEngine {
       out.add(Finding(AuditSeverity.info,
           titleEn: '${notOnAir.length} config(s) not on air',
           titleRu: 'Конфигов не в эфире: ${notOnAir.length}',
-          detailEn:
-              'Defined but not assigned to any running radio, so not '
+          detailEn: 'Defined but not assigned to any running radio, so not '
               'broadcasting (not audited): $list.',
           detailRu:
               'Заданы, но не назначены ни на одно активное радио, значит не '
@@ -458,8 +490,7 @@ class AuditEngine {
       final p = named[ref]!;
       return {
         'auth': p['authentication-types'] ?? '',
-        'enc':
-            '${p['encryption'] ?? ''},${p['group-encryption'] ?? ''}',
+        'enc': '${p['encryption'] ?? ''},${p['group-encryption'] ?? ''}',
         'mode': 'dynamic-keys',
       };
     }
@@ -600,32 +631,56 @@ class AuditEngine {
         out.add(Finding(AuditSeverity.info,
             titleEn: 'RouterOS update available',
             titleRu: 'Доступно обновление RouterOS',
-            detailEn: '$installed → $latest. Updates fix security bugs; plan an '
+            detailEn:
+                '$installed → $latest. Updates fix security bugs; plan an '
                 'upgrade.',
             detailRu: '$installed → $latest. Обновления чинят уязвимости — '
                 'запланируй апгрейд.'));
       }
     }
 
-    // Active management services (dedupe by standard port).
+    // Active management services. A service stays the same service when the
+    // administrator moves it to a non-standard port — filtering by the default
+    // port here used to make e.g. telnet:2323 disappear from the audit.
     final active = <String, Map<String, String>>{};
     for (final s in c.services) {
       final n = s['name'] ?? '';
       if (s['disabled'] == 'true') continue;
-      if (_mgmtPorts[n] == s['port']) active[n] = s;
+      if (_mgmtPorts.containsKey(n)) active[n] = s;
     }
     final defaultDrop = _hasDefaultDrop(c.filter);
 
+    if (active.isNotEmpty) {
+      final labelsEn = active.entries
+          .map((e) => _serviceLabel(e.key, e.value, customSuffix: ' (custom)'))
+          .join(', ');
+      final labelsRu = active.entries
+          .map((e) =>
+              _serviceLabel(e.key, e.value, customSuffix: ' (нестандартный)'))
+          .join(', ');
+      out.add(Finding(AuditSeverity.info,
+          titleEn: 'Active management services',
+          titleRu: 'Активные сервисы управления',
+          detailEn:
+              '$labelsEn. A custom port reduces background scanning noise, '
+              'but does not replace an IP restriction or input firewall.',
+          detailRu: '$labelsRu. Нестандартный порт уменьшает фоновый шум от '
+              'сканеров, но не заменяет ограничение по IP или firewall input.',
+          where: c.host));
+    }
+
     // Plaintext services — worth disabling regardless of the firewall.
-    for (final n in ['ftp', 'telnet']) {
-      if (active.containsKey(n)) {
+    for (final n in ['ftp', 'telnet', 'www', 'api']) {
+      final service = active[n];
+      if (service != null) {
+        final label = _serviceLabel(n, service);
         out.add(Finding(AuditSeverity.info,
-            titleEn: '$n is enabled',
-            titleRu: '$n включён',
-            detailEn: '$n is a plaintext protocol. If you don\'t use it, turn '
-                'it off to shrink the attack surface.',
-            detailRu: '$n — протокол без шифрования. Если не используешь — '
-                'выключи, чтобы сузить поверхность атаки.',
+            titleEn: '$label is enabled',
+            titleRu: '$label включён',
+            detailEn: '$label is a plaintext management service. If you don\'t '
+                'use it, turn it off to shrink the attack surface.',
+            detailRu: '$label — сервис управления без шифрования. Если не '
+                'используешь — выключи, чтобы сузить поверхность атаки.',
             fixEn: 'Disable $n in /ip service if unused.',
             fixRu: 'Отключи $n в /ip service, если не нужен.'));
       }
@@ -634,11 +689,15 @@ class AuditEngine {
     // Real exposure = no service-level ACL AND no catch-all drop on input.
     // (A default-deny firewall gates services even when their address is empty.)
     final noAcl = <String>[];
-    for (final n in ['ssh', 'www-ssl', 'winbox', 'api', 'api-ssl', 'ftp']) {
+    for (final n in _mgmtPorts.keys) {
       final s = active[n];
-      if (s != null && (s['address'] ?? '').isEmpty) noAcl.add(n);
+      if (s != null && !_hasServiceAcl(s['address'])) {
+        noAcl.add(_serviceLabel(n, s));
+      }
     }
-    if (noAcl.isNotEmpty && !defaultDrop) {
+    if (noAcl.isNotEmpty &&
+        !defaultDrop &&
+        !c.unreadable.contains('/ip/firewall/filter')) {
       out.add(Finding(AuditSeverity.warn,
           titleEn: 'Management may be exposed',
           titleRu: 'Управление может быть открыто',
@@ -681,10 +740,13 @@ class AuditEngine {
       }
     }
 
-    // Firewall posture on the input chain.
+    // Firewall posture on the input chain. Skipped when the menu couldn't be
+    // read: "no rules returned" would otherwise read as "no firewall".
     final hasInput =
         c.filter.any((f) => (f['chain'] ?? '').startsWith('input'));
-    if (defaultDrop) {
+    if (c.unreadable.contains('/ip/firewall/filter')) {
+      // Nothing to say about a chain we never saw.
+    } else if (defaultDrop) {
       out.add(const Finding(AuditSeverity.ok,
           titleEn: 'Firewall: input default-deny',
           titleRu: 'Firewall: default-deny на input',
@@ -733,6 +795,15 @@ class AuditEngine {
     }
   }
 
+  /// True if a CAPsMAN interface is on the air.
+  ///
+  /// REST reports it as `running`; the SSH console marks a bound radio with a
+  /// flag letter instead, so `current-state` (`running-ap`) is the second
+  /// witness. Both transports agree on the outcome.
+  bool _isRunning(Map<String, String> iface) =>
+      iface['running'] == 'true' ||
+      (iface['current-state'] ?? '').startsWith('running');
+
   /// True if the input chain has a catch-all drop (default-deny) — a drop rule
   /// with no matcher that would limit which traffic it catches.
   bool _hasDefaultDrop(List<Map<String, String>> filter) {
@@ -761,6 +832,33 @@ class AuditEngine {
       if (!limited) return true;
     }
     return false;
+  }
+
+  /// `ssh` on port 2222 becomes `ssh:2222`; missing ports fall back to the
+  /// RouterOS default so an incomplete transport response is still readable.
+  String _serviceLabel(
+    String name,
+    Map<String, String> service, {
+    String customSuffix = '',
+  }) {
+    final defaultPort = _mgmtPorts[name];
+    final port = (service['port'] ?? defaultPort ?? '').trim();
+    if (port.isEmpty) return name;
+    final custom = defaultPort != null && port != defaultPort;
+    return '$name:$port${custom ? customSuffix : ''}';
+  }
+
+  /// Empty and explicit any-address values both mean that `/ip service` itself
+  /// does not restrict who may connect. Firewall checks are handled separately.
+  bool _hasServiceAcl(String? raw) {
+    final values = (raw ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty)
+        .toList();
+    if (values.isEmpty) return false;
+    if (values.any((v) => v == '0.0.0.0/0' || v == '::/0')) return false;
+    return true;
   }
 
   int? _ipToInt(String ip) {
@@ -841,6 +939,9 @@ class _Ctx {
   final List<Map<String, String>> pools;
   final List<Map<String, String>> leases;
   final List<Map<String, String>> filter;
+
+  /// Menus whose read threw — treated as "unknown", never as "empty".
+  final Set<String> unreadable;
   _Ctx({
     required this.capsIfaces,
     required this.capsConfigs,
@@ -858,5 +959,6 @@ class _Ctx {
     required this.pools,
     required this.leases,
     required this.filter,
+    required this.unreadable,
   });
 }

@@ -21,19 +21,72 @@
 
 | Layer        | Files                                   | Responsibility                         |
 |--------------|-----------------------------------------|----------------------------------------|
-| Transport    | `mikrotik/rest_transport.dart`, `binary_api_transport.dart` | Talk RouterOS, read-only |
+| Transport    | `mikrotik/rest_transport.dart`, `binary_api_transport.dart`, `ssh_transport.dart` | Talk RouterOS, read-only |
 | Interface    | `mikrotik/router_os_transport.dart`     | One `read()` contract, no write method  |
 | Service      | `mikrotik/mikrotik_service.dart`        | Transport fallback, stack detect, MAC→signal |
 | Device       | `services/phone_wifi_service.dart`      | Local Wi-Fi chip readings               |
 | State        | `state/monitor_controller.dart`         | Poll loop, history, delta               |
 | UI           | `ui/…`                                   | Dashboard, form, sparkline              |
 
-## Why two transports
+## Why three transports
 
-`RouterOsTransport` exposes a single `read(menuPath, {filters})`. `RestTransport`
-(RouterOS 7.1+, HTTPS) and `BinaryApiTransport` (8728/8729, RouterOS 6 & 7) both
-implement it, so `MikrotikService` and everything above are transport-agnostic.
-`TransportPreference.auto` tries REST first, then the binary API.
+`RouterOsTransport` exposes `read(menuPath, {filters})` plus `command()` for
+`monitor once`. Three implementations satisfy it, so `MikrotikService` and
+everything above are transport-agnostic:
+
+| Implementation | Reaches | Speaks |
+|----------------|---------|--------|
+| `RestTransport` | RouterOS 7.1+, `www-ssl` | JSON over HTTPS |
+| `BinaryApiTransport` | RouterOS 6 & 7, 8728/8729 | the API word/sentence protocol |
+| `SshTransport` | anything with SSH on | the RouterOS console |
+
+`TransportPreference.auto` tries REST → API → SSH. SSH comes last because it
+costs a console round-trip per read (~120 ms vs ~60 ms measured on a hAP ac³),
+but it is the most widely available: on a RouterOS 6 box with the API service off
+it is the only way in.
+
+### What the SSH transport has to reconcile
+
+The console is made for humans, so its output needs normalising back into the
+rows REST returns. Each of these was found against a live router:
+
+* `print terse` does **not** quote values, and they contain spaces
+  (`interface=hAP AC2 2GHz ssid=SlipKo Wi-Fi`) — fields are cut at the next
+  `key=` boundary, never at whitespace.
+* Registration tables hide the runtime numbers from `print terse`; the signal,
+  rates and uptime only appear under `print stats`. Single-record menus
+  (`/system/resource`) reject both and answer with an aligned `label: value`
+  block. `read()` walks these flavours in order.
+* State that REST returns as a field (`disabled`, `dynamic`, `running`) is a flag
+  *letter* on the console — the letters are translated back, otherwise the audit
+  would read a disabled service as enabled.
+* Booleans print as `yes`/`no` rather than `true`/`false`.
+
+Verified by running the whole audit over both transports against the same
+router: 16 findings each, identical (`test/ssh_transport_parse_test.dart` pins
+the parsing).
+
+### Sessions die; reads must not lie
+
+Android suspends sockets in the background and RouterOS drops idle sessions, so
+a long-lived SSH connection is gone by the time the app is resumed.
+`SshTransport` reconnects once when a command hits a closed transport. The audit
+layer covers the other half: a *failed* read is recorded as unknown rather than
+empty, checks that infer absence are skipped, and the report says which menus it
+couldn't see — before this, an unreadable `/ip/firewall/filter` was reported as
+"No input firewall" on a router with a default-deny chain.
+
+`BinaryApiTransport` shares the long-lived-socket shape and does not reconnect
+yet (see TODO). `RestTransport` is immune — every request opens its own
+connection.
+
+### Read-only on a channel that could write
+
+REST and the API are read-only because only `print`/`GET` is ever issued. A
+console could do anything, so `SshTransport` enforces the rule in code: commands
+are composed from a menu path plus a fixed verb, only `print` and `monitor once`
+pass the whitelist, console metacharacters are refused, and `monitor` without
+`once` is rejected. See `mikrotik-readonly-user.md`.
 
 ## Randomized-MAC workaround
 

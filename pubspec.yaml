@@ -5,7 +5,7 @@ description: >-
 publish_to: 'none'
 
 # Semantic version + build number. Keep in sync with /VERSION and CHANGELOG.md.
-version: 0.2.1+3
+version: 0.2.2+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -20,6 +20,12 @@ dependencies:
 
   # MikroTik REST transport
   http: ^1.2.0
+
+  # MikroTik SSH transport (RouterOS CLI over SSH, read-only commands)
+  dartssh2: ^2.22.4
+
+  # Opening the project page / usage guide in a browser
+  url_launcher: ^6.3.1
 
   # Phone-side Wi-Fi facts (SSID / BSSID / IP / gateway) and RSSI
   network_info_plus: ^5.0.3
@@ -60,6 +66,9 @@ dependencies:
 
   # Simple state management
   provider: ^6.1.2
+
+  # @visibleForTesting on the SSH output parsers
+  meta: ^1.15.0
 
 dev_dependencies:
   flutter_test:

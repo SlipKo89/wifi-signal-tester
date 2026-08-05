@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../app_info.dart';
 import '../audit/audit.dart';
 import '../models/phone_signal.dart';
+import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import 'about_dialog.dart';
@@ -126,6 +128,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   open(const DevicesScreen());
                 case 'reference':
                   open(const ReferenceScreen());
+                case 'guide':
+                  openExternalLink(context, usageUrl(ru: l.ru));
                 case 'history':
                   open(const HistoryScreen());
                 case 'settings':
@@ -161,6 +165,10 @@ class _HomeScreenState extends State<HomeScreen> {
               PopupMenuItem(
                 value: 'reference',
                 child: Text(l.t('Reference', 'Справка')),
+              ),
+              PopupMenuItem(
+                value: 'guide',
+                child: Text(l.t('How to use (GitHub)', 'Инструкция (GitHub)')),
               ),
               PopupMenuItem(
                 value: 'history',

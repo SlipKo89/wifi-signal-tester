@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app_info.dart';
+import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
 
@@ -63,7 +64,10 @@ class _AboutDialogState extends State<_AboutDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.all(22),
-        child: Column(
+        // Scrollable: with the project links the dialog is taller than a small
+        // phone in landscape.
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -132,6 +136,29 @@ class _AboutDialogState extends State<_AboutDialog> {
               ],
             ),
             const Divider(height: 28, color: Color(0xFF232B36)),
+            Text(l.t('PROJECT', 'ПРОЕКТ'),
+                style: const TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 1.1,
+                    color: Color(0xFF7D8590),
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            const _LinkRow(
+              icon: Icons.code,
+              label: 'github.com/SlipKo89/wifi-signal-tester',
+              url: kRepoUrl,
+            ),
+            _LinkRow(
+              icon: Icons.menu_book_outlined,
+              label: l.t('How to use the app', 'Как пользоваться приложением'),
+              url: usageUrl(ru: l.ru),
+            ),
+            _LinkRow(
+              icon: Icons.download_outlined,
+              label: l.t('Latest release (APK)', 'Свежий релиз (APK)'),
+              url: kReleasesUrl,
+            ),
+            const Divider(height: 28, color: Color(0xFF232B36)),
             Text(l.t('AUTHOR', 'АВТОР'),
                 style: const TextStyle(
                     fontSize: 10,
@@ -173,6 +200,50 @@ class _AboutDialogState extends State<_AboutDialog> {
                 ),
               ],
             ),
+          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A row that opens [url] in a browser; long-press copies it instead.
+class _LinkRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String url;
+
+  const _LinkRow({
+    required this.icon,
+    required this.label,
+    required this.url,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.read<SettingsController>().l;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => openExternalLink(context, url,
+          copiedLabel: l.t('Link copied: $url', 'Ссылка скопирована: $url')),
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: url));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l.t('Link copied', 'Ссылка скопирована')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: AppTheme.accent),
+            const SizedBox(width: 10),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+            const Icon(Icons.open_in_new, size: 14, color: Color(0xFF7D8590)),
           ],
         ),
       ),

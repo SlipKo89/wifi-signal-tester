@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import 'app_info.dart';
 import 'settings/settings_controller.dart';
 import 'state/monitor_controller.dart';
 import 'ui/home_screen.dart';
@@ -38,7 +39,7 @@ class WifiApkApp extends StatelessWidget {
       ],
       child: Consumer<SettingsController>(
         builder: (context, s, _) => MaterialApp(
-          title: 'MikroTik Wi-Fi Tester',
+          title: kAppName,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.dark,
           locale: s.locale,
