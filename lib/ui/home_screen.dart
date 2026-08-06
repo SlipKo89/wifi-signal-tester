@@ -14,6 +14,7 @@ import 'audit_screen.dart';
 import 'delta_info.dart';
 import 'devices_screen.dart';
 import 'history_screen.dart';
+import 'link_diagnostics_sheet.dart';
 import 'reference_screen.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
@@ -23,9 +24,8 @@ import 'widgets/metric_tile.dart';
 import 'widgets/signal_card.dart';
 
 /// Formats a kbps value as Kbps/Mbps.
-String _fmtKbps(int kbps) => kbps >= 1000
-    ? '${(kbps / 1000).toStringAsFixed(1)} Mbps'
-    : '$kbps Kbps';
+String _fmtKbps(int kbps) =>
+    kbps >= 1000 ? '${(kbps / 1000).toStringAsFixed(1)} Mbps' : '$kbps Kbps';
 
 /// Colour for a ping RTT (ms) / loss (%).
 Color _pingColor(int? ms, int? loss) {
@@ -58,8 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final l = settings.l;
     final connected = ctrl.state == MonitorState.connected;
 
-    void open(Widget screen) => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => screen));
+    void open(Widget screen) => Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => screen));
 
     return Scaffold(
       appBar: AppBar(
@@ -247,8 +247,7 @@ class _TitleBar extends StatelessWidget {
         const Text('Wi-Fi Signal Tester',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         Text(sub,
-            style:
-                const TextStyle(fontSize: 11, color: Color(0xFF7D8590))),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590))),
       ],
     );
   }
@@ -278,6 +277,7 @@ class _Dashboard extends StatelessWidget {
                           'точки.')
                   : ctrl.error!),
         if (!ctrl.offWifi) _StatusBanner(ctrl: ctrl),
+        if (!ctrl.offWifi) LinkDiagnosticsCard(report: ctrl.linkDiagnostics),
         _ConnectionSummary(
           phone: phone,
           delta: ctrl.signalDelta,
@@ -338,97 +338,97 @@ class _Dashboard extends StatelessWidget {
           ],
         ),
         if (!ctrl.phoneOnly) ...[
-        const SizedBox(height: 12),
-        SignalCard(
-          title: l.t('AP → hears PHONE', 'ТОЧКА → слышит телефон'),
-          icon: Icons.router,
-          accent: AppTheme.apAccent,
-          signalDbm: ap?.signalDbm,
-          emptyHint: ctrl.apUnmanaged
-              ? (ctrl.connectedApName != null
-                  ? l.t(
-                      'On ${ctrl.connectedApName} — waiting for the router to '
-                          'report this client…',
-                      'На точке ${ctrl.connectedApName} — ждём данные от '
-                          'роутера…')
-                  : l.t(
-                      "This client isn't on a MikroTik-managed AP (standalone / "
-                          'non-CAPsMAN). No AP-side signal — only the phone side.',
-                      'Клиент не на управляемой точке MikroTik (standalone / '
-                          'не CAPsMAN). Сигнала с точки нет — только сторона '
-                          'телефона.'))
-              : null,
-          metrics: [
-            MetricTile(
-                label: l.t('On AP', 'Точка'),
-                value: ap?.interfaceName ?? '—'),
-            if (ctrl.servingHost != null && ctrl.routerCount > 1)
-              MetricTile(label: l.t('Via', 'Через'), value: ctrl.servingHost!),
-            MetricTile(
-              label: ctrl.apSnrIsEstimate ? 'SNR est.' : 'SNR',
-              value: ctrl.apSnr?.toString() ?? '—',
-              unit: 'dB',
-              color: AppTheme.snrColor(ctrl.apSnr),
-              helpKey: 'snr',
-            ),
-            if (ctrl.downKbps != null)
+          const SizedBox(height: 12),
+          SignalCard(
+            title: l.t('AP → hears PHONE', 'ТОЧКА → слышит телефон'),
+            icon: Icons.router,
+            accent: AppTheme.apAccent,
+            signalDbm: ap?.signalDbm,
+            emptyHint: ctrl.apUnmanaged
+                ? (ctrl.connectedApName != null
+                    ? l.t(
+                        'On ${ctrl.connectedApName} — waiting for the router to '
+                            'report this client…',
+                        'На точке ${ctrl.connectedApName} — ждём данные от '
+                            'роутера…')
+                    : l.t(
+                        "This client isn't on a MikroTik-managed AP (standalone / "
+                            'non-CAPsMAN). No AP-side signal — only the phone side.',
+                        'Клиент не на управляемой точке MikroTik (standalone / '
+                            'не CAPsMAN). Сигнала с точки нет — только сторона '
+                            'телефона.'))
+                : null,
+            metrics: [
               MetricTile(
-                  label: l.t('Down', 'Загрузка'),
-                  value: _fmtKbps(ctrl.downKbps!),
-                  helpKey: 'throughput'),
-            if (ctrl.upKbps != null)
+                  label: l.t('On AP', 'Точка'),
+                  value: ap?.interfaceName ?? '—'),
+              if (ctrl.servingHost != null && ctrl.routerCount > 1)
+                MetricTile(
+                    label: l.t('Via', 'Через'), value: ctrl.servingHost!),
               MetricTile(
-                  label: l.t('Up', 'Отдача'),
-                  value: _fmtKbps(ctrl.upKbps!),
-                  helpKey: 'throughput'),
-            MetricTile(
-                label: 'TX rate', value: ap?.txRate ?? '—', helpKey: 'rate'),
-            MetricTile(
-                label: 'RX rate', value: ap?.rxRate ?? '—', helpKey: 'rate'),
-            if (ap?.pThroughputKbps != null)
+                label: ctrl.apSnrIsEstimate ? 'SNR est.' : 'SNR',
+                value: ctrl.apSnr?.toString() ?? '—',
+                unit: 'dB',
+                color: AppTheme.snrColor(ctrl.apSnr),
+                helpKey: 'snr',
+              ),
+              if (ctrl.downKbps != null)
+                MetricTile(
+                    label: l.t('Down', 'Загрузка'),
+                    value: _fmtKbps(ctrl.downKbps!),
+                    helpKey: 'throughput'),
+              if (ctrl.upKbps != null)
+                MetricTile(
+                    label: l.t('Up', 'Отдача'),
+                    value: _fmtKbps(ctrl.upKbps!),
+                    helpKey: 'throughput'),
               MetricTile(
-                  label: l.t('Est. thr', 'Оц. пропуск'),
-                  value: _fmtKbps(ap!.pThroughputKbps!),
-                  helpKey: 'throughput'),
-            if (ap?.signalCh0 != null)
+                  label: 'TX rate', value: ap?.txRate ?? '—', helpKey: 'rate'),
               MetricTile(
-                  label: 'Ch0',
-                  value: '${ap!.signalCh0}',
-                  unit: 'dBm',
-                  helpKey: 'signal'),
-            if (ap?.signalCh1 != null)
-              MetricTile(
-                  label: 'Ch1',
-                  value: '${ap!.signalCh1}',
-                  unit: 'dBm',
-                  helpKey: 'signal'),
-            if (ap?.txCcq != null)
-              MetricTile(
-                  label: 'TX CCQ',
-                  value: '${ap!.txCcq}',
-                  unit: '%',
-                  helpKey: 'ccq'),
-            if (ap?.rxCcq != null)
-              MetricTile(
-                  label: 'RX CCQ',
-                  value: '${ap!.rxCcq}',
-                  unit: '%',
-                  helpKey: 'ccq'),
-            if (ap?.uptime != null)
-              MetricTile(
-                  label: l.t('Uptime', 'Аптайм'),
-                  value: ap!.uptime!,
-                  helpKey: 'uptime'),
-          ],
-        ),
+                  label: 'RX rate', value: ap?.rxRate ?? '—', helpKey: 'rate'),
+              if (ap?.pThroughputKbps != null)
+                MetricTile(
+                    label: l.t('Est. thr', 'Оц. пропуск'),
+                    value: _fmtKbps(ap!.pThroughputKbps!),
+                    helpKey: 'throughput'),
+              if (ap?.signalCh0 != null)
+                MetricTile(
+                    label: 'Ch0',
+                    value: '${ap!.signalCh0}',
+                    unit: 'dBm',
+                    helpKey: 'signal'),
+              if (ap?.signalCh1 != null)
+                MetricTile(
+                    label: 'Ch1',
+                    value: '${ap!.signalCh1}',
+                    unit: 'dBm',
+                    helpKey: 'signal'),
+              if (ap?.txCcq != null)
+                MetricTile(
+                    label: 'TX CCQ',
+                    value: '${ap!.txCcq}',
+                    unit: '%',
+                    helpKey: 'ccq'),
+              if (ap?.rxCcq != null)
+                MetricTile(
+                    label: 'RX CCQ',
+                    value: '${ap!.rxCcq}',
+                    unit: '%',
+                    helpKey: 'ccq'),
+              if (ap?.uptime != null)
+                MetricTile(
+                    label: l.t('Uptime', 'Аптайм'),
+                    value: ap!.uptime!,
+                    helpKey: 'uptime'),
+            ],
+          ),
         ],
         if (ctrl.routerResource != null || ctrl.roamCount > 0) ...[
           const SizedBox(height: 12),
           _RouterHealthCard(ctrl: ctrl),
         ],
         const SizedBox(height: 12),
-        _HistoryChart(
-            phone: ctrl.phoneHistory, ap: ctrl.apHistory),
+        _HistoryChart(phone: ctrl.phoneHistory, ap: ctrl.apHistory),
       ],
     );
   }
@@ -444,12 +444,10 @@ class _StatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
     final ok = ctrl.thresholdsOk;
-    final color =
-        ok ? const Color(0xFF3FB950) : const Color(0xFFD29922);
+    final color = ok ? const Color(0xFF3FB950) : const Color(0xFFD29922);
 
     String nameOf(ThresholdBreach b) => switch (b) {
-          ThresholdBreach.phoneSignal =>
-            l.t('phone signal', 'сигнал телефона'),
+          ThresholdBreach.phoneSignal => l.t('phone signal', 'сигнал телефона'),
           ThresholdBreach.apSignal => l.t('AP signal', 'сигнал точки'),
           ThresholdBreach.phoneSnr => l.t('phone SNR', 'SNR телефона'),
           ThresholdBreach.apSnr => l.t('AP SNR', 'SNR точки'),
@@ -472,14 +470,11 @@ class _StatusBanner extends StatelessWidget {
           Expanded(
             child: Text(
               ok
-                  ? l.t('All metrics within target',
-                      'Все показатели в пределах цели')
+                  ? l.t('Signal targets are met', 'Цели по сигналу соблюдены')
                   : '${l.t('Out of target', 'Вне цели')}: '
                       '${ctrl.breaches.map(nameOf).join(', ')}',
               style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: color),
+                  fontSize: 12.5, fontWeight: FontWeight.w600, color: color),
             ),
           ),
         ],
@@ -697,8 +692,8 @@ class _DeltaBadge extends StatelessWidget {
               ],
             ),
             Text(has ? '$sign$delta dB' : '—',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w800)),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           ],
         ),
       ),
@@ -821,8 +816,7 @@ class _ErrorBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(message,
-                style: const TextStyle(
-                    fontSize: 12, color: Color(0xFFF0B4B4))),
+                style: const TextStyle(fontSize: 12, color: Color(0xFFF0B4B4))),
           ),
         ],
       ),
