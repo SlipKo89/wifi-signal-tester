@@ -25,7 +25,12 @@ it next to your phone's own readings.
 ## Download
 
 Grab the latest APK from the [Releases page](../../releases/latest) — download
-`app-release.apk` under *Assets* and install it on your Android device.
+`wifi-signal-tester-<version>.apk` under *Assets* and install it on your Android
+device.
+
+Every push to `main` also creates an APK without requiring a tag. Open
+[Actions](../../actions/workflows/release.yml), select a successful run and
+download the `wifi-signal-tester-…` archive from its *Artifacts* section.
 
 ## How to use it
 

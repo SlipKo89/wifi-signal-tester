@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- GitHub Actions now builds and uploads a release APK artifact on every push to
+  `main`, on pull requests to `main`, and on manual runs. A `v*` tag is only
+  needed when the same APK should also be published as a GitHub Release.
+
 ## [0.2.3] - 2026-08-05
 
 ### Added

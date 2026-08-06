@@ -25,7 +25,12 @@ CAPsMAN или обычным Wi-Fi) **только на чтение**, **то�
 ## Скачать
 
 Свежий APK — на [странице релизов](../../releases/latest): скачай
-`app-release.apk` в разделе *Assets* и установи на Android-устройство.
+`wifi-signal-tester-<версия>.apk` в разделе *Assets* и установи на
+Android-устройство.
+
+Каждый push в `main` также собирает APK без тега. Открой
+[Actions](../../actions/workflows/release.yml), выбери успешный запуск и скачай
+архив `wifi-signal-tester-…` из раздела *Artifacts*.
 
 ## Как пользоваться
 
