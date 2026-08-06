@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../diagnostics/link_diagnostics.dart';
 import '../history/history_store.dart';
 import '../mikrotik/mikrotik_service.dart';
 import '../models/phone_signal.dart';
@@ -54,6 +55,8 @@ class MonitorController extends ChangeNotifier {
   int? pingMs;
   bool _pinging = false;
   final List<int?> _pingWindow = [];
+  String? _pingHost;
+  int _pingGeneration = 0;
 
   int? get pingAvgMs {
     final ok = _pingWindow.whereType<int>().toList();
@@ -66,6 +69,14 @@ class MonitorController extends ChangeNotifier {
     final lost = _pingWindow.where((e) => e == null).length;
     return (lost * 100 / _pingWindow.length).round();
   }
+
+  int get pingSampleCount => _pingWindow.length;
+
+  /// Correlates signal, SNR, CCQ, rates, gateway latency and router CPU over a
+  /// short rolling window. This never changes the router or Android settings.
+  final LinkDiagnosticsEngine _diagnostics = LinkDiagnosticsEngine();
+  String? _diagnosticLinkKey;
+  LinkDiagnosticReport get linkDiagnostics => _diagnostics.report;
 
   /// Our MAC as last resolved from ARP (re-resolved every poll).
   String? _ourMac;
@@ -120,7 +131,8 @@ class MonitorController extends ChangeNotifier {
 
   int get routerCount => _routers.length;
   List<MikrotikService> get routers => List.unmodifiable(_routers);
-  MikrotikService? get _primary => _serving ?? (_routers.isEmpty ? null : _routers.first);
+  MikrotikService? get _primary =>
+      _serving ?? (_routers.isEmpty ? null : _routers.first);
   String? get stackLabel => _primary?.stack?.label;
   String? get transportKind => _primary?.transportKind;
 
@@ -167,6 +179,7 @@ class MonitorController extends ChangeNotifier {
     state = MonitorState.connecting;
     phoneOnly = false;
     error = null;
+    _resetDiagnostics();
     notifyListeners();
 
     final access = await _phone.ensureLocationAccess();
@@ -211,6 +224,7 @@ class MonitorController extends ChangeNotifier {
     locationGranted = access.granted;
     locationServiceOn = access.serviceOn;
     await _closeRouters();
+    _resetDiagnostics();
     phoneOnly = true;
     state = MonitorState.connected;
     error = null;
@@ -242,6 +256,7 @@ class MonitorController extends ChangeNotifier {
         offWifi = true;
         stationSignal = null;
         connectedApName = null;
+        _resetDiagnostics();
         error = 'Phone is off Wi-Fi (mobile data?). Connect to a network '
             'served by one of your MikroTiks to see the AP side.';
         notifyListeners();
@@ -274,6 +289,22 @@ class MonitorController extends ChangeNotifier {
       apUnmanaged =
           !phoneOnly && phone.ipAddress != null && stationSignal == null;
 
+      // Never mix samples from different APs. BSSID is the most reliable link
+      // identity; interface/SSID are fallbacks when Android hides it.
+      final linkKey = phone.bssid ??
+          stationSignal?.interfaceName ??
+          phone.ssid ??
+          phone.ipAddress;
+      if (_diagnosticLinkKey != null &&
+          linkKey != null &&
+          linkKey != _diagnosticLinkKey) {
+        _diagnostics.clear();
+        pingMs = null;
+        _pingWindow.clear();
+        _pingGeneration++;
+      }
+      _diagnosticLinkKey = linkKey;
+
       // Roaming: detect when the serving AP changes.
       final apNow = stationSignal?.interfaceName ?? connectedApName;
       if (apNow != null && _lastApName != null && apNow != _lastApName) {
@@ -293,6 +324,7 @@ class MonitorController extends ChangeNotifier {
       _push(apHistory, stationSignal?.signalDbm);
 
       _evaluateThresholds();
+      _evaluateLinkDiagnostics();
 
       await _recordIfNeeded();
       error = null;
@@ -416,16 +448,74 @@ class MonitorController extends ChangeNotifier {
     if (alertsEnabled && found.isNotEmpty) _beeper.beep();
   }
 
+  void _evaluateLinkDiagnostics() {
+    final phone = phoneSignal;
+    if (phone == null || phone.rssiDbm == null) return;
+    final station = stationSignal;
+    final phoneRates = [
+      phone.linkSpeedMbps,
+      phone.txLinkSpeedMbps,
+      phone.rxLinkSpeedMbps,
+    ].whereType<int>().toList();
+    final phoneRate = phoneRates.isEmpty
+        ? null
+        : phoneRates.reduce((a, b) => a < b ? a : b).toDouble();
+
+    _diagnostics.add(LinkDiagnosticSample(
+      timestamp: DateTime.now(),
+      phoneRssi: phone.rssiDbm,
+      apSignal: station?.signalDbm,
+      phoneSnr: phoneSnr,
+      apSnr: apSnr,
+      phoneSnrEstimated: phoneSnrIsEstimate,
+      apSnrEstimated: apSnrIsEstimate,
+      delta: signalDelta,
+      txCcq: station?.txCcq,
+      rxCcq: station?.rxCcq,
+      phoneRateMbps: phoneRate,
+      apTxRateMbps: LinkDiagnosticsEngine.parseRateMbps(station?.txRate),
+      apRxRateMbps: LinkDiagnosticsEngine.parseRateMbps(station?.rxRate),
+      pThroughputKbps: station?.pThroughputKbps,
+      pingAvgMs: pingAvgMs,
+      pingLossPct: pingLossPct,
+      pingSamples: pingSampleCount,
+      cpuLoad: cpuLoad,
+    ));
+  }
+
   void _pingTarget(String? host) {
-    if (host == null || _pinging) return;
+    if (host == null) return;
+    if (_pingHost != host) {
+      _pingHost = host;
+      pingMs = null;
+      _pingWindow.clear();
+      _pingGeneration++;
+    }
+    if (_pinging) return;
+    final requestedHost = host;
+    final requestedGeneration = _pingGeneration;
     _pinging = true;
     _ping.pingOnce(host).then((ms) {
-      pingMs = ms;
-      _pingWindow.add(ms);
-      if (_pingWindow.length > 20) _pingWindow.removeAt(0);
+      // A ping started on the previous network may finish after a roam. Do not
+      // contaminate the new AP's diagnostics with that result.
+      if (_pingHost == requestedHost &&
+          _pingGeneration == requestedGeneration) {
+        pingMs = ms;
+        _pingWindow.add(ms);
+        if (_pingWindow.length > 20) _pingWindow.removeAt(0);
+      }
       _pinging = false;
       notifyListeners();
     });
+  }
+
+  void _resetDiagnostics() {
+    _diagnostics.clear();
+    _diagnosticLinkKey = null;
+    _pingHost = null;
+    _pingGeneration++;
+    pingMs = null;
+    _pingWindow.clear();
   }
 
   String? _apNameForBssid(String? bssid) {
@@ -491,7 +581,9 @@ class MonitorController extends ChangeNotifier {
     lastRoam = null;
     pingMs = null;
     _pingWindow.clear();
+    _pingHost = null;
     _pinging = false;
+    _resetDiagnostics();
     breaches = const [];
     phoneHistory.clear();
     apHistory.clear();

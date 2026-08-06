@@ -19,10 +19,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] **Threshold alerts** — configurable targets for signal, SNR and asymmetry;
       beep + vibrate on any breach; dashboard pass/fail strip listing what's out
       of target
-- [~] **Asymmetry diagnosis with advice** — turn the AP−phone delta into a
-      verdict. Done: tap the Δ badge for explanation + rule-based advice.
-      Left: fold in rate/CCQ ("strong signal but low rate → interference") and
-      surface a short inline verdict without tapping
+- [x] **Smart link diagnosis with advice** — inline verdict + detailed facts and
+      suggestions from a stable window of RSSI/SNR, AP−phone delta, rate/CCQ,
+      p-throughput, gateway ping/loss and router CPU
 
 ## Next (v0.2)
 - [ ] Per-MIMO-chain view (signal-strength-ch0/ch1) with bar visualization
@@ -86,7 +85,7 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] iOS build pass + platform-specific Wi-Fi permission flows
 - [ ] Localization framework (proper i18n, not hardcoded RU/EN strings)
 - [ ] Optional read-only user auto-check (warn if the API user has write policy)
-- [ ] Speed/latency probe alongside signal (ping the gateway)
+- [x] Latency probe alongside signal (rolling gateway ping + loss)
 - [x] App icon (two-sided signal, SVG → adaptive/iOS)
 - [ ] Splash screen + store listing assets
 
@@ -98,9 +97,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 ### A. Squeeze more from data we already fetch
 - [x] Real noise-floor from `/interface/wireless/monitor` (and wifi equivalent)
       → honest SNR on both sides (done as AP-side SNR estimate)
-- [ ] `p-throughput` (RouterOS's own estimated client throughput) as a headline
+- [x] `p-throughput` (RouterOS's own estimated client throughput) as a headline
       metric — more honest than raw dBm
-- [ ] Highlight signal↔rate/CCQ mismatch (strong signal but low rate = interference)
+- [x] Highlight signal↔rate/CCQ mismatch with a stable-window diagnosis and advice
 - [ ] Retransmit / frame-error rate from counters over time (link quality depth)
 
 ### B. New diagnostic features
@@ -109,7 +108,7 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       catch sticky-client / handover issues
 - [ ] Named measurement spots ("kitchen") with min/max/avg over a dwell window,
       compare spots
-- [ ] Ping / latency probe to the gateway alongside signal (correlate signal↔lag)
+- [x] Ping / latency probe to the gateway alongside signal (correlate signal↔lag)
 
 ### C. Bigger directions
 - [ ] A/B before/after snapshots (channel / power / AP placement change) with diff

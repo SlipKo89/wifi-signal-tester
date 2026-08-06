@@ -9,6 +9,17 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.2.4', '2026-08-06', [
+    'Smart connection diagnosis correlates RSSI/SNR, CCQ, rates, p-throughput, gateway ping/loss and router CPU',
+    'A dashboard verdict opens detailed observed facts, likely causes and concrete checks',
+    'Diagnosis uses a stable rolling window, ignores isolated spikes and resets after an AP change',
+    'Every push to main now produces a downloadable APK artifact without requiring a tag',
+  ], [
+    'Умная диагностика сопоставляет RSSI/SNR, CCQ, rates, p-throughput, ping/потери до шлюза и CPU роутера',
+    'Вердикт на главном экране открывает факты, вероятные причины и конкретные рекомендации',
+    'Диагностика использует устойчивое окно, игнорирует одиночные скачки и сбрасывается при смене точки',
+    'Каждый push в main теперь создаёт скачиваемый APK в Artifacts без обязательного тега',
+  ]),
   Release('0.2.3', '2026-08-05', [
     'Expanded MikroTik hardening audit: MAC access, Neighbor Discovery, btest, DNS, proxy/SOCKS/UPnP/Cloud and SSH crypto',
     'Every hardening finding links to the official MikroTik recommendation, including in PDF reports',
