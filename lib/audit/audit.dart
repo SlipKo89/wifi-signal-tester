@@ -16,6 +16,7 @@ class Finding {
   final String? fixEn;
   final String? fixRu;
   final String? where;
+  final String? sourceUrl;
 
   const Finding(
     this.sev, {
@@ -26,6 +27,7 @@ class Finding {
     this.fixEn,
     this.fixRu,
     this.where,
+    this.sourceUrl,
   });
 }
 
@@ -57,7 +59,7 @@ class AuditEngine {
   }) async {
     final out = <Finding>[];
     for (final svc in routers) {
-      final c = await _gather(svc);
+      final c = await _gather(svc, scope);
       _routerInfo(c, out);
       _dataGaps(c, out);
       if (scope == AuditScope.wifi) {
@@ -196,7 +198,7 @@ class AuditEngine {
     // Handled in _logNote via a separate read is overkill; note-only here.
   }
 
-  Future<_Ctx> _gather(MikrotikService svc) async {
+  Future<_Ctx> _gather(MikrotikService svc, AuditScope scope) async {
     // A menu that simply doesn't exist on this stack reads as empty — that's
     // normal and the checks below cope. A menu that *failed* is different: it
     // must not be mistaken for "the feature isn't configured", which is how an
@@ -217,35 +219,88 @@ class AuditEngine {
       throw RouterOsException(
           'Could not read the router — reconnect and run the audit again');
     }
-    final ntp = await read('/system/ntp/client');
-    final update = await read('/system/package/update');
+    final system = scope == AuditScope.system;
+    final ntp = system
+        ? await read('/system/ntp/client')
+        : const <Map<String, String>>[];
+    final update = system
+        ? await read('/system/package/update')
+        : const <Map<String, String>>[];
+    final macServer =
+        system ? await read('/tool/mac-server') : const <Map<String, String>>[];
+    final macWinbox = system
+        ? await read('/tool/mac-server/mac-winbox')
+        : const <Map<String, String>>[];
+    final macPing = system
+        ? await read('/tool/mac-server/ping')
+        : const <Map<String, String>>[];
+    final neighborDiscovery = system
+        ? await read('/ip/neighbor/discovery-settings')
+        : const <Map<String, String>>[];
+    final bandwidthServer = system
+        ? await read('/tool/bandwidth-server')
+        : const <Map<String, String>>[];
+    final dns = system ? await read('/ip/dns') : const <Map<String, String>>[];
+    final proxy =
+        system ? await read('/ip/proxy') : const <Map<String, String>>[];
+    final socks =
+        system ? await read('/ip/socks') : const <Map<String, String>>[];
+    final upnp =
+        system ? await read('/ip/upnp') : const <Map<String, String>>[];
+    final cloud =
+        system ? await read('/ip/cloud') : const <Map<String, String>>[];
+    final ssh = system ? await read('/ip/ssh') : const <Map<String, String>>[];
     return _Ctx(
-      capsIfaces: await read('/caps-man/interface'),
-      capsConfigs: await read('/caps-man/configuration'),
-      capsSecs: {
-        for (final s in await read('/caps-man/security')) s['name'] ?? '': s
-      },
-      wireless: await read('/interface/wireless'),
-      wirelessProfiles: {
-        for (final p in await read('/interface/wireless/security-profiles'))
-          p['name'] ?? '': p
-      },
-      datapaths: {
-        for (final d in await read('/caps-man/datapath')) d['name'] ?? '': d
-      },
-      accessList: [
-        ...await read('/caps-man/access-list'),
-        ...await read('/interface/wireless/access-list'),
-      ],
+      capsIfaces: system ? const [] : await read('/caps-man/interface'),
+      capsConfigs: system ? const [] : await read('/caps-man/configuration'),
+      capsSecs: system
+          ? const {}
+          : {
+              for (final s in await read('/caps-man/security'))
+                s['name'] ?? '': s
+            },
+      wireless: system ? const [] : await read('/interface/wireless'),
+      wirelessProfiles: system
+          ? const {}
+          : {
+              for (final p
+                  in await read('/interface/wireless/security-profiles'))
+                p['name'] ?? '': p
+            },
+      datapaths: system
+          ? const {}
+          : {
+              for (final d in await read('/caps-man/datapath'))
+                d['name'] ?? '': d
+            },
+      accessList: system
+          ? const []
+          : [
+              ...await read('/caps-man/access-list'),
+              ...await read('/interface/wireless/access-list'),
+            ],
       resource: resource.isEmpty ? null : resource.first,
       host: svc.host,
       ntp: ntp.isEmpty ? null : ntp.first,
       update: update.isEmpty ? null : update.first,
-      services: await read('/ip/service'),
-      users: await read('/user'),
-      pools: await read('/ip/pool'),
-      leases: await read('/ip/dhcp-server/lease'),
-      filter: await read('/ip/firewall/filter'),
+      services: system ? await read('/ip/service') : const [],
+      users: system ? await read('/user') : const [],
+      pools: system ? await read('/ip/pool') : const [],
+      leases: system ? await read('/ip/dhcp-server/lease') : const [],
+      ipv4Filter: system ? await read('/ip/firewall/filter') : const [],
+      ipv6Filter: system ? await read('/ipv6/firewall/filter') : const [],
+      macServer: macServer.isEmpty ? null : macServer.first,
+      macWinbox: macWinbox.isEmpty ? null : macWinbox.first,
+      macPing: macPing.isEmpty ? null : macPing.first,
+      neighborDiscovery:
+          neighborDiscovery.isEmpty ? null : neighborDiscovery.first,
+      bandwidthServer: bandwidthServer.isEmpty ? null : bandwidthServer.first,
+      dns: dns.isEmpty ? null : dns.first,
+      proxy: proxy.isEmpty ? null : proxy.first,
+      socks: socks.isEmpty ? null : socks.first,
+      upnp: upnp.isEmpty ? null : upnp.first,
+      cloud: cloud.isEmpty ? null : cloud.first,
+      ssh: ssh.isEmpty ? null : ssh.first,
       unreadable: failed,
     );
   }
@@ -593,11 +648,18 @@ class AuditEngine {
     'winbox': '8291',
   };
 
+  static const _hardeningUrl =
+      'https://manual.mikrotik.com/docs/getting-started/securing-your-router/';
+  static const _servicesUrl =
+      'https://manual.mikrotik.com/docs/system-information-and-utilities/services/';
+
   void _hardeningChecks(_Ctx c, List<Finding> out) {
     // NTP time sync.
     final ntp = c.ntp;
     if (ntp != null) {
-      if (ntp['enabled'] == 'true') {
+      final enabled = ntp['enabled'] == 'true';
+      final status = (ntp['status'] ?? '').toLowerCase();
+      if (enabled && status.contains('synchronized')) {
         out.add(Finding(AuditSeverity.ok,
             titleEn: 'NTP time sync on',
             titleRu: 'Синхронизация времени (NTP)',
@@ -607,6 +669,18 @@ class AuditEngine {
             detailRu:
                 'Часы синхронизированы (${ntp['status'] ?? 'ok'}) — сертификаты, '
                 'логи и расписания корректны.'));
+      } else if (enabled) {
+        out.add(Finding(AuditSeverity.info,
+            titleEn: 'NTP client enabled; sync not confirmed',
+            titleRu: 'NTP включён, синхронизация не подтверждена',
+            detailEn:
+                'RouterOS reports status "${ntp['status'] ?? 'unknown'}". '
+                'The client is configured, but the audit cannot confirm that '
+                'the clock is synchronized.',
+            detailRu:
+                'RouterOS сообщает статус «${ntp['status'] ?? 'неизвестно'}». '
+                'Клиент настроен, но аудит не может подтвердить синхронизацию '
+                'часов.'));
       } else {
         out.add(const Finding(AuditSeverity.warn,
             titleEn: 'NTP time sync off',
@@ -635,7 +709,8 @@ class AuditEngine {
                 '$installed → $latest. Updates fix security bugs; plan an '
                 'upgrade.',
             detailRu: '$installed → $latest. Обновления чинят уязвимости — '
-                'запланируй апгрейд.'));
+                'запланируй апгрейд.',
+            sourceUrl: '$_hardeningUrl#routeros-version'));
       }
     }
 
@@ -648,8 +723,6 @@ class AuditEngine {
       if (s['disabled'] == 'true') continue;
       if (_mgmtPorts.containsKey(n)) active[n] = s;
     }
-    final defaultDrop = _hasDefaultDrop(c.filter);
-
     if (active.isNotEmpty) {
       final labelsEn = active.entries
           .map((e) => _serviceLabel(e.key, e.value, customSuffix: ' (custom)'))
@@ -666,7 +739,8 @@ class AuditEngine {
               'but does not replace an IP restriction or input firewall.',
           detailRu: '$labelsRu. Нестандартный порт уменьшает фоновый шум от '
               'сканеров, но не заменяет ограничение по IP или firewall input.',
-          where: c.host));
+          where: c.host,
+          sourceUrl: '$_hardeningUrl#management-service-ports'));
     }
 
     // Plaintext services — worth disabling regardless of the firewall.
@@ -674,20 +748,24 @@ class AuditEngine {
       final service = active[n];
       if (service != null) {
         final label = _serviceLabel(n, service);
-        out.add(Finding(AuditSeverity.info,
+        out.add(Finding(AuditSeverity.warn,
             titleEn: '$label is enabled',
             titleRu: '$label включён',
             detailEn: '$label is a plaintext management service. If you don\'t '
                 'use it, turn it off to shrink the attack surface.',
             detailRu: '$label — сервис управления без шифрования. Если не '
                 'используешь — выключи, чтобы сузить поверхность атаки.',
-            fixEn: 'Disable $n in /ip service if unused.',
-            fixRu: 'Отключи $n в /ip service, если не нужен.'));
+            fixEn: 'Disable $n in /ip service if unused; prefer its encrypted '
+                'alternative where one exists.',
+            fixRu: 'Отключи $n в /ip service, если не нужен; по возможности '
+                'используй зашифрованную альтернативу.',
+            sourceUrl: '$_hardeningUrl#management-service-ports'));
       }
     }
 
-    // Real exposure = no service-level ACL AND no catch-all drop on input.
-    // (A default-deny firewall gates services even when their address is empty.)
+    // Report only the service's own address restriction. We deliberately do
+    // not infer WAN exposure from firewall rules: rule order, interface lists,
+    // address lists and dynamic rules make that a separate product-sized task.
     final noAcl = <String>[];
     for (final n in _mgmtPorts.keys) {
       final s = active[n];
@@ -695,23 +773,33 @@ class AuditEngine {
         noAcl.add(_serviceLabel(n, s));
       }
     }
-    if (noAcl.isNotEmpty &&
-        !defaultDrop &&
-        !c.unreadable.contains('/ip/firewall/filter')) {
-      out.add(Finding(AuditSeverity.warn,
-          titleEn: 'Management may be exposed',
-          titleRu: 'Управление может быть открыто',
-          detailEn: '${noAcl.join(', ')} have no service-level IP restriction, '
-              'and the input firewall has no catch-all drop — they may accept '
-              'connections from anywhere.',
-          detailRu:
-              '${noAcl.join(', ')} без ограничения по IP на уровне сервиса, и в '
-              'firewall на input нет финального drop — могут принимать '
-              'подключения откуда угодно.',
-          fixEn: 'Add a default-deny to the input chain and/or restrict these '
-              'services by address.',
-          fixRu: 'Добавь финальный drop в input и/или ограничь эти сервисы по '
-              'адресу.'));
+    if (noAcl.isNotEmpty) {
+      out.add(Finding(AuditSeverity.info,
+          titleEn: 'No own IP restriction on management services',
+          titleRu: 'Нет собственного IP-ограничения сервисов',
+          detailEn: '${noAcl.join(', ')} do not restrict source addresses in '
+              '/ip service. This is a fact about the service setting, not a '
+              'claim that it is reachable from the internet: firewall rules '
+              'are not analysed by this app.',
+          detailRu: '${noAcl.join(', ')} не ограничивают адреса источников в '
+              '/ip service. Это факт о настройке сервиса, а не утверждение о '
+              'доступности из интернета: правила firewall приложение не '
+              'анализирует.',
+          fixEn: 'If appropriate, restrict trusted source prefixes in the '
+              'service address field and review the firewall separately.',
+          fixRu: 'Если подходит для твоей сети, ограничь доверенные подсети в '
+              'поле address сервиса и отдельно проверь firewall.',
+          sourceUrl: '$_servicesUrl#properties'));
+    } else if (active.isNotEmpty) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: 'Management services have own IP restrictions',
+          titleRu: 'Сервисы управления ограничены по IP',
+          detailEn: 'Every active management service has a non-global address '
+              'restriction. Firewall effectiveness is outside this audit.',
+          detailRu: 'У каждого активного сервиса управления есть неглобальное '
+              'ограничение address. Эффективность firewall в этот аудит не '
+              'входит.',
+          sourceUrl: '$_servicesUrl#properties'));
     }
 
     // Default admin user.
@@ -722,7 +810,8 @@ class AuditEngine {
             titleEn: "Default 'admin' disabled",
             titleRu: 'Дефолтный admin отключён',
             detailEn: 'The well-known admin account is disabled — good.',
-            detailRu: 'Стандартная учётка admin отключена — хорошо.'));
+            detailRu: 'Стандартная учётка admin отключена — хорошо.',
+            sourceUrl: '$_hardeningUrl#access-username'));
       } else {
         out.add(const Finding(AuditSeverity.warn,
             titleEn: "Default 'admin' account is active",
@@ -736,41 +825,23 @@ class AuditEngine {
             fixEn: 'Change the admin password, or create a named admin and '
                 'disable admin.',
             fixRu: 'Смени пароль admin, либо заведи именованного админа и '
-                'отключи admin.'));
+                'отключи admin.',
+            sourceUrl: '$_hardeningUrl#access-username'));
       }
     }
 
-    // Firewall posture on the input chain. Skipped when the menu couldn't be
-    // read: "no rules returned" would otherwise read as "no firewall".
-    final hasInput =
-        c.filter.any((f) => (f['chain'] ?? '').startsWith('input'));
-    if (c.unreadable.contains('/ip/firewall/filter')) {
-      // Nothing to say about a chain we never saw.
-    } else if (defaultDrop) {
-      out.add(const Finding(AuditSeverity.ok,
-          titleEn: 'Firewall: input default-deny',
-          titleRu: 'Firewall: default-deny на input',
-          detailEn: 'The input chain drops everything not explicitly allowed — '
-              'services are gated by the firewall, not just their address ACL.',
-          detailRu: 'Input-цепочка отбрасывает всё, что явно не разрешено — '
-              'сервисы гейтит firewall, а не только их address-ACL.'));
-    } else if (hasInput) {
-      out.add(const Finding(AuditSeverity.info,
-          titleEn: 'Input firewall: no catch-all drop found',
-          titleRu: 'Firewall input: нет финального drop',
-          detailEn: 'There are input rules but no default-deny was detected. '
-              'Verify the router doesn\'t accept unsolicited traffic.',
-          detailRu: 'Правила на input есть, но финального drop не нашла. '
-              'Проверь, что роутер не принимает лишний трафик.'));
-    } else {
-      out.add(const Finding(AuditSeverity.warn,
-          titleEn: 'No input firewall',
-          titleRu: 'Нет firewall на input',
-          detailEn: 'Nothing filters traffic to the router itself.',
-          detailRu: 'Ничто не фильтрует трафик к самому роутеру.',
-          fixEn: 'Add an input chain ending with a drop.',
-          fixRu: 'Добавь цепочку input с финальным drop.'));
-    }
+    _firewallPresence(c, out);
+    _macAccessChecks(c, out);
+    _neighborDiscoveryCheck(c, out);
+    _bandwidthServerCheck(c, out);
+    _dnsCheck(c, out);
+    _additionalServiceCheck(
+        c.proxy, 'Web proxy', 'Web proxy', '/ip proxy', out);
+    _additionalServiceCheck(
+        c.socks, 'SOCKS proxy', 'SOCKS-прокси', '/ip socks', out);
+    _additionalServiceCheck(c.upnp, 'UPnP', 'UPnP', '/ip upnp', out);
+    _cloudCheck(c, out);
+    _sshCheck(c, active, out);
 
     // IP pool usage.
     for (final p in c.pools) {
@@ -795,6 +866,270 @@ class AuditEngine {
     }
   }
 
+  void _firewallPresence(_Ctx c, List<Finding> out) {
+    void check({
+      required String version,
+      required String menu,
+      required List<Map<String, String>> rules,
+    }) {
+      if (c.unreadable.contains(menu)) return;
+      final active = rules.where((r) => r['disabled'] != 'true').length;
+      if (active == 0) {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: 'No $version firewall filter rules',
+            titleRu: 'Нет правил firewall для $version',
+            detailEn: 'No active rules were found in $menu. A firewall should '
+                'be configured for this protocol family.',
+            detailRu: 'В $menu не найдено активных правил. Для этого семейства '
+                'протоколов стоит настроить firewall.',
+            fixEn:
+                'Configure and verify the firewall in WinBox/WebFig. The app '
+                'does not assess rule order or effectiveness.',
+            fixRu: 'Настрой и проверь firewall в WinBox/WebFig. Приложение не '
+                'оценивает порядок и эффективность правил.',
+            sourceUrl: '$_hardeningUrl#firewall-rules-for-management-access'));
+      } else {
+        out.add(Finding(AuditSeverity.ok,
+            titleEn: '$version firewall rules present',
+            titleRu: 'Правила firewall для $version присутствуют',
+            detailEn: '$active active filter rule(s) found. Presence only: the '
+                'app does not analyse their order, coverage or effectiveness.',
+            detailRu: 'Найдено активных правил: $active. Проверяется только '
+                'наличие: порядок, покрытие и эффективность не анализируются.',
+            sourceUrl: '$_hardeningUrl#firewall-rules-for-management-access'));
+      }
+    }
+
+    check(version: 'IPv4', menu: '/ip/firewall/filter', rules: c.ipv4Filter);
+    check(version: 'IPv6', menu: '/ipv6/firewall/filter', rules: c.ipv6Filter);
+  }
+
+  void _macAccessChecks(_Ctx c, List<Finding> out) {
+    void allowedList(
+      Map<String, String>? row,
+      String titleEn,
+      String titleRu,
+    ) {
+      if (row == null) return;
+      final value = (row['allowed-interface-list'] ?? '').trim();
+      if (value == 'none') {
+        out.add(Finding(AuditSeverity.ok,
+            titleEn: '$titleEn disabled',
+            titleRu: '$titleRu отключён',
+            detailEn: 'allowed-interface-list=none.',
+            detailRu: 'allowed-interface-list=none.',
+            sourceUrl: '$_hardeningUrl#routeros-mac-access'));
+      } else {
+        out.add(Finding(AuditSeverity.warn,
+            titleEn: '$titleEn enabled',
+            titleRu: '$titleRu включён',
+            detailEn:
+                'allowed-interface-list=${value.isEmpty ? 'unknown' : value}. '
+                'MikroTik recommends disabling MAC management access in '
+                'production networks.',
+            detailRu:
+                'allowed-interface-list=${value.isEmpty ? 'неизвестно' : value}. '
+                'MikroTik рекомендует отключать управление по MAC в '
+                'production-сетях.',
+            fixEn: 'Set allowed-interface-list=none, or deliberately restrict '
+                'it to a trusted management interface list.',
+            fixRu: 'Установи allowed-interface-list=none либо осознанно '
+                'ограничь доверенным списком интерфейсов.',
+            sourceUrl: '$_hardeningUrl#routeros-mac-access'));
+      }
+    }
+
+    allowedList(c.macServer, 'MAC Telnet', 'MAC Telnet');
+    allowedList(c.macWinbox, 'MAC WinBox', 'MAC WinBox');
+    final ping = c.macPing;
+    if (ping != null) {
+      final enabled = ping['enabled'] == 'true';
+      out.add(Finding(enabled ? AuditSeverity.warn : AuditSeverity.ok,
+          titleEn: enabled ? 'MAC Ping enabled' : 'MAC Ping disabled',
+          titleRu: enabled ? 'MAC Ping включён' : 'MAC Ping отключён',
+          detailEn: enabled
+              ? 'MikroTik recommends disabling MAC Ping in production networks.'
+              : 'MAC-level ping is disabled.',
+          detailRu: enabled
+              ? 'MikroTik рекомендует отключать MAC Ping в production-сетях.'
+              : 'Ping на MAC-уровне отключён.',
+          fixEn: enabled ? 'Set enabled=no in /tool mac-server ping.' : null,
+          fixRu:
+              enabled ? 'Установи enabled=no в /tool mac-server ping.' : null,
+          sourceUrl: '$_hardeningUrl#routeros-mac-access'));
+    }
+  }
+
+  void _neighborDiscoveryCheck(_Ctx c, List<Finding> out) {
+    final row = c.neighborDiscovery;
+    if (row == null) return;
+    final value = (row['discover-interface-list'] ?? '').trim();
+    final disabled = value == 'none';
+    out.add(Finding(disabled ? AuditSeverity.ok : AuditSeverity.warn,
+        titleEn: disabled
+            ? 'Neighbor Discovery disabled'
+            : 'Neighbor Discovery enabled',
+        titleRu: disabled
+            ? 'Neighbor Discovery отключён'
+            : 'Neighbor Discovery включён',
+        detailEn: disabled
+            ? 'discover-interface-list=none.'
+            : 'discover-interface-list=${value.isEmpty ? 'unknown' : value}. '
+                'Discovery reveals router information on those interfaces.',
+        detailRu: disabled
+            ? 'discover-interface-list=none.'
+            : 'discover-interface-list=${value.isEmpty ? 'неизвестно' : value}. '
+                'Discovery раскрывает сведения о роутере на этих интерфейсах.',
+        fixEn: disabled
+            ? null
+            : 'Set it to none, or restrict it to a trusted management list.',
+        fixRu: disabled
+            ? null
+            : 'Установи none либо ограничь доверенным списком управления.',
+        sourceUrl: '$_hardeningUrl#neighbor-discovery'));
+  }
+
+  void _bandwidthServerCheck(_Ctx c, List<Finding> out) {
+    final row = c.bandwidthServer;
+    if (row == null) return;
+    final enabled = row['enabled'] == 'true';
+    final authenticated = row['authenticate'] != 'false';
+    if (!enabled) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: 'Bandwidth Test Server disabled',
+          titleRu: 'Bandwidth Test Server отключён',
+          detailEn: 'The resource-intensive test server is not listening.',
+          detailRu: 'Ресурсоёмкий тестовый сервер не слушает подключения.',
+          sourceUrl: '$_hardeningUrl#bandwidth-server'));
+      return;
+    }
+    out.add(Finding(AuditSeverity.warn,
+        titleEn: authenticated
+            ? 'Bandwidth Test Server enabled'
+            : 'Bandwidth Test Server has no authentication',
+        titleRu: authenticated
+            ? 'Bandwidth Test Server включён'
+            : 'Bandwidth Test Server без авторизации',
+        detailEn: authenticated
+            ? 'Authentication is on, but MikroTik recommends disabling the '
+                'server in production. Firewall reachability is not analysed.'
+            : 'The server is enabled with authenticate=no. It can consume '
+                'substantial CPU and bandwidth; firewall reachability is not '
+                'analysed.',
+        detailRu: authenticated
+            ? 'Авторизация включена, но MikroTik рекомендует отключать сервер '
+                'в production. Доступность через firewall не анализируется.'
+            : 'Сервер включён с authenticate=no. Он способен занять заметную '
+                'часть CPU и полосы; доступность через firewall не '
+                'анализируется.',
+        fixEn: 'Disable /tool bandwidth-server when it is not actively needed.',
+        fixRu: 'Отключи /tool bandwidth-server, когда он не нужен.',
+        sourceUrl: '$_hardeningUrl#bandwidth-server'));
+  }
+
+  void _dnsCheck(_Ctx c, List<Finding> out) {
+    final row = c.dns;
+    if (row == null) return;
+    final remote = row['allow-remote-requests'] == 'true';
+    out.add(Finding(remote ? AuditSeverity.info : AuditSeverity.ok,
+        titleEn: remote
+            ? 'Router accepts client DNS requests'
+            : 'Remote DNS requests disabled',
+        titleRu: remote
+            ? 'Роутер принимает DNS-запросы клиентов'
+            : 'Удалённые DNS-запросы отключены',
+        detailEn: remote
+            ? 'allow-remote-requests=yes. This may be intentional when the '
+                'router is the LAN DNS cache. Confirm it is needed and review '
+                'the firewall separately.'
+            : 'allow-remote-requests=no.',
+        detailRu: remote
+            ? 'allow-remote-requests=yes. Это может быть правильно, если '
+                'роутер работает DNS-кэшем для LAN. Подтверди необходимость и '
+                'отдельно проверь firewall.'
+            : 'allow-remote-requests=no.',
+        sourceUrl: '$_hardeningUrl#dns-cache'));
+  }
+
+  void _additionalServiceCheck(
+    Map<String, String>? row,
+    String titleEn,
+    String titleRu,
+    String menu,
+    List<Finding> out,
+  ) {
+    if (row == null) return;
+    final enabled = row['enabled'] == 'true';
+    out.add(Finding(enabled ? AuditSeverity.warn : AuditSeverity.ok,
+        titleEn: enabled ? '$titleEn enabled' : '$titleEn disabled',
+        titleRu: enabled ? '$titleRu включён' : '$titleRu отключён',
+        detailEn: enabled
+            ? 'MikroTik recommends disabling this service in production when '
+                'it is not explicitly required.'
+            : 'The optional service is disabled.',
+        detailRu: enabled
+            ? 'MikroTik рекомендует отключать этот сервис в production, если '
+                'он явно не нужен.'
+            : 'Дополнительный сервис отключён.',
+        fixEn: enabled ? 'Set enabled=no in $menu.' : null,
+        fixRu: enabled ? 'Установи enabled=no в $menu.' : null,
+        sourceUrl: '$_hardeningUrl#additional-services'));
+  }
+
+  void _cloudCheck(_Ctx c, List<Finding> out) {
+    final row = c.cloud;
+    if (row == null) return;
+    final ddns = (row['ddns-enabled'] ?? '').toLowerCase();
+    final updateTime = row['update-time'] == 'true';
+    final explicitlyEnabled = ddns == 'true' || ddns == 'yes';
+    if (!explicitlyEnabled && !updateTime) {
+      out.add(const Finding(AuditSeverity.ok,
+          titleEn: 'Optional MikroTik Cloud services off',
+          titleRu: 'Дополнительные сервисы MikroTik Cloud выключены',
+          detailEn: 'Cloud DDNS is not explicitly enabled and cloud time '
+              'updates are off.',
+          detailRu: 'Cloud DDNS явно не включён, обновление времени через '
+              'облако выключено.',
+          sourceUrl: '$_hardeningUrl#additional-services'));
+      return;
+    }
+    out.add(Finding(AuditSeverity.info,
+        titleEn: 'MikroTik Cloud feature enabled',
+        titleRu: 'Включена функция MikroTik Cloud',
+        detailEn: 'ddns-enabled=${ddns.isEmpty ? 'unknown' : ddns}, '
+            'update-time=${updateTime ? 'yes' : 'no'}. Confirm these cloud '
+            'features are intentional.',
+        detailRu: 'ddns-enabled=${ddns.isEmpty ? 'неизвестно' : ddns}, '
+            'update-time=${updateTime ? 'yes' : 'no'}. Подтверди, что эти '
+            'облачные функции включены осознанно.',
+        sourceUrl: '$_hardeningUrl#additional-services'));
+  }
+
+  void _sshCheck(
+    _Ctx c,
+    Map<String, Map<String, String>> active,
+    List<Finding> out,
+  ) {
+    if (!active.containsKey('ssh') || c.ssh == null) return;
+    final strong = c.ssh!['strong-crypto'] == 'true';
+    out.add(Finding(strong ? AuditSeverity.ok : AuditSeverity.warn,
+        titleEn: strong ? 'SSH strong crypto enabled' : 'SSH strong crypto off',
+        titleRu: strong
+            ? 'Усиленная криптография SSH включена'
+            : 'Усиленная криптография SSH выключена',
+        detailEn: strong
+            ? 'strong-crypto=yes.'
+            : 'SSH is active with strong-crypto=no. MikroTik recommends the '
+                'stricter cipher, HMAC and key-exchange set.',
+        detailRu: strong
+            ? 'strong-crypto=yes.'
+            : 'SSH активен с strong-crypto=no. MikroTik рекомендует более '
+                'строгий набор шифров, HMAC и обмена ключами.',
+        fixEn: strong ? null : 'Set strong-crypto=yes in /ip ssh.',
+        fixRu: strong ? null : 'Установи strong-crypto=yes в /ip ssh.',
+        sourceUrl: '$_hardeningUrl#more-secure-ssh-access'));
+  }
+
   /// True if a CAPsMAN interface is on the air.
   ///
   /// REST reports it as `running`; the SSH console marks a bound radio with a
@@ -803,36 +1138,6 @@ class AuditEngine {
   bool _isRunning(Map<String, String> iface) =>
       iface['running'] == 'true' ||
       (iface['current-state'] ?? '').startsWith('running');
-
-  /// True if the input chain has a catch-all drop (default-deny) — a drop rule
-  /// with no matcher that would limit which traffic it catches.
-  bool _hasDefaultDrop(List<Map<String, String>> filter) {
-    const limiters = [
-      'protocol',
-      'dst-port',
-      'src-port',
-      'port',
-      'src-address',
-      'dst-address',
-      'src-address-list',
-      'dst-address-list',
-      'in-interface',
-      'in-interface-list',
-      'connection-state',
-      'src-address-type',
-      'dst-address-type',
-      'connection-nat-state',
-      'p2p',
-      'content',
-    ];
-    for (final r in filter) {
-      if ((r['chain'] ?? '') != 'input') continue;
-      if (r['action'] != 'drop' || r['disabled'] == 'true') continue;
-      final limited = limiters.any((k) => (r[k] ?? '').isNotEmpty);
-      if (!limited) return true;
-    }
-    return false;
-  }
 
   /// `ssh` on port 2222 becomes `ssh:2222`; missing ports fall back to the
   /// RouterOS default so an incomplete transport response is still readable.
@@ -938,7 +1243,19 @@ class _Ctx {
   final List<Map<String, String>> users;
   final List<Map<String, String>> pools;
   final List<Map<String, String>> leases;
-  final List<Map<String, String>> filter;
+  final List<Map<String, String>> ipv4Filter;
+  final List<Map<String, String>> ipv6Filter;
+  final Map<String, String>? macServer;
+  final Map<String, String>? macWinbox;
+  final Map<String, String>? macPing;
+  final Map<String, String>? neighborDiscovery;
+  final Map<String, String>? bandwidthServer;
+  final Map<String, String>? dns;
+  final Map<String, String>? proxy;
+  final Map<String, String>? socks;
+  final Map<String, String>? upnp;
+  final Map<String, String>? cloud;
+  final Map<String, String>? ssh;
 
   /// Menus whose read threw — treated as "unknown", never as "empty".
   final Set<String> unreadable;
@@ -958,7 +1275,19 @@ class _Ctx {
     required this.users,
     required this.pools,
     required this.leases,
-    required this.filter,
+    required this.ipv4Filter,
+    required this.ipv6Filter,
+    required this.macServer,
+    required this.macWinbox,
+    required this.macPing,
+    required this.neighborDiscovery,
+    required this.bandwidthServer,
+    required this.dns,
+    required this.proxy,
+    required this.socks,
+    required this.upnp,
+    required this.cloud,
+    required this.ssh,
     required this.unreadable,
   });
 }

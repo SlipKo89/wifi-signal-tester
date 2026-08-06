@@ -46,8 +46,16 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Audit: show passed checks/policies (channel plan, country, TX, isolation,
       sticky-client, router info) — not just problems
 - [x] System audit: management services on standard and non-standard ports;
-      actual port shown, plaintext FTP/Telnet/HTTP/API highlighted, exposure
-      checked together with service ACL and input firewall
+      actual port shown, plaintext FTP/Telnet/HTTP/API highlighted, and each
+      service's own `address` restriction reported without guessing WAN
+      exposure from firewall rules
+- [x] System audit: MikroTik hardening baseline — RouterOS updates, default
+      admin, MAC Telnet/WinBox/Ping, Neighbor Discovery, btest authentication,
+      DNS cache, proxy/SOCKS/UPnP/Cloud and SSH strong crypto; every applicable
+      finding links to the official MikroTik recommendation
+- [x] System audit scope boundary: IPv4/IPv6 firewall checks presence only;
+      firewall rule semantics and all Queue/FastTrack analysis are intentionally
+      out of scope
 - [x] Router health metric on dashboard (CPU / board / version / uptime)
 - [x] Roam counter (AP switches this session)
 - [ ] Audit: extend to WifiWave2 (/interface/wifi) config
@@ -58,7 +66,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Roaming handoff time (proper reconnect-speed measurement, not just count)
 - [ ] Verify PDF export on a real device (built, not yet field-tested)
 - [x] Phone-only mode + phone-side audit (native WifiManager facts)
-- [x] Inspect third-party devices from DHCP leases (AP-side signal)
+- [x] Inspect currently associated third-party devices (AP-side signal),
+      enriched with IP/hostname/DHCP comment and comments from legacy CAPsMAN,
+      classic wireless and WifiWave2 access lists
 - [x] In-app changelog + "what's new on update"
 - [x] Open-source licenses page + "built with AI" note + easter egg
 - [ ] LTE mode for LHG LTE (RSRP/RSRQ/SINR alignment) — high value, next
@@ -119,8 +129,19 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Self-signed TLS is accepted by default (LAN assumption) — make it a
       user-visible toggle with a warning
 - [ ] wifi_iot RSSI availability varies by OEM ROM — needs field testing
-- [ ] AGP pinned to 8.7.3 / Gradle 8.11.1 — revisit once Flutter fully supports
-      AGP 9 (default toolchain installs 9.0.1, which broke the build)
-- [ ] Bump Kotlin from 2.1.0 (build warns it will be dropped; wants ≥2.2.20)
+- [ ] Android toolchain compatibility pass: current AGP is 8.9.1 and Gradle is
+      8.11.1; Flutter 3.44.8 warns that support will soon require AGP ≥8.11.1
+      and Gradle ≥8.14.0. Upgrade those together and run analyze/tests/release
+      build on JDK 17. Do not jump to AGP 9 until Flutter explicitly supports it
+      (AGP 9.0.1 previously broke this project).
+- [ ] Bump Kotlin from 2.1.0 to ≥2.2.20 in the same compatibility pass (Flutter
+      3.44.8 warns that 2.1.0 support will be dropped).
 - [ ] Full i18n framework (gen-l10n/.arb) — currently a lightweight inline
       L10n.t table covers the main strings only
+
+## Out of scope / declined
+- **Native WinBox protocol** — REST, binary API and SSH already expose the
+  read-only data the app needs; another proprietary transport would add major
+  complexity without a meaningful diagnostic benefit.
+- **SNMP transport** — duplicates metrics available through the existing
+  transports while requiring another enabled service and credential set.

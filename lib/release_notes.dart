@@ -9,6 +9,17 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.2.3', '2026-08-05', [
+    'Expanded MikroTik hardening audit: MAC access, Neighbor Discovery, btest, DNS, proxy/SOCKS/UPnP/Cloud and SSH crypto',
+    'Every hardening finding links to the official MikroTik recommendation, including in PDF reports',
+    'IPv4 and IPv6 firewall checks now report presence only and never guess whether a service is internet-exposed',
+    'Connected devices use access-list and DHCP comments plus hostnames for clearer identification',
+  ], [
+    'Расширенный hardening-аудит MikroTik: MAC-доступ, Neighbor Discovery, btest, DNS, proxy/SOCKS/UPnP/Cloud и криптография SSH',
+    'У каждой hardening-проверки есть ссылка на официальную рекомендацию MikroTik, в том числе в PDF',
+    'Проверки firewall для IPv4 и IPv6 показывают только наличие правил и не гадают о доступности сервиса из интернета',
+    'Устройства понятнее подписаны комментариями access-list и DHCP, а также hostname',
+  ]),
   Release('0.2.2', '2026-08-01', [
     'SSH transport for RouterOS 6/7 when REST or the binary API is unavailable',
     'SSH reconnects after a background pause; incomplete audits no longer guess',

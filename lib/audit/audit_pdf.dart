@@ -17,12 +17,11 @@ Future<Uint8List> buildAuditPdf(
       pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
   final bold =
       pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
-  final doc =
-      pw.Document(theme: pw.ThemeData.withFont(base: reg, bold: bold));
+  final doc = pw.Document(theme: pw.ThemeData.withFont(base: reg, bold: bold));
 
   final issues = findings
-      .where((f) =>
-          f.sev == AuditSeverity.critical || f.sev == AuditSeverity.warn)
+      .where(
+          (f) => f.sev == AuditSeverity.critical || f.sev == AuditSeverity.warn)
       .length;
 
   PdfColor color(AuditSeverity s) => switch (s) {
@@ -52,17 +51,15 @@ Future<Uint8List> buildAuditPdf(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                  padding:
+                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: pw.BoxDecoration(
                     color: color(f.sev),
                     borderRadius: pw.BorderRadius.circular(4),
                   ),
                   child: pw.Text(label(f.sev),
                       style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 8,
-                          font: bold)),
+                          color: PdfColors.white, fontSize: 8, font: bold)),
                 ),
                 pw.SizedBox(width: 8),
                 pw.Expanded(
@@ -83,6 +80,20 @@ Future<Uint8List> buildAuditPdf(
               pw.Text('→ ${l.t(f.fixEn!, f.fixRu!)}',
                   style: const pw.TextStyle(
                       fontSize: 9.5, color: PdfColors.green800)),
+            ],
+            if (f.sourceUrl != null) ...[
+              pw.SizedBox(height: 4),
+              pw.UrlLink(
+                destination: f.sourceUrl!,
+                child: pw.Text(
+                  l.t('MikroTik recommendation', 'Рекомендация MikroTik'),
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.blue700,
+                    decoration: pw.TextDecoration.underline,
+                  ),
+                ),
+              ),
             ],
           ],
         ),
