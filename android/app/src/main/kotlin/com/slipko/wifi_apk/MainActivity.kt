@@ -14,10 +14,10 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
             .setMethodCallHandler { call, result ->
-                if (call.method == "info") {
-                    result.success(wifiInfo())
-                } else {
-                    result.notImplemented()
+                when (call.method) {
+                    "info" -> result.success(wifiInfo())
+                    "deviceInfo" -> result.success(deviceInfo())
+                    else -> result.notImplemented()
                 }
             }
     }
@@ -43,6 +43,30 @@ class MainActivity : FlutterActivity() {
             }
         } catch (_: Throwable) {
             // Leave partial/empty on any failure.
+        }
+        return map
+    }
+
+    // Intentionally excludes serial, Android ID, IMEI and other unique IDs.
+    private fun deviceInfo(): Map<String, Any?> {
+        val map = HashMap<String, Any?>()
+        map["platform"] = "android"
+        map["manufacturer"] = Build.MANUFACTURER
+        map["model"] = Build.MODEL
+        map["android_release"] = Build.VERSION.RELEASE
+        map["android_sdk"] = Build.VERSION.SDK_INT
+        try {
+            @Suppress("DEPRECATION")
+            val info = packageManager.getPackageInfo(packageName, 0)
+            map["app_version"] = info.versionName
+            map["app_build"] = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode.toLong()
+            }
+        } catch (_: Throwable) {
+            // The Dart side also carries a compile-time version fallback.
         }
         return map
     }

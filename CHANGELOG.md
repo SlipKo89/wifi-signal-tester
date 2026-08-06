@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Support diagnostics** from ⋮ → Support report: a user-triggered ZIP with a
+  readable `report.txt`, structured `report.json`, a bounded in-memory
+  `events.log` and a privacy note. It contains app/device state, current
+  two-sided measurements, link-diagnosis facts, router health and controlled
+  connection events — never credentials, private keys, raw RouterOS responses
+  or full client lists. SSID/BSSID/MAC/IP/router and AP names are masked by
+  default and can be included only with an explicit switch. Nothing is uploaded
+  automatically.
+- **Typed bilingual failure banners** with stable support codes and relevant
+  actions for authentication, permissions, timeout, refused/unreachable host,
+  TLS, closed session, off-Wi-Fi and missing-station cases.
+
+### Fixed
+- The binary RouterOS API now serialises reads and reconnects once after its
+  long-lived socket dies while Android is in the background, replaying login
+  before retrying the same read-only command. Reconnect attempts and outcomes
+  are recorded in the support event log.
+
 ## [0.2.4] - 2026-08-06
 
 ### Added

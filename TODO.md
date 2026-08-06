@@ -13,7 +13,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Wire native RSSI reliability check on real devices (Android 13/14 perms)
 - [x] Connection profiles: save/select multiple routers (multi-router support)
 - [x] BSSID → AP identification across routers
-- [ ] Graceful error banners for each failure mode (auth, timeout, no-station)
+- [x] Graceful bilingual error banners for each failure mode (auth, access,
+      timeout/refused/unreachable, TLS, closed session, off-Wi-Fi, no-station),
+      with stable support codes, retry/edit actions and a support-report shortcut
 
 ## Next (v0.2) — agreed with user ✅
 - [x] **Threshold alerts** — configurable targets for signal, SNR and asymmetry;
@@ -24,6 +26,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       p-throughput, gateway ping/loss and router CPU
 
 ## Next (v0.2)
+- [x] User-triggered support ZIP: readable + structured report, bounded
+      in-memory event log, identifiers masked by default, secrets always removed
 - [ ] Per-MIMO-chain view (signal-strength-ch0/ch1) with bar visualization
 - [x] Persistent measurement history — SQLite store, Record button, session
       list, CSV export (share), delete/clear
@@ -119,10 +123,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Exportable survey report (PDF/CSV with spots + verdicts) for clients
 
 ## Tech debt / risks
-- [ ] Binary API has the same dead-session problem SSH just got fixed: its socket
-      dies while the app is backgrounded and every later read fails. SSH now
-      reconnects once; the API transport should too (it needs its login state
-      replayed). REST is unaffected — each request opens its own connection.
+- [x] Binary API dead-session recovery: serialised commands reconnect once,
+      replay login and retry the same read-only command after a background socket
+      closure. REST remains stateless; SSH has the equivalent one-shot recovery.
 - [ ] Binary-API reader uses `List<int>` with O(n) removes — fine for tiny
       registration tables, revisit if we ever stream large menus
 - [ ] Self-signed TLS is accepted by default (LAN assumption) — make it a

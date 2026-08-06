@@ -1,9 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
+import '../app_info.dart';
+import '../diagnostics/app_failure.dart';
+import '../diagnostics/device_info_service.dart';
+import '../diagnostics/diagnostic_log.dart';
 import '../diagnostics/link_diagnostics.dart';
+import '../diagnostics/support_bundle.dart';
 import '../history/history_store.dart';
 import '../mikrotik/mikrotik_service.dart';
 import '../models/phone_signal.dart';
@@ -21,12 +25,27 @@ enum ThresholdBreach { phoneSignal, apSignal, phoneSnr, apSnr, asymmetry }
 /// Drives one measurement loop across one or more routers: read the phone side,
 /// resolve our MAC, find the AP side on whichever router currently serves the
 /// client, and keep a short history for the sparkline.
-class MonitorController extends ChangeNotifier {
+class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   final List<MikrotikService> _routers = [];
   final PhoneWifiService _phone = PhoneWifiService();
+  final DeviceInfoService _deviceInfo = DeviceInfoService();
+  final DateTime _startedAt = DateTime.now();
+
+  MonitorController() {
+    WidgetsBinding.instance.addObserver(this);
+    diagnosticLog.record('APP-START', 'Monitoring controller started');
+  }
 
   MonitorState state = MonitorState.idle;
-  String? error;
+  AppFailure? failure;
+  AppFailure? _connectionWarning;
+  final DiagnosticLog diagnosticLog = DiagnosticLog();
+  List<RouterConnection> _lastConfigs = const [];
+  int _stationMisses = 0;
+  bool _refreshing = false;
+  int _sessionGeneration = 0;
+  DateTime? lastSuccessfulPoll;
+  DateTime? lastFailedPoll;
 
   PhoneSignal? phoneSignal;
   StationSignal? stationSignal;
@@ -176,9 +195,17 @@ class MonitorController extends ChangeNotifier {
   /// Connects to every configured router (best-effort — at least one must
   /// succeed). SSID/BSSID need location access, so we ask first.
   Future<void> connect(List<RouterConnection> cfgs) async {
+    _sessionGeneration++;
     state = MonitorState.connecting;
     phoneOnly = false;
-    error = null;
+    failure = null;
+    _connectionWarning = null;
+    _lastConfigs = List.unmodifiable(cfgs);
+    diagnosticLog.record(
+      'CONNECT-START',
+      'Connecting to configured routers',
+      details: {'router_count': cfgs.length},
+    );
     _resetDiagnostics();
     notifyListeners();
 
@@ -187,21 +214,44 @@ class MonitorController extends ChangeNotifier {
     locationServiceOn = access.serviceOn;
 
     await _closeRouters();
-    final failures = <String>[];
+    final failures = <({RouterConnection config, Object error})>[];
     for (final cfg in cfgs) {
-      final svc = MikrotikService();
+      final svc = MikrotikService(onEvent: _recordTransportEvent);
       try {
         await svc.connect(cfg);
         _routers.add(svc);
+        diagnosticLog.record(
+          'CONNECT-OK',
+          'Router connected',
+          details: {
+            'host': cfg.host,
+            'transport': svc.transportKind,
+            'wireless_stack': svc.stack?.label,
+          },
+        );
       } catch (e) {
-        failures.add('${cfg.host}: ${_short(e)}');
+        failures.add((config: cfg, error: e));
+        final classified = AppFailure.classify(e);
+        diagnosticLog.record(
+          classified.code,
+          'Router connection failed',
+          details: {
+            'host': cfg.host,
+            'transport_preference': cfg.transport.name,
+            'failure_kind': classified.kind.name,
+            'technical': classified.technical,
+          },
+        );
         await svc.close();
       }
     }
 
     if (_routers.isEmpty) {
       state = MonitorState.error;
-      error = 'Could not connect to any router — ${failures.join('; ')}';
+      failure = failures.isEmpty
+          ? AppFailure.classify('No router configuration supplied')
+          : AppFailure.classify(failures.last.error);
+      lastFailedPoll = DateTime.now();
       notifyListeners();
       return;
     }
@@ -209,10 +259,10 @@ class MonitorController extends ChangeNotifier {
     state = MonitorState.connected;
     _serving = null;
     _ourMac = null;
-    error = failures.isEmpty
+    _connectionWarning = failures.isEmpty
         ? null
-        : 'Connected to ${_routers.length}/${cfgs.length}. '
-            'Failed: ${failures.join('; ')}';
+        : AppFailure.partial(failures.length, cfgs.length);
+    failure = _connectionWarning;
     notifyListeners();
     await refresh();
     startLive();
@@ -220,14 +270,18 @@ class MonitorController extends ChangeNotifier {
 
   /// Monitor only the phone's own Wi-Fi, no router connection.
   Future<void> startPhoneOnly() async {
+    _sessionGeneration++;
     final access = await _phone.ensureLocationAccess();
     locationGranted = access.granted;
     locationServiceOn = access.serviceOn;
     await _closeRouters();
     _resetDiagnostics();
     phoneOnly = true;
+    _lastConfigs = const [];
     state = MonitorState.connected;
-    error = null;
+    failure = null;
+    _connectionWarning = null;
+    diagnosticLog.record('PHONE-ONLY', 'Phone-only monitoring started');
     notifyListeners();
     await refresh();
     startLive();
@@ -245,10 +299,14 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// One measurement pass. Never throws — failures land in [error].
+  /// One measurement pass. Never throws — failures land in [failure].
   Future<void> refresh() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    final generation = _sessionGeneration;
     try {
       final phone = await _phone.read();
+      if (generation != _sessionGeneration) return;
       phoneSignal = phone;
 
       // No Wi-Fi (mobile data / disconnected): don't hammer unreachable routers.
@@ -257,12 +315,14 @@ class MonitorController extends ChangeNotifier {
         stationSignal = null;
         connectedApName = null;
         _resetDiagnostics();
-        error = 'Phone is off Wi-Fi (mobile data?). Connect to a network '
-            'served by one of your MikroTiks to see the AP side.';
+        failure = AppFailure.offWifi();
+        lastFailedPoll = DateTime.now();
+        diagnosticLog.record('WIFI-01', 'Phone is not connected to Wi-Fi');
         notifyListeners();
         return;
       }
       offWifi = false;
+      failure = _connectionWarning;
 
       // Which AP does the phone say it's on? (BSSID → AP name across routers.)
       connectedApName = _apNameForBssid(phone.bssid);
@@ -275,8 +335,10 @@ class MonitorController extends ChangeNotifier {
       if (phone.ipAddress != null) {
         for (final svc in _routers) {
           final mac = await svc.resolveMacForIp(phone.ipAddress!);
+          if (generation != _sessionGeneration) return;
           if (mac == null) continue;
           final station = await svc.fetchStation(mac);
+          if (generation != _sessionGeneration) return;
           if (station != null) {
             stationSignal = station;
             _serving = svc;
@@ -288,6 +350,31 @@ class MonitorController extends ChangeNotifier {
       }
       apUnmanaged =
           !phoneOnly && phone.ipAddress != null && stationSignal == null;
+      if (apUnmanaged) {
+        _stationMisses++;
+        if (_stationMisses >= 3) {
+          failure = AppFailure.station(knownAp: connectedApName != null);
+          if (_stationMisses == 3) {
+            diagnosticLog.record(
+              failure!.code,
+              'Client is absent from registration tables',
+              details: {
+                'ap_name': connectedApName,
+                'bssid': phone.bssid,
+              },
+            );
+          }
+        }
+      } else {
+        if (_stationMisses >= 3 && stationSignal != null) {
+          diagnosticLog.record(
+            'STATION-RECOVERED',
+            'Client returned to a registration table',
+          );
+        }
+        _stationMisses = 0;
+        failure = _connectionWarning;
+      }
 
       // Never mix samples from different APs. BSSID is the most reliable link
       // identity; interface/SSID are fallbacks when Android hides it.
@@ -310,11 +397,17 @@ class MonitorController extends ChangeNotifier {
       if (apNow != null && _lastApName != null && apNow != _lastApName) {
         roamCount++;
         lastRoam = '$_lastApName → $apNow';
+        diagnosticLog.record(
+          'WIFI-ROAM',
+          'Serving access point changed',
+          details: {'from_ap_name': _lastApName, 'to_ap_name': apNow},
+        );
       }
       if (apNow != null) _lastApName = apNow;
 
       // Router health from whichever router serves the client.
       routerResource = _serving == null ? null : await _serving!.readResource();
+      if (generation != _sessionGeneration) return;
 
       // Latency to the gateway (non-blocking).
       _pingTarget(phone.gatewayIp ?? _serving?.host);
@@ -327,9 +420,23 @@ class MonitorController extends ChangeNotifier {
       _evaluateLinkDiagnostics();
 
       await _recordIfNeeded();
-      error = null;
+      if (generation != _sessionGeneration) return;
+      lastSuccessfulPoll = DateTime.now();
+      if (!apUnmanaged) failure = _connectionWarning;
     } catch (e) {
-      error = _friendlyError(e);
+      if (generation != _sessionGeneration) return;
+      failure = AppFailure.classify(e);
+      lastFailedPoll = DateTime.now();
+      diagnosticLog.record(
+        failure!.code,
+        'Monitoring poll failed',
+        details: {
+          'failure_kind': failure!.kind.name,
+          'technical': failure!.technical,
+        },
+      );
+    } finally {
+      _refreshing = false;
     }
     notifyListeners();
   }
@@ -527,29 +634,6 @@ class MonitorController extends ChangeNotifier {
     return null;
   }
 
-  /// Turns raw exceptions into something a human can act on.
-  String _friendlyError(Object e) {
-    if (e is SocketException || e is TimeoutException) {
-      return 'Router unreachable — check you are on its Wi-Fi and the host is '
-          'correct.';
-    }
-    final s = e.toString();
-    if (s.contains('401') || s.toLowerCase().contains('auth')) {
-      return 'Authentication failed — check the username and password.';
-    }
-    if (s.contains('timed out') ||
-        s.contains('Connection refused') ||
-        s.contains('Network is unreachable') ||
-        s.contains('Connection closed')) {
-      return 'Router unreachable — check you are on its Wi-Fi and the host is '
-          'correct.';
-    }
-    return s.replaceFirst('RouterOsException: ', '');
-  }
-
-  String _short(Object e) =>
-      e.toString().replaceFirst('RouterOsException: ', '');
-
   void _push(List<int> buffer, int? value) {
     if (value == null) return;
     buffer.add(value);
@@ -564,6 +648,7 @@ class MonitorController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _sessionGeneration++;
     stopLive();
     phoneOnly = false;
     _recordingSessionId = null;
@@ -588,11 +673,198 @@ class MonitorController extends ChangeNotifier {
     phoneHistory.clear();
     apHistory.clear();
     state = MonitorState.idle;
+    _lastConfigs = const [];
+    failure = null;
+    _connectionWarning = null;
+    _stationMisses = 0;
+    diagnosticLog.record('DISCONNECT', 'Monitoring disconnected');
     notifyListeners();
+  }
+
+  Future<void> retry() async {
+    diagnosticLog.record('RETRY', 'User requested a retry');
+    if (state == MonitorState.error && _lastConfigs.isNotEmpty) {
+      await connect(_lastConfigs);
+    } else {
+      await refresh();
+    }
+  }
+
+  void dismissFailure() {
+    failure = _connectionWarning;
+    notifyListeners();
+  }
+
+  void clearDiagnosticLog() {
+    diagnosticLog.clear();
+    diagnosticLog.record(
+        'LOG-CLEARED', 'User cleared the diagnostic event log');
+    notifyListeners();
+  }
+
+  Future<SupportSnapshot> createSupportSnapshot(
+      {required String locale}) async {
+    final phone = phoneSignal;
+    final station = stationSignal;
+    final report = linkDiagnostics;
+    final summary = report.summary;
+    final device = await _deviceInfo.read();
+    device.putIfAbsent('app_version', () => kAppVersion);
+
+    return SupportSnapshot(
+      createdAt: DateTime.now(),
+      events: diagnosticLog.events,
+      report: {
+        'app': {
+          'name': kAppName,
+          'version': kAppVersion,
+          'locale': locale,
+          'controller_uptime_seconds':
+              DateTime.now().difference(_startedAt).inSeconds,
+          'monitor_state': state.name,
+          'phone_only': phoneOnly,
+          'live_polling': isLive,
+          'poll_interval_seconds': pollInterval.inSeconds,
+        },
+        'device': device,
+        'permissions': {
+          'location_granted': locationGranted,
+          'location_service_on': locationServiceOn,
+        },
+        'connection': {
+          'configured_router_count': _lastConfigs.length,
+          'connected_router_count': routerCount,
+          'routers': [
+            for (final router in _routers)
+              {
+                'host': router.host,
+                'transport': router.transportKind,
+                'wireless_stack': router.stack?.label,
+                'serving': identical(router, _serving),
+              },
+          ],
+          'serving_host': servingHost,
+          'connected_ap_name': connectedApName,
+          'off_wifi': offWifi,
+          'ap_unmanaged': apUnmanaged,
+          'station_missed_polls': _stationMisses,
+          'last_successful_poll': lastSuccessfulPoll?.toUtc().toIso8601String(),
+          'last_failed_poll': lastFailedPoll?.toUtc().toIso8601String(),
+        },
+        'phone_wifi': {
+          'ssid': phone?.ssid,
+          'bssid': phone?.bssid,
+          'ip_address': phone?.ipAddress,
+          'gateway': phone?.gatewayIp,
+          'rssi_dbm': phone?.rssiDbm,
+          'frequency_mhz': phone?.frequencyMhz,
+          'channel': phone?.channel,
+          'band': phone?.band,
+          'link_speed_mbps': phone?.linkSpeedMbps,
+          'tx_link_speed_mbps': phone?.txLinkSpeedMbps,
+          'rx_link_speed_mbps': phone?.rxLinkSpeedMbps,
+          'wifi_standard': phone?.wifiStandard,
+          'security': phone?.security,
+          'snr_db': phoneSnr,
+          'snr_estimated': phoneSnrIsEstimate,
+        },
+        'ap_view': {
+          'client_mac': station?.macAddress,
+          'interface': station?.interfaceName,
+          'ssid': station?.ssid,
+          'signal_dbm': station?.signalDbm,
+          'snr_db': apSnr,
+          'snr_estimated': apSnrIsEstimate,
+          'signal_ch0_dbm': station?.signalCh0,
+          'signal_ch1_dbm': station?.signalCh1,
+          'tx_rate': station?.txRate,
+          'rx_rate': station?.rxRate,
+          'tx_ccq_pct': station?.txCcq,
+          'rx_ccq_pct': station?.rxCcq,
+          'estimated_throughput_kbps': station?.pThroughputKbps,
+          'live_down_kbps': downKbps,
+          'live_up_kbps': upKbps,
+          'signal_delta_db': signalDelta,
+        },
+        'router_health': {
+          'board': routerBoard,
+          'routeros_version': routerVersion,
+          'uptime': routerUptime,
+          'cpu_load_pct': cpuLoad,
+        },
+        'latency': {
+          'target_host': _pingHost,
+          'last_ms': pingMs,
+          'average_ms': pingAvgMs,
+          'loss_pct': pingLossPct,
+          'sample_count': pingSampleCount,
+        },
+        'link_diagnosis': {
+          'ready': report.ready,
+          'sample_count': report.sampleCount,
+          'window_seconds': report.windowSeconds,
+          'findings': [
+            for (final finding in report.findings)
+              {
+                'kind': finding.kind.name,
+                'severity': finding.severity.name,
+              },
+          ],
+          'summary': {
+            'phone_rssi_dbm': summary.phoneRssi,
+            'ap_signal_dbm': summary.apSignal,
+            'phone_snr_db': summary.phoneSnr,
+            'ap_snr_db': summary.apSnr,
+            'delta_db': summary.delta,
+            'tx_ccq_pct': summary.txCcq,
+            'rx_ccq_pct': summary.rxCcq,
+            'phone_rate_mbps': summary.phoneRateMbps,
+            'ap_tx_rate_mbps': summary.apTxRateMbps,
+            'ap_rx_rate_mbps': summary.apRxRateMbps,
+            'estimated_throughput_kbps': summary.pThroughputKbps,
+            'ping_average_ms': summary.pingAvgMs,
+            'ping_loss_pct': summary.pingLossPct,
+            'cpu_load_pct': summary.cpuLoad,
+          },
+        },
+        'thresholds': {
+          'alerts_enabled': alertsEnabled,
+          'min_signal_dbm': minSignalDbm,
+          'min_snr_db': minSnrDb,
+          'max_asymmetry_db': alertThresholdDb,
+          'breaches': breaches.map((b) => b.name).toList(),
+        },
+        'session': {
+          'roam_count': roamCount,
+          'last_roam': lastRoam,
+          'phone_rssi_history': List<int>.of(phoneHistory),
+          'ap_rssi_history': List<int>.of(apHistory),
+        },
+        if (failure != null) 'last_failure': failure!.toJson(),
+      },
+    );
+  }
+
+  void _recordTransportEvent(
+    String code,
+    String message,
+    Map<String, Object?> details,
+  ) {
+    diagnosticLog.record(code, message, details: details);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    diagnosticLog.record(
+      'APP-LIFECYCLE',
+      'Application lifecycle changed',
+      details: {'state': state.name},
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _beeper.dispose();
     _closeRouters();

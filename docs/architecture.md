@@ -69,16 +69,16 @@ the parsing).
 ### Sessions die; reads must not lie
 
 Android suspends sockets in the background and RouterOS drops idle sessions, so
-a long-lived SSH connection is gone by the time the app is resumed.
-`SshTransport` reconnects once when a command hits a closed transport. The audit
-layer covers the other half: a *failed* read is recorded as unknown rather than
-empty, checks that infer absence are skipped, and the report says which menus it
-couldn't see — before this, an unreadable `/ip/firewall/filter` was reported as
-"No input firewall" on a router with a default-deny chain.
+a long-lived SSH or binary-API connection may be gone by the time the app is
+resumed. Both transports serialise their commands, reconnect once, replay login
+and retry the same read-only operation. `RestTransport` is unaffected because
+every request opens its own connection.
 
-`BinaryApiTransport` shares the long-lived-socket shape and does not reconnect
-yet (see TODO). `RestTransport` is immune — every request opens its own
-connection.
+The audit layer covers the other half: a *failed* read is recorded as unknown
+rather than empty, checks that infer absence are skipped, and the report says
+which menus it couldn't see — before this, an unreadable
+`/ip/firewall/filter` was reported as "No input firewall" on a router with a
+default-deny chain.
 
 ### Read-only on a channel that could write
 
@@ -97,6 +97,6 @@ in the registration table.
 
 ## Read-only guarantee
 
-The transport interface has no write method; both implementations only issue
+The transport interface has no write method; all implementations only issue
 `print`/`GET`. Combined with a read-only RouterOS user (see
 `mikrotik-readonly-user.md`), the app cannot change router state.

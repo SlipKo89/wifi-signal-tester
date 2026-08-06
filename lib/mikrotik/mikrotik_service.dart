@@ -57,6 +57,9 @@ enum TransportPreference { auto, rest, binary, ssh }
 /// exactly one MAC (ours).
 class MikrotikService {
   RouterOsTransport? _transport;
+  final TransportEventSink? onEvent;
+
+  MikrotikService({this.onEvent});
 
   /// The router this service talks to (host is used as a label).
   String? host;
@@ -168,6 +171,7 @@ class MikrotikService {
         password: cfg.password,
         useTls: cfg.useTls,
         port: _portFor(cfg, TransportPreference.binary),
+        onEvent: onEvent,
       );
 
   SshTransport _ssh(RouterConnection cfg) => SshTransport(
@@ -204,9 +208,7 @@ class MikrotikService {
           if (name == null || name.isEmpty) continue;
           for (final macKey in ['mac-address', 'radio-mac', 'bssid']) {
             final mac = row[macKey];
-            if (mac != null &&
-                mac.isNotEmpty &&
-                mac != '00:00:00:00:00:00') {
+            if (mac != null && mac.isNotEmpty && mac != '00:00:00:00:00:00') {
               _bssidToAp[mac.toLowerCase()] = name;
             }
           }
@@ -295,7 +297,8 @@ class MikrotikService {
     final target = mac.toLowerCase();
     final order = <WirelessStack>[
       if (_stack != null) _stack!,
-      for (final s in _availableStacks) if (s != _stack) s,
+      for (final s in _availableStacks)
+        if (s != _stack) s,
     ];
     for (final stack in order) {
       final rows = await t.read(stack.registrationPath);
