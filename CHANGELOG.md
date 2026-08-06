@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-05
+
+### Added
+- **MikroTik hardening audit** now checks MAC Telnet/WinBox/Ping, Neighbor
+  Discovery, Bandwidth Test Server and its authentication, DNS client requests,
+  proxy, SOCKS, UPnP, MikroTik Cloud and SSH strong crypto. Applicable findings
+  link directly to the relevant official MikroTik recommendation in both the UI
+  and exported PDF.
+- Separate IPv4 and IPv6 firewall-presence checks. They deliberately report only
+  whether active filter rules exist; rule order, coverage and effectiveness are
+  not inferred.
+
+### Changed
+- The connected-device list now uses operator-authored access-list comments
+  (legacy CAPsMAN, classic wireless and WifiWave2), then DHCP comments and DHCP
+  hostnames. Device details show every source separately, and search covers all
+  of them. Only currently associated stations are still listed.
+- Management-service findings now report only facts visible in `/ip service`,
+  including its own `address` restriction. The audit no longer claims that a
+  service is exposed based on a simplified firewall interpretation. Queue and
+  FastTrack analysis are explicitly outside the audit scope.
+
 ## [0.2.2] - 2026-08-01
 
 ### Added
@@ -258,7 +280,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.1.0...v0.2.0

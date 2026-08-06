@@ -6,6 +6,7 @@ import '../audit/audit.dart';
 import '../audit/audit_pdf.dart';
 import '../audit/phone_audit.dart';
 import '../l10n/l10n.dart';
+import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 
@@ -92,7 +93,8 @@ class _AuditScreenState extends State<AuditScreen> {
           final findings = snap.data!;
           final issues = findings
               .where((f) =>
-                  f.sev == AuditSeverity.critical || f.sev == AuditSeverity.warn)
+                  f.sev == AuditSeverity.critical ||
+                  f.sev == AuditSeverity.warn)
               .length;
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -199,6 +201,31 @@ class _AuditScreenState extends State<AuditScreen> {
                             height: 1.35)),
                   ),
                 ],
+              ),
+            ],
+            if (f.sourceUrl != null) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  onPressed: () => openExternalLink(
+                    context,
+                    f.sourceUrl!,
+                    copiedLabel: l.t(
+                      'MikroTik documentation link copied',
+                      'Ссылка на документацию MikroTik скопирована',
+                    ),
+                  ),
+                  icon: const Icon(Icons.open_in_new, size: 14),
+                  label: Text(
+                    l.t('MikroTik recommendation', 'Рекомендация MikroTik'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
               ),
             ],
           ],
