@@ -9,6 +9,19 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.2.5', '2026-08-06', [
+    'Support ZIP with readable/structured diagnostics and an in-memory event log',
+    'Network identifiers are masked by default; credentials and raw RouterOS responses are never included',
+    'Bilingual failure banners with stable codes and retry/edit/report actions',
+    'Binary API reconnects once after Android or RouterOS closes an idle session',
+    'Merging to main now publishes the versioned GitHub Release automatically',
+  ], [
+    'ZIP для поддержки: читаемый/структурированный отчёт и журнал событий в памяти',
+    'Сетевые идентификаторы скрыты по умолчанию; креды и сырые ответы RouterOS не выгружаются',
+    'Двуязычные ошибки со стабильными кодами и кнопками повтора/настройки/отчёта',
+    'Бинарный API один раз переподключается после закрытия фоновой сессии',
+    'После merge в main версия теперь автоматически публикуется в GitHub Releases',
+  ]),
   Release('0.2.4', '2026-08-06', [
     'Smart connection diagnosis correlates RSSI/SNR, CCQ, rates, p-throughput, gateway ping/loss and router CPU',
     'A dashboard verdict opens detailed observed facts, likely causes and concrete checks',

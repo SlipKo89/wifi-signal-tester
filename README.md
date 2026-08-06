@@ -28,9 +28,11 @@ Grab the latest APK from the [Releases page](../../releases/latest) — download
 `wifi-signal-tester-<version>.apk` under *Assets* and install it on your Android
 device.
 
-Every push to `main` also creates an APK without requiring a tag. Open
-[Actions](../../actions/workflows/release.yml), select a successful run and
-download the `wifi-signal-tester-…` archive from its *Artifacts* section.
+Every push/merge to `main` builds the APK, creates the `v<version>` tag from
+`VERSION` and publishes a GitHub Release automatically. The same APK is also
+available from that workflow run under [Actions](../../actions/workflows/release.yml)
+→ *Artifacts*. Do not create release tags manually; bump the app version before
+the merge instead.
 
 ## How to use it
 

@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-08-06
+
 ### Added
 - **Support diagnostics** from ⋮ → Support report: a user-triggered ZIP with a
   readable `report.txt`, structured `report.json`, a bounded in-memory
@@ -24,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-lived socket dies while Android is in the background, replaying login
   before retrying the same read-only command. Reconnect attempts and outcomes
   are recorded in the support event log.
+
+### Changed
+- A push or merge to `main` now builds the APK, derives `vX.Y.Z` from `VERSION`
+  and publishes the GitHub Release automatically. Manual tag creation is no
+  longer required; pull requests still run analysis/tests/build without
+  publishing a release.
 
 ## [0.2.4] - 2026-08-06
 
@@ -314,7 +322,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.1...v0.2.2

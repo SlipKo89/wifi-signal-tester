@@ -1,13 +1,12 @@
 name: Build APK
 
-# Every push to main produces a downloadable APK artifact. Tags are optional:
-# a v* tag additionally publishes the same APK as a GitHub Release.
+# Every push/merge to main builds an APK and publishes a GitHub Release for the
+# version in /VERSION. The workflow creates the v* tag itself; manual tags are
+# neither needed nor used as a trigger. Pull requests only build/test.
 on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   pull_request:
     branches:
       - main
@@ -22,6 +21,8 @@ jobs:
     outputs:
       apk: ${{ steps.rename.outputs.apk }}
       artifact: ${{ steps.rename.outputs.artifact }}
+      version: ${{ steps.rename.outputs.version }}
+      tag: ${{ steps.rename.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +36,18 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Verify version files are in sync
+        shell: bash
+        run: |
+          VERSION_NUMBER=$(tr -d '[:space:]' < VERSION)
+          PUBSPEC_VERSION=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)
+          APP_VERSION=$(sed -n "s/^const String kAppVersion = '\([^']*\)';/\1/p" lib/app_info.dart)
+
+          if [ "$VERSION_NUMBER" != "$PUBSPEC_VERSION" ] || [ "$VERSION_NUMBER" != "$APP_VERSION" ]; then
+            echo "::error::Version mismatch: VERSION=$VERSION_NUMBER, pubspec.yaml=$PUBSPEC_VERSION, lib/app_info.dart=$APP_VERSION"
+            exit 1
+          fi
 
       - name: Fetch packages
         run: flutter pub get
@@ -55,9 +68,12 @@ jobs:
           VERSION=$(tr -d '[:space:]' < VERSION)
           APK="wifi-signal-tester-$VERSION.apk"
           ARTIFACT="wifi-signal-tester-$VERSION-build-${GITHUB_RUN_NUMBER}"
+          TAG="v$VERSION"
           cp build/app/outputs/flutter-apk/app-release.apk "$APK"
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
           echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -68,8 +84,10 @@ jobs:
           retention-days: 14
 
   release:
-    name: Publish tagged release
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Publish version from main
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -77,17 +95,42 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact }}
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          files: ${{ needs.build.outputs.apk }}
-          body_path: docs/release-notes.md
-          fail_on_unmatched_files: true
+      - name: Verify version has not already been used for different code
+        shell: bash
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            TAG_TREE=$(git rev-parse "$TAG^{tree}")
+            BUILD_TREE=$(git rev-parse "$GITHUB_SHA^{tree}")
+            if [ "$TAG_TREE" != "$BUILD_TREE" ]; then
+              echo "::error::Tag $TAG already belongs to different code. Bump VERSION before merging to main."
+              exit 1
+            fi
+          fi
+
+      - name: Create or refresh GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
+          APK: ${{ needs.build.outputs.apk }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --notes-file docs/release-notes.md \
+              --latest
+          fi

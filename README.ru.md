@@ -28,9 +28,10 @@ CAPsMAN или обычным Wi-Fi) **только на чтение**, **то�
 `wifi-signal-tester-<версия>.apk` в разделе *Assets* и установи на
 Android-устройство.
 
-Каждый push в `main` также собирает APK без тега. Открой
-[Actions](../../actions/workflows/release.yml), выбери успешный запуск и скачай
-архив `wifi-signal-tester-…` из раздела *Artifacts*.
+Каждый push/merge в `main` собирает APK, сам создаёт тег `v<версия>` из файла
+`VERSION` и автоматически публикует GitHub Release. Тот же APK можно скачать из
+*Artifacts* соответствующего запуска в [Actions](../../actions/workflows/release.yml).
+Релизный тег вручную создавать не нужно — перед merge поднимается версия.
 
 ## Как пользоваться
 

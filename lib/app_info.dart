@@ -2,7 +2,7 @@
 /// /VERSION, pubspec.yaml and CHANGELOG.md when releasing.
 const String kAppName = 'Wi-Fi Signal Tester';
 const String kAppTagline = 'Two-sided MikroTik Wi-Fi signal tester';
-const String kAppVersion = '0.2.4';
+const String kAppVersion = '0.2.5';
 
 const String kAuthor = 'SlipKo';
 const String kAuthorEmail = 'slipko89@gmail.com';

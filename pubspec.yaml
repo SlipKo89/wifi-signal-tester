@@ -5,7 +5,7 @@ description: >-
 publish_to: 'none'
 
 # Semantic version + build number. Keep in sync with /VERSION and CHANGELOG.md.
-version: 0.2.4+6
+version: 0.2.5+7
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
