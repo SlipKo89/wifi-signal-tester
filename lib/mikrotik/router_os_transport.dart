@@ -1,5 +1,5 @@
-/// Read-only transport to a RouterOS device. Two implementations exist —
-/// [RestTransport] and [BinaryApiTransport] — and the rest of the app never
+/// Read-only transport to a RouterOS device. REST, binary API and SSH
+/// implementations sit behind this contract, so the rest of the app never
 /// cares which one is in use.
 ///
 /// By contract, implementations MUST only ever issue read (`print` / GET)
@@ -29,6 +29,14 @@ abstract class RouterOsTransport {
   /// Human-readable transport name for the UI ("REST" / "API").
   String get kind;
 }
+
+/// Controlled transport telemetry for the in-memory support log. Callers must
+/// not put credentials or raw RouterOS responses into [details].
+typedef TransportEventSink = void Function(
+  String code,
+  String message,
+  Map<String, Object?> details,
+);
 
 /// Thrown for any RouterOS-reported error (trap/fatal, HTTP error, auth).
 class RouterOsException implements Exception {

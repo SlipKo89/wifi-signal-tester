@@ -54,6 +54,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
   Android 10+ MAC randomization doesn't break it.
 - **Read-only & scoped**: only `print`/`GET`, only your MAC.
 - **Live**: polls every ~2 s with a signal sparkline for walk-around testing.
+- **Support report**: creates a ZIP only when you ask, with current diagnostics
+  and a bounded event log. Network identifiers are masked by default;
+  credentials and raw router responses are never included or uploaded.
 
 ## Requirements (build machine — macOS)
 
@@ -124,9 +127,10 @@ that MAC → show both sides side by side.
   `monitor once`, refusing console metacharacters and any other verb.
 - **Device:** the app only reads the Wi-Fi chip (RSSI, SSID, frequency). It never
   changes, connects, disconnects or forgets any network. The manifest explicitly
-  rejects `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` and `WRITE_SETTINGS`, and
-  the app touches no files, contacts or media. The
-  only thing it stores is *its own* router credentials in the Keystore.
+  rejects `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` and `WRITE_SETTINGS`; it
+  does not access contacts or media. It stores only its own data: router
+  credentials in the Keystore, settings, measurement history, and a temporary
+  support ZIP when the user explicitly creates one.
 - Credentials are stored in the Android Keystore / iOS Keychain, never in plain
   preferences.
 - Self-signed TLS is accepted (LAN assumption) — this will become a visible

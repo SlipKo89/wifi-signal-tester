@@ -22,8 +22,14 @@ class BinaryApiTransport implements RouterOsTransport {
   final String password;
   final bool useTls;
   final Duration timeout;
+  final TransportEventSink? onEvent;
 
   Socket? _socket;
+  StreamSubscription<List<int>>? _subscription;
+  bool _ended = true;
+  bool _allowReconnect = false;
+  int _generation = 0;
+  Future<void> _queue = Future.value();
 
   /// Bytes received but not yet consumed by the parser.
   final List<int> _inbox = [];
@@ -36,6 +42,7 @@ class BinaryApiTransport implements RouterOsTransport {
     this.useTls = false,
     int? port,
     this.timeout = const Duration(seconds: 8),
+    this.onEvent,
   }) : port = port ?? (useTls ? 8729 : 8728);
 
   @override
@@ -47,6 +54,17 @@ class BinaryApiTransport implements RouterOsTransport {
 
   @override
   Future<void> connect() async {
+    _allowReconnect = true;
+    await _shutdown();
+    try {
+      await _openAndLogin();
+    } catch (_) {
+      await _shutdown();
+      rethrow;
+    }
+  }
+
+  Future<void> _openAndLogin() async {
     final socket = useTls
         ? await SecureSocket.connect(
             host,
@@ -55,15 +73,18 @@ class BinaryApiTransport implements RouterOsTransport {
             timeout: timeout,
           )
         : await Socket.connect(host, port, timeout: timeout);
+    final generation = ++_generation;
     _socket = socket;
-    socket.listen(
+    _ended = false;
+    _inbox.clear();
+    _subscription = socket.listen(
       (data) {
+        if (generation != _generation) return;
         _inbox.addAll(data);
-        _dataWaiter?.complete();
-        _dataWaiter = null;
+        _wakeReader();
       },
-      onError: (_) => _wakeReader(),
-      onDone: _wakeReader,
+      onError: (_) => _markEnded(generation),
+      onDone: () => _markEnded(generation),
       cancelOnError: true,
     );
     await _login();
@@ -83,11 +104,9 @@ class BinaryApiTransport implements RouterOsTransport {
     final challenge = _attr(reply, 'ret');
     if (challenge != null) {
       final chalBytes = _hexToBytes(challenge);
-      final digest = md5
-          .convert([0, ...utf8.encode(password), ...chalBytes])
-          .toString();
-      _writeSentence(
-          ['/login', '=name=$username', '=response=00$digest']);
+      final digest =
+          md5.convert([0, ...utf8.encode(password), ...chalBytes]).toString();
+      _writeSentence(['/login', '=name=$username', '=response=00$digest']);
       reply = await _readSentence();
       if (reply.isEmpty || reply.first != '!done') {
         throw RouterOsException(
@@ -106,7 +125,13 @@ class BinaryApiTransport implements RouterOsTransport {
   Future<List<Map<String, String>>> read(
     String menuPath, {
     Map<String, String>? filters,
-  }) async {
+  }) =>
+      _serialized(() => _withReconnect(() => _readOnce(menuPath, filters)));
+
+  Future<List<Map<String, String>>> _readOnce(
+    String menuPath,
+    Map<String, String>? filters,
+  ) async {
     final words = <String>['$menuPath/print'];
     filters?.forEach((k, v) => words.add('?$k=$v'));
     _writeSentence(words);
@@ -131,6 +156,12 @@ class BinaryApiTransport implements RouterOsTransport {
 
   @override
   Future<List<Map<String, String>>> command(
+    String path,
+    Map<String, String> params,
+  ) =>
+      _serialized(() => _withReconnect(() => _commandOnce(path, params)));
+
+  Future<List<Map<String, String>>> _commandOnce(
     String path,
     Map<String, String> params,
   ) async {
@@ -158,9 +189,84 @@ class BinaryApiTransport implements RouterOsTransport {
 
   @override
   Future<void> close() async {
-    await _socket?.close();
-    _socket?.destroy();
+    _allowReconnect = false;
+    await _shutdown();
+  }
+
+  Future<T> _serialized<T>(Future<T> Function() operation) async {
+    final previous = _queue;
+    final release = Completer<void>();
+    _queue = release.future;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release.complete();
+    }
+  }
+
+  Future<T> _withReconnect<T>(Future<T> Function() operation) async {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!_allowReconnect || !_isDeadSession(error)) rethrow;
+      onEvent?.call('API-RECONNECT', 'Binary API session reconnect started', {
+        'host': host,
+        'port': port,
+        'reason': _shortError(error),
+      });
+      try {
+        await _shutdown();
+        if (!_allowReconnect) {
+          throw RouterOsException('Connection closed');
+        }
+        await _openAndLogin();
+        final result = await operation();
+        onEvent?.call('API-RECONNECTED', 'Binary API session reconnected', {
+          'host': host,
+          'port': port,
+        });
+        return result;
+      } catch (retryError) {
+        onEvent?.call(
+          'API-RECONNECT-FAILED',
+          'Binary API session reconnect failed',
+          {
+            'host': host,
+            'port': port,
+            'reason': _shortError(retryError),
+          },
+        );
+        rethrow;
+      }
+    }
+  }
+
+  bool _isDeadSession(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('connection closed') ||
+        text.contains('not connected') ||
+        text.contains('broken pipe') ||
+        text.contains('reset by peer') ||
+        text.contains('read timed out');
+  }
+
+  String _shortError(Object error) {
+    final value = error.toString().replaceFirst('RouterOsException: ', '');
+    return value.length <= 200 ? value : '${value.substring(0, 200)}…';
+  }
+
+  Future<void> _shutdown() async {
+    final subscription = _subscription;
+    final socket = _socket;
+    _generation++;
+    _subscription = null;
     _socket = null;
+    _ended = true;
+    _inbox.clear();
+    _wakeReader();
+    await subscription?.cancel();
+    socket?.destroy();
   }
 
   // ---------------------------------------------------------------------------
@@ -169,7 +275,7 @@ class BinaryApiTransport implements RouterOsTransport {
 
   void _writeSentence(List<String> words) {
     final socket = _socket;
-    if (socket == null) throw RouterOsException('Not connected');
+    if (socket == null || _ended) throw RouterOsException('Not connected');
     for (final w in words) {
       final bytes = utf8.encode(w);
       socket.add(_encodeLength(bytes.length));
@@ -203,7 +309,13 @@ class BinaryApiTransport implements RouterOsTransport {
       l |= 0xE0000000;
       return [(l >> 24) & 0xFF, (l >> 16) & 0xFF, (l >> 8) & 0xFF, l & 0xFF];
     }
-    return [0xF0, (l >> 24) & 0xFF, (l >> 16) & 0xFF, (l >> 8) & 0xFF, l & 0xFF];
+    return [
+      0xF0,
+      (l >> 24) & 0xFF,
+      (l >> 16) & 0xFF,
+      (l >> 8) & 0xFF,
+      l & 0xFF
+    ];
   }
 
   Future<int> _readLength() async {
@@ -238,8 +350,14 @@ class BinaryApiTransport implements RouterOsTransport {
 
   Future<void> _ensure(int n) async {
     while (_inbox.length < n) {
-      if (_socket == null) throw RouterOsException('Connection closed');
+      if (_socket == null || _ended) {
+        throw RouterOsException('Connection closed');
+      }
       _dataWaiter = Completer<void>();
+      if (_socket == null || _ended) {
+        _wakeReader();
+        throw RouterOsException('Connection closed');
+      }
       await _dataWaiter!.future.timeout(
         timeout,
         onTimeout: () => throw RouterOsException('Read timed out'),
@@ -248,8 +366,15 @@ class BinaryApiTransport implements RouterOsTransport {
   }
 
   void _wakeReader() {
-    _dataWaiter?.complete();
+    if (!(_dataWaiter?.isCompleted ?? true)) _dataWaiter?.complete();
     _dataWaiter = null;
+  }
+
+  void _markEnded(int generation) {
+    if (generation != _generation) return;
+    _ended = true;
+    _socket = null;
+    _wakeReader();
   }
 
   // ---------------------------------------------------------------------------

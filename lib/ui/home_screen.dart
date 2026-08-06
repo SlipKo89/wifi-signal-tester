@@ -17,9 +17,11 @@ import 'history_screen.dart';
 import 'link_diagnostics_sheet.dart';
 import 'reference_screen.dart';
 import 'settings_screen.dart';
+import 'support_diagnostics_screen.dart';
 import 'theme.dart';
 import 'whats_new.dart';
 import 'widgets/connection_form.dart';
+import 'widgets/failure_banner.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/signal_card.dart';
 
@@ -136,6 +138,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   open(const SettingsScreen());
                 case 'changelog':
                   open(const ChangelogScreen());
+                case 'diagnostics':
+                  open(const SupportDiagnosticsScreen());
                 case 'about':
                   showAboutSheet(context);
               }
@@ -183,6 +187,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Text(l.t('Changelog', 'История версий')),
               ),
               PopupMenuItem(
+                value: 'diagnostics',
+                child: Text(l.t('Support report', 'Отчёт в поддержку')),
+              ),
+              PopupMenuItem(
                 value: 'about',
                 child: Text(l.t('About', 'О программе')),
               ),
@@ -193,9 +201,33 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: connected
-              ? _Dashboard(ctrl: ctrl)
-              : ConnectionForm(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (ctrl.failure != null)
+                FailureBanner(
+                  failure: ctrl.failure!,
+                  l: l,
+                  onRetry: ctrl.failure!.canRetry ? ctrl.retry : null,
+                  onEditConnection: ctrl.failure!.wantsConnectionEdit
+                      ? () async {
+                          if (connected) {
+                            await ctrl.disconnect();
+                          } else {
+                            ctrl.dismissFailure();
+                          }
+                        }
+                      : null,
+                  onSystemSettings: ctrl.failure!.wantsSystemSettings
+                      ? openAppSettings
+                      : null,
+                  onDiagnostics: () => open(const SupportDiagnosticsScreen()),
+                  onDismiss: ctrl.dismissFailure,
+                ),
+              if (connected)
+                _Dashboard(ctrl: ctrl)
+              else
+                ConnectionForm(
                   busy: ctrl.state == MonitorState.connecting,
                   onConnect: (routers) {
                     ctrl.applySettings(
@@ -220,6 +252,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ctrl.startPhoneOnly();
                   },
                 ),
+            ],
+          ),
         ),
       ),
     );
@@ -266,16 +300,6 @@ class _Dashboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (ctrl.error != null)
-          _ErrorBanner(
-              message: ctrl.offWifi
-                  ? l.t(
-                      'Phone is off Wi-Fi (mobile data?). Connect to a network '
-                          'served by one of your MikroTiks to see the AP side.',
-                      'Телефон не в Wi-Fi (мобильный интернет?). Подключись к '
-                          'сети одного из твоих MikroTik, чтобы видеть сторону '
-                          'точки.')
-                  : ctrl.error!),
         if (!ctrl.offWifi) _StatusBanner(ctrl: ctrl),
         if (!ctrl.offWifi) LinkDiagnosticsCard(report: ctrl.linkDiagnostics),
         _ConnectionSummary(
@@ -793,33 +817,6 @@ class _Legend extends StatelessWidget {
         Text(label,
             style: const TextStyle(fontSize: 11, color: Color(0xFFAAB2BD))),
       ],
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D1618),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF5C2327)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber, color: Color(0xFFF85149), size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(message,
-                style: const TextStyle(fontSize: 12, color: Color(0xFFF0B4B4))),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -254,7 +254,26 @@ Two entries worth reading up front: **Δ / asymmetry**, and **Wi-Fi scan
 throttling** — Android limits how often apps may scan, which is why some numbers
 refresh more slowly than the poll interval.
 
-## 14. Troubleshooting
+## 14. Support report
+
+⋮ → *Support report* creates troubleshooting material you can send to the
+developer. Nothing is collected remotely and nothing is uploaded automatically.
+Only pressing *Create and share ZIP* writes a temporary archive containing:
+
+- `report.txt` — readable app/device state, current two-sided metrics and link
+  diagnosis;
+- `report.json` — the same facts in a structured form;
+- `events.log` — up to 200 controlled connection/lifecycle events kept only in
+  memory until the app restarts or you clear them;
+- `README.txt` — a privacy reminder.
+
+SSID, BSSID, MAC, IP and router/AP names are masked by default. You may include
+them with the switch when they are necessary to reproduce a problem. Passwords,
+tokens, private keys, raw RouterOS responses and full lists of other clients are
+never included, even with that switch enabled. Review `report.txt` before
+sharing. *Copy readable report* is available when a ZIP is inconvenient.
+
+## 15. Troubleshooting
 
 | Symptom | Cause and fix |
 |---------|---------------|
@@ -268,7 +287,7 @@ refresh more slowly than the poll interval.
 | Nothing at all over SSH | The user's group needs the `ssh` policy; check `/ip service` allows your subnet. |
 | Audit says "Report incomplete" | Those menus couldn't be read — usually a session dropped while the app was in the background (it reconnects, so just re-run), or a user without rights to them. |
 
-## 15. What the app never does
+## 16. What the app never does
 
 - **On the router:** no writes, ever. There is no write path in the code — the
   transport interface exposes only reads, and the SSH transport additionally
@@ -277,9 +296,10 @@ refresh more slowly than the poll interval.
   wireless and system menus for the audit.
 - **On the phone:** it reads the Wi-Fi chip but never changes, connects,
   disconnects or forgets a network — the permission to do so is explicitly
-  removed from the manifest. It touches no files, contacts or media. The only
-  data it stores is its own: router credentials in the Keystore, settings, and
-  measurement history — and only those can be deleted from inside the app.
+  removed from the manifest. It accesses no contacts or media. The only data it
+  stores is its own: router credentials in the Keystore, settings, measurement
+  history, and a temporary support ZIP created only on request — and only app
+  data can be deleted from inside the app.
 
 Questions, bugs and ideas: [GitHub issues](../../../issues), or Telegram
 [@slipko](https://t.me/slipko).
