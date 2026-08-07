@@ -23,7 +23,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       of target
 - [x] **Smart link diagnosis with advice** — inline verdict + detailed facts and
       suggestions from a stable window of RSSI/SNR, AP−phone delta, rate/CCQ,
-      p-throughput, gateway ping/loss and router CPU
+      p-throughput, gateway ping/loss and router CPU; bounded manual runs and
+      configurable delayed auto-run after connect/roam
 
 ## Next (v0.2)
 - [x] User-triggered support ZIP: readable + structured report, bounded

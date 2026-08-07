@@ -145,6 +145,14 @@ the session.
 **Ping.** Real ICMP round-trip to the gateway each poll. Latency spikes or loss
 while the signal looks strong point at interference or a busy AP.
 
+**Connection diagnosis.** This is a bounded six-sample check, not an endless
+rolling verdict. Press *Run diagnosis* to start it at the current position. The
+card shows progress, then freezes the result with the AP name and completion
+time; tap the verdict for facts, likely causes and checks. After connecting or
+roaming the app can run the same check automatically, but waits for the link to
+settle first so handoff transients do not distort the result. While waiting,
+*Run now* skips the delay; an active run can be cancelled or repeated.
+
 **Sparkline.** Both sides over time — walk around the flat or office and watch
 where it collapses.
 
@@ -238,6 +246,7 @@ notification permission.
 | Language | Russian / English, switches immediately |
 | Poll interval | How often both sides are read (default ~2 s) |
 | History length | How many points the sparkline keeps |
+| Connection diagnosis | Automatic run after connect/roam and its settling delay (default 10 s); manual run remains available |
 | Targets | Minimum signal, minimum SNR, maximum Δ |
 | Alerts | Beep + vibrate on a breach, and the Δ threshold |
 

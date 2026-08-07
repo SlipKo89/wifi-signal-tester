@@ -90,6 +90,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   alertThresholdDb: settings.alertThresholdDb,
                   minSignalDbm: settings.minSignalDbm,
                   minSnrDb: settings.minSnrDb,
+                  autoLinkDiagnostics: settings.autoLinkDiagnostics,
+                  linkDiagnosticDelaySeconds:
+                      settings.linkDiagnosticDelaySeconds,
                 );
               },
             ),
@@ -253,6 +256,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       alertThresholdDb: settings.alertThresholdDb,
                       minSignalDbm: settings.minSignalDbm,
                       minSnrDb: settings.minSnrDb,
+                      autoLinkDiagnostics: settings.autoLinkDiagnostics,
+                      linkDiagnosticDelaySeconds:
+                          settings.linkDiagnosticDelaySeconds,
                     );
                     ctrl.connect(routers);
                   },
@@ -264,6 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       alertThresholdDb: settings.alertThresholdDb,
                       minSignalDbm: settings.minSignalDbm,
                       minSnrDb: settings.minSnrDb,
+                      autoLinkDiagnostics: settings.autoLinkDiagnostics,
+                      linkDiagnosticDelaySeconds:
+                          settings.linkDiagnosticDelaySeconds,
                     );
                     ctrl.startPhoneOnly();
                   },
@@ -317,7 +326,17 @@ class _Dashboard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!ctrl.offWifi) _StatusBanner(ctrl: ctrl),
-        if (!ctrl.offWifi) LinkDiagnosticsCard(report: ctrl.linkDiagnostics),
+        if (!ctrl.offWifi)
+          LinkDiagnosticsCard(
+            report: ctrl.linkDiagnostics,
+            phase: ctrl.linkDiagnosticPhase,
+            waitSeconds: ctrl.diagnosticWaitSecondsRemaining,
+            apName: ctrl.diagnosticApName,
+            completedAt: ctrl.diagnosticCompletedAt,
+            canStart: ctrl.canStartLinkDiagnostic,
+            onStart: ctrl.startLinkDiagnostic,
+            onCancel: ctrl.cancelLinkDiagnostic,
+          ),
         _ConnectionSummary(
           phone: phone,
           delta: ctrl.signalDelta,

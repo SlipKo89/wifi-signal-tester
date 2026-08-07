@@ -93,6 +93,40 @@ void main() {
       expect(LinkDiagnosticsEngine.parseRateMbps('unknown'), isNull);
     });
   });
+
+  group('LinkDiagnosticSession', () {
+    test('waits, runs once and freezes the completed report', () {
+      final session = LinkDiagnosticSession();
+
+      session.waitForStableLink();
+      expect(session.phase, LinkDiagnosticPhase.waiting);
+      expect(session.add(_sample(0)), isFalse);
+      expect(session.report.sampleCount, 0);
+
+      session.start();
+      for (var i = 0; i < 5; i++) {
+        expect(session.add(_sample(i)), isFalse);
+      }
+      expect(session.phase, LinkDiagnosticPhase.collecting);
+      expect(session.add(_sample(5)), isTrue);
+      expect(session.phase, LinkDiagnosticPhase.complete);
+      expect(session.report.sampleCount, 6);
+
+      expect(session.add(_sample(6, txCcq: 20)), isFalse);
+      expect(session.report.sampleCount, 6);
+      expect(session.report.healthy, isTrue);
+    });
+
+    test('reset discards an unfinished run', () {
+      final session = LinkDiagnosticSession()..start();
+      session.add(_sample(0));
+
+      session.reset();
+
+      expect(session.phase, LinkDiagnosticPhase.idle);
+      expect(session.report.sampleCount, 0);
+    });
+  });
 }
 
 LinkDiagnosticSample _sample(

@@ -20,6 +20,8 @@ class SettingsScreen extends StatelessWidget {
           alertThresholdDb: s.alertThresholdDb,
           minSignalDbm: s.minSignalDbm,
           minSnrDb: s.minSnrDb,
+          autoLinkDiagnostics: s.autoLinkDiagnostics,
+          linkDiagnosticDelaySeconds: s.linkDiagnosticDelaySeconds,
         );
 
     return Scaffold(
@@ -52,6 +54,34 @@ class SettingsScreen extends StatelessWidget {
             onChanged: (v) => s.setHistoryLength((v / 20).round() * 20),
             onDone: applyToMonitor,
           ),
+          const SizedBox(height: 20),
+          _section(l.t('Connection diagnosis', 'Диагностика соединения')),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l.t('Run automatically after connect or roam',
+                'Автозапуск после подключения или роуминга')),
+            subtitle: Text(
+              l.t('Waits for the radio link to settle before collecting a fixed result. Manual start is always available on the dashboard.',
+                  'Ждёт стабилизации радиоканала и затем фиксирует результат. Ручной запуск всегда доступен на дашборде.'),
+              style: const TextStyle(fontSize: 12),
+            ),
+            value: s.autoLinkDiagnostics,
+            onChanged: (v) {
+              s.setAutoLinkDiagnostics(v);
+              applyToMonitor();
+            },
+          ),
+          if (s.autoLinkDiagnostics)
+            _sliderTile(
+              title: l.t('Link settling delay', 'Пауза на стабилизацию'),
+              value: s.linkDiagnosticDelaySeconds.toDouble(),
+              min: 0,
+              max: 30,
+              divisions: 30,
+              label: '${s.linkDiagnosticDelaySeconds} ${l.t('sec', 'сек')}',
+              onChanged: (v) => s.setLinkDiagnosticDelaySeconds(v.round()),
+              onDone: applyToMonitor,
+            ),
           const SizedBox(height: 20),
           _section(l.t('Targets', 'Целевые значения')),
           _sliderTile(
@@ -149,8 +179,8 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Text(title, style: const TextStyle(fontSize: 14)),
               Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: Color(0xFF7D8590))),
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF7D8590))),
             ],
           ),
         ),

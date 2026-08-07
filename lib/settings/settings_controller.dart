@@ -16,6 +16,8 @@ class SettingsController extends ChangeNotifier {
   int _alertThresholdDb = 12;
   int _minSignalDbm = -72;
   int _minSnrDb = 20;
+  bool _autoLinkDiagnostics = true;
+  int _linkDiagnosticDelaySeconds = 10;
   String _lastSeenVersion = '';
 
   String get lang => _lang;
@@ -28,6 +30,8 @@ class SettingsController extends ChangeNotifier {
   /// Target signal / SNR: below these the dashboard warns (and alerts beep).
   int get minSignalDbm => _minSignalDbm;
   int get minSnrDb => _minSnrDb;
+  bool get autoLinkDiagnostics => _autoLinkDiagnostics;
+  int get linkDiagnosticDelaySeconds => _linkDiagnosticDelaySeconds;
 
   /// Last app version whose "What's new" the user has already seen ('' = never).
   String get lastSeenVersion => _lastSeenVersion;
@@ -58,6 +62,9 @@ class SettingsController extends ChangeNotifier {
     _alertThresholdDb = p.getInt('alertThresholdDb') ?? 12;
     _minSignalDbm = p.getInt('minSignalDbm') ?? -72;
     _minSnrDb = p.getInt('minSnrDb') ?? 20;
+    _autoLinkDiagnostics = p.getBool('autoLinkDiagnostics') ?? true;
+    _linkDiagnosticDelaySeconds =
+        (p.getInt('linkDiagnosticDelaySeconds') ?? 10).clamp(0, 30);
     _lastSeenVersion = p.getString('lastSeenVersion') ?? '';
     notifyListeners();
   }
@@ -71,6 +78,19 @@ class SettingsController extends ChangeNotifier {
   Future<void> setMinSnrDb(int v) async {
     _minSnrDb = v.clamp(5, 40);
     await _prefs?.setInt('minSnrDb', _minSnrDb);
+    notifyListeners();
+  }
+
+  Future<void> setAutoLinkDiagnostics(bool v) async {
+    _autoLinkDiagnostics = v;
+    await _prefs?.setBool('autoLinkDiagnostics', v);
+    notifyListeners();
+  }
+
+  Future<void> setLinkDiagnosticDelaySeconds(int v) async {
+    _linkDiagnosticDelaySeconds = v.clamp(0, 30);
+    await _prefs?.setInt(
+        'linkDiagnosticDelaySeconds', _linkDiagnosticDelaySeconds);
     notifyListeners();
   }
 

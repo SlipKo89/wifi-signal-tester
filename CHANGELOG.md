@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Focused Wi-Fi connection diagnosis** can now be started manually from the
+  dashboard. Each run clears the old measurement window, collects six fresh
+  samples for the current access point, then freezes the verdict together with
+  the AP name and completion time. A pending or active run can be started
+  immediately, repeated or cancelled.
 - **Separate LTE signal diagnostics** from ⋮ → LTE diagnostics. It connects to
   a MikroTik over the read-only SSH transport, auto-selects an enabled LTE
   interface and polls `monitor once` for RSRP, RSRQ, SINR and optional RSSI/CQI.
@@ -15,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   distinguishes weak-but-clean coverage from interference/sector load.
   R11e-LTE and FG621-EA output formats are covered. IMEI, IMSI and ICCID are
   deliberately discarded immediately and are never stored or displayed.
+
+### Changed
+- Automatic connection diagnosis no longer samples the unstable handoff
+  itself. After connecting or roaming it waits for the radio link to settle;
+  automatic runs can be disabled and the delay can be set from 0 to 30 seconds
+  in Settings → Connection diagnosis. The default delay is 10 seconds.
 
 ### Fixed
 - Long access-point names in the latest-roam display are now width-bounded and

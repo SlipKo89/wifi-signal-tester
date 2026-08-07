@@ -17,6 +17,12 @@ enum LinkIssueKind {
 
 enum LinkIssueSeverity { warning, critical }
 
+/// Lifecycle of one focused connection diagnosis.
+///
+/// Unlike the raw engine, a session stops accepting samples after it has a
+/// result. This keeps the verdict tied to one AP and one measurement window.
+enum LinkDiagnosticPhase { idle, waiting, collecting, complete }
+
 class LinkDiagnosticFinding {
   final LinkIssueKind kind;
   final LinkIssueSeverity severity;
@@ -365,5 +371,51 @@ class LinkDiagnosticsEngine {
       'k' => value / 1000,
       _ => value,
     };
+  }
+}
+
+/// Controls a single, bounded run of [LinkDiagnosticsEngine].
+///
+/// Scheduling itself stays in the monitor controller because it depends on AP
+/// changes and timers. This class is deliberately pure and easy to test.
+class LinkDiagnosticSession {
+  final LinkDiagnosticsEngine _engine;
+
+  LinkDiagnosticSession({LinkDiagnosticsEngine? engine})
+      : _engine = engine ?? LinkDiagnosticsEngine();
+
+  LinkDiagnosticPhase _phase = LinkDiagnosticPhase.idle;
+  LinkDiagnosticReport? _completedReport;
+
+  LinkDiagnosticPhase get phase => _phase;
+  LinkDiagnosticReport get report => _completedReport ?? _engine.report;
+
+  void waitForStableLink() {
+    _engine.clear();
+    _completedReport = null;
+    _phase = LinkDiagnosticPhase.waiting;
+  }
+
+  void start() {
+    _engine.clear();
+    _completedReport = null;
+    _phase = LinkDiagnosticPhase.collecting;
+  }
+
+  /// Returns true exactly once, when this sample completes the run.
+  bool add(LinkDiagnosticSample sample) {
+    if (_phase != LinkDiagnosticPhase.collecting) return false;
+    _engine.add(sample);
+    final current = _engine.report;
+    if (!current.ready) return false;
+    _completedReport = current;
+    _phase = LinkDiagnosticPhase.complete;
+    return true;
+  }
+
+  void reset() {
+    _engine.clear();
+    _completedReport = null;
+    _phase = LinkDiagnosticPhase.idle;
   }
 }

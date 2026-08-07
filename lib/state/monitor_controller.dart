@@ -95,11 +95,36 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
   int get pingSampleCount => _pingWindow.length;
 
-  /// Correlates signal, SNR, CCQ, rates, gateway latency and router CPU over a
-  /// short rolling window. This never changes the router or Android settings.
-  final LinkDiagnosticsEngine _diagnostics = LinkDiagnosticsEngine();
+  /// Correlates signal, SNR, CCQ, rates, gateway latency and router CPU during
+  /// one bounded run. This never changes the router or Android settings.
+  final LinkDiagnosticSession _diagnostics = LinkDiagnosticSession();
   String? _diagnosticLinkKey;
+  Timer? _diagnosticDelayTimer;
+  String? _scheduledDiagnosticLinkKey;
+  bool autoLinkDiagnostics = true;
+  int linkDiagnosticDelaySeconds = 10;
+  DateTime? diagnosticScheduledFor;
+  DateTime? diagnosticStartedAt;
+  DateTime? diagnosticCompletedAt;
+  String? diagnosticApName;
+
   LinkDiagnosticReport get linkDiagnostics => _diagnostics.report;
+  LinkDiagnosticPhase get linkDiagnosticPhase => _diagnostics.phase;
+  bool get canStartLinkDiagnostic =>
+      state == MonitorState.connected &&
+      !offWifi &&
+      phoneSignal?.rssiDbm != null &&
+      _diagnosticLinkKey != null;
+
+  int? get diagnosticWaitSecondsRemaining {
+    final target = diagnosticScheduledFor;
+    if (target == null || _diagnostics.phase != LinkDiagnosticPhase.waiting) {
+      return null;
+    }
+    final milliseconds = target.difference(DateTime.now()).inMilliseconds;
+    if (milliseconds <= 0) return 0;
+    return (milliseconds / 1000).ceil();
+  }
 
   /// Our MAC as last resolved from ARP (re-resolved every poll).
   String? _ourMac;
@@ -294,12 +319,21 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   void startLive() {
     _timer?.cancel();
     _timer = Timer.periodic(pollInterval, (_) => refresh());
+    if (autoLinkDiagnostics &&
+        _diagnostics.phase == LinkDiagnosticPhase.idle &&
+        _diagnosticLinkKey != null) {
+      _scheduleLinkDiagnostic(_diagnosticLinkKey!);
+    }
     notifyListeners();
   }
 
   void stopLive() {
     _timer?.cancel();
     _timer = null;
+    if (_diagnostics.phase == LinkDiagnosticPhase.waiting ||
+        _diagnostics.phase == LinkDiagnosticPhase.collecting) {
+      _cancelDiagnosticRun(logEvent: false);
+    }
     notifyListeners();
   }
 
@@ -386,10 +420,9 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
           stationSignal?.interfaceName ??
           phone.ssid ??
           phone.ipAddress;
-      if (_diagnosticLinkKey != null &&
-          linkKey != null &&
-          linkKey != _diagnosticLinkKey) {
-        _diagnostics.clear();
+      final previousLinkKey = _diagnosticLinkKey;
+      final linkChanged = linkKey != null && linkKey != previousLinkKey;
+      if (linkChanged) {
         pingMs = null;
         _pingWindow.clear();
         _pingGeneration++;
@@ -398,7 +431,9 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
       // Roaming: detect when the serving AP changes.
       final apNow = stationSignal?.interfaceName ?? connectedApName;
-      if (apNow != null && _lastApName != null && apNow != _lastApName) {
+      final roamed =
+          apNow != null && _lastApName != null && apNow != _lastApName;
+      if (roamed) {
         roamCount++;
         lastRoamFrom = _lastApName;
         lastRoamTo = apNow;
@@ -409,6 +444,13 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
       if (apNow != null) _lastApName = apNow;
+
+      // Wait for the new radio link to settle before taking the six samples.
+      // A changed BSSID is the primary trigger; AP-name detection is a fallback
+      // for Android builds that hide the BSSID.
+      if (linkKey != null && (linkChanged || (roamed && !linkChanged))) {
+        _scheduleLinkDiagnostic(linkKey);
+      }
 
       // Router health from whichever router serves the client.
       routerResource = _serving == null ? null : await _serving!.readResource();
@@ -514,12 +556,24 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     int? alertThresholdDb,
     int? minSignalDbm,
     int? minSnrDb,
+    bool? autoLinkDiagnostics,
+    int? linkDiagnosticDelaySeconds,
   }) {
     historyLimit = historyLength;
     if (alertsEnabled != null) this.alertsEnabled = alertsEnabled;
     if (alertThresholdDb != null) this.alertThresholdDb = alertThresholdDb;
     if (minSignalDbm != null) this.minSignalDbm = minSignalDbm;
     if (minSnrDb != null) this.minSnrDb = minSnrDb;
+    final autoChanged = autoLinkDiagnostics != null &&
+        autoLinkDiagnostics != this.autoLinkDiagnostics;
+    final delayChanged = linkDiagnosticDelaySeconds != null &&
+        linkDiagnosticDelaySeconds != this.linkDiagnosticDelaySeconds;
+    if (autoLinkDiagnostics != null) {
+      this.autoLinkDiagnostics = autoLinkDiagnostics;
+    }
+    if (linkDiagnosticDelaySeconds != null) {
+      this.linkDiagnosticDelaySeconds = linkDiagnosticDelaySeconds.clamp(0, 30);
+    }
     while (phoneHistory.length > historyLimit) {
       phoneHistory.removeAt(0);
     }
@@ -531,7 +585,125 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       pollInterval = next;
       if (isLive) startLive();
     }
+    if (!this.autoLinkDiagnostics &&
+        _diagnostics.phase == LinkDiagnosticPhase.waiting) {
+      _cancelDiagnosticRun(logEvent: false);
+    } else if (this.autoLinkDiagnostics &&
+        isLive &&
+        _diagnosticLinkKey != null &&
+        (_diagnostics.phase == LinkDiagnosticPhase.idle ||
+            (delayChanged &&
+                _diagnostics.phase == LinkDiagnosticPhase.waiting))) {
+      _scheduleLinkDiagnostic(_diagnosticLinkKey!);
+    } else if (autoChanged && !this.autoLinkDiagnostics) {
+      _cancelDiagnosticTimer();
+    }
     notifyListeners();
+  }
+
+  /// Starts a focused diagnosis now. If live polling was paused, it is resumed
+  /// because the run needs fresh measurements to finish.
+  void startLinkDiagnostic() {
+    if (!canStartLinkDiagnostic) return;
+    if (!isLive) startLive();
+    _beginLinkDiagnostic(automatic: false);
+  }
+
+  void cancelLinkDiagnostic() {
+    _cancelDiagnosticRun(logEvent: true);
+    notifyListeners();
+  }
+
+  void _scheduleLinkDiagnostic(String linkKey) {
+    _cancelDiagnosticTimer();
+    if (!autoLinkDiagnostics) {
+      _diagnostics.reset();
+      diagnosticScheduledFor = null;
+      diagnosticStartedAt = null;
+      diagnosticCompletedAt = null;
+      diagnosticApName = null;
+      notifyListeners();
+      return;
+    }
+    _diagnostics.waitForStableLink();
+    _scheduledDiagnosticLinkKey = linkKey;
+    diagnosticScheduledFor =
+        DateTime.now().add(Duration(seconds: linkDiagnosticDelaySeconds));
+    diagnosticStartedAt = null;
+    diagnosticCompletedAt = null;
+    diagnosticApName = _currentDiagnosticApName;
+
+    diagnosticLog.record(
+      'LINK-DIAG-WAIT',
+      'Connection diagnosis scheduled after link stabilization',
+      details: {
+        'delay_seconds': linkDiagnosticDelaySeconds,
+        'ap_name': diagnosticApName,
+      },
+    );
+
+    if (linkDiagnosticDelaySeconds == 0) {
+      _beginLinkDiagnostic(automatic: true);
+      return;
+    }
+    _diagnosticDelayTimer = Timer(
+      Duration(seconds: linkDiagnosticDelaySeconds),
+      () {
+        if (_scheduledDiagnosticLinkKey != _diagnosticLinkKey ||
+            state != MonitorState.connected ||
+            offWifi ||
+            !isLive) {
+          return;
+        }
+        _beginLinkDiagnostic(automatic: true);
+      },
+    );
+    notifyListeners();
+  }
+
+  void _beginLinkDiagnostic({required bool automatic}) {
+    if (!canStartLinkDiagnostic) return;
+    _cancelDiagnosticTimer();
+    _diagnostics.start();
+    diagnosticScheduledFor = null;
+    diagnosticStartedAt = DateTime.now();
+    diagnosticCompletedAt = null;
+    diagnosticApName = _currentDiagnosticApName;
+    diagnosticLog.record(
+      'LINK-DIAG-START',
+      automatic
+          ? 'Automatic connection diagnosis started'
+          : 'Manual connection diagnosis started',
+      details: {
+        'automatic': automatic,
+        'ap_name': diagnosticApName,
+      },
+    );
+    notifyListeners();
+  }
+
+  String? get _currentDiagnosticApName =>
+      stationSignal?.interfaceName ?? connectedApName ?? phoneSignal?.ssid;
+
+  void _cancelDiagnosticTimer() {
+    _diagnosticDelayTimer?.cancel();
+    _diagnosticDelayTimer = null;
+    _scheduledDiagnosticLinkKey = null;
+  }
+
+  void _cancelDiagnosticRun({required bool logEvent}) {
+    final wasActive = _diagnostics.phase == LinkDiagnosticPhase.waiting ||
+        _diagnostics.phase == LinkDiagnosticPhase.collecting;
+    _cancelDiagnosticTimer();
+    _diagnostics.reset();
+    diagnosticScheduledFor = null;
+    diagnosticStartedAt = null;
+    diagnosticCompletedAt = null;
+    diagnosticApName = null;
+    if (logEvent && wasActive) {
+      diagnosticLog.record(
+          'LINK-DIAG-CANCEL', 'Connection diagnosis cancelled by user');
+    }
   }
 
   /// Compares the live metrics against the configured targets and beeps when
@@ -573,7 +745,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
         ? null
         : phoneRates.reduce((a, b) => a < b ? a : b).toDouble();
 
-    _diagnostics.add(LinkDiagnosticSample(
+    final completed = _diagnostics.add(LinkDiagnosticSample(
       timestamp: DateTime.now(),
       phoneRssi: phone.rssiDbm,
       apSignal: station?.signalDbm,
@@ -593,6 +765,20 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       pingSamples: pingSampleCount,
       cpuLoad: cpuLoad,
     ));
+    if (completed) {
+      diagnosticCompletedAt = DateTime.now();
+      final report = _diagnostics.report;
+      diagnosticLog.record(
+        'LINK-DIAG-COMPLETE',
+        'Connection diagnosis completed',
+        details: {
+          'ap_name': diagnosticApName,
+          'sample_count': report.sampleCount,
+          'window_seconds': report.windowSeconds,
+          'findings': report.findings.map((f) => f.kind.name).toList(),
+        },
+      );
+    }
   }
 
   void _pingTarget(String? host) {
@@ -622,8 +808,13 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _resetDiagnostics() {
-    _diagnostics.clear();
+    _cancelDiagnosticTimer();
+    _diagnostics.reset();
     _diagnosticLinkKey = null;
+    diagnosticScheduledFor = null;
+    diagnosticStartedAt = null;
+    diagnosticCompletedAt = null;
+    diagnosticApName = null;
     _pingHost = null;
     _pingGeneration++;
     pingMs = null;
@@ -806,6 +997,11 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
           'sample_count': pingSampleCount,
         },
         'link_diagnosis': {
+          'phase': linkDiagnosticPhase.name,
+          'ap_name': diagnosticApName,
+          'scheduled_for': diagnosticScheduledFor?.toUtc().toIso8601String(),
+          'started_at': diagnosticStartedAt?.toUtc().toIso8601String(),
+          'completed_at': diagnosticCompletedAt?.toUtc().toIso8601String(),
           'ready': report.ready,
           'sample_count': report.sampleCount,
           'window_seconds': report.windowSeconds,
@@ -872,6 +1068,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _diagnosticDelayTimer?.cancel();
     _beeper.dispose();
     _closeRouters();
     super.dispose();

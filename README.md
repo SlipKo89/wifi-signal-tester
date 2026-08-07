@@ -60,6 +60,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
   Android 10+ MAC randomization doesn't break it.
 - **Read-only & scoped**: only `print`/`GET`, only your MAC.
 - **Live**: polls every ~2 s with a signal sparkline for walk-around testing.
+- **Focused link diagnosis**: run a fixed six-sample check manually, or let it
+  start automatically after a configurable post-roam settling delay. The result
+  is frozen for the current AP with likely causes and practical advice.
 - **Support report**: creates a ZIP only when you ask, with current diagnostics
   and a bounded event log. Network identifiers are masked by default;
   credentials and raw router responses are never included or uploaded.

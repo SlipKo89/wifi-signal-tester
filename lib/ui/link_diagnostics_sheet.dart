@@ -32,92 +32,170 @@ void showLinkDiagnostics(
 /// modify traffic/configuration to prove them.
 class LinkDiagnosticsCard extends StatelessWidget {
   final LinkDiagnosticReport report;
+  final LinkDiagnosticPhase phase;
+  final int? waitSeconds;
+  final String? apName;
+  final DateTime? completedAt;
+  final bool canStart;
+  final VoidCallback onStart;
+  final VoidCallback onCancel;
 
-  const LinkDiagnosticsCard({super.key, required this.report});
+  const LinkDiagnosticsCard({
+    super.key,
+    required this.report,
+    required this.phase,
+    required this.canStart,
+    required this.onStart,
+    required this.onCancel,
+    this.waitSeconds,
+    this.apName,
+    this.completedAt,
+  });
 
   @override
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
     final primary = report.primary;
-    final collecting = !report.ready;
-    final healthy = report.healthy;
-    final color = collecting
-        ? AppTheme.accent
-        : healthy
-            ? _green
-            : primary?.severity == LinkIssueSeverity.critical
-                ? _red
-                : _amber;
-    final title = collecting
-        ? l.t('Analyzing connection…', 'Анализируем соединение…')
-        : healthy
-            ? l.t('Signal matches link quality',
-                'Качество связи соответствует сигналу')
-            : _copy(primary!.kind, l).title;
-    final subtitle = collecting
-        ? l.t(
-            '${report.sampleCount}/${report.requiredSamples} measurements — '
-                'the result appears after a stable window',
-            '${report.sampleCount}/${report.requiredSamples} замеров — '
-                'результат появится после устойчивого окна')
-        : healthy
-            ? l.t('No stable signal/quality mismatch was found.',
-                'Устойчивого расхождения между сигналом и качеством не найдено.')
-            : _copy(primary!.kind, l).short;
+    final complete = phase == LinkDiagnosticPhase.complete && report.ready;
+    final healthy = complete && report.healthy;
+    final color = switch (phase) {
+      LinkDiagnosticPhase.complete when healthy => _green,
+      LinkDiagnosticPhase.complete
+          when primary?.severity == LinkIssueSeverity.critical =>
+        _red,
+      LinkDiagnosticPhase.complete => _amber,
+      _ => AppTheme.accent,
+    };
+    final title = switch (phase) {
+      LinkDiagnosticPhase.idle =>
+        l.t('Connection diagnosis', 'Диагностика соединения'),
+      LinkDiagnosticPhase.waiting =>
+        l.t('Waiting for the link to settle', 'Ждём стабилизации соединения'),
+      LinkDiagnosticPhase.collecting =>
+        l.t('Analyzing connection…', 'Анализируем соединение…'),
+      LinkDiagnosticPhase.complete when healthy => l.t(
+          'Signal matches link quality',
+          'Качество связи соответствует сигналу'),
+      LinkDiagnosticPhase.complete => _copy(primary!.kind, l).title,
+    };
+    final subtitle = switch (phase) {
+      LinkDiagnosticPhase.idle => l.t(
+          'Run a focused six-measurement check for the current access point.',
+          'Запусти отдельную проверку из шести замеров для текущей точки.'),
+      LinkDiagnosticPhase.waiting => l.t(
+          'Automatic measurement starts in ${waitSeconds ?? 0} sec. You can run it now.',
+          'Автозамер начнётся через ${waitSeconds ?? 0} сек. Можно запустить сейчас.'),
+      LinkDiagnosticPhase.collecting => l.t(
+          '${report.sampleCount}/${report.requiredSamples} measurements — keep the phone in the test position',
+          '${report.sampleCount}/${report.requiredSamples} замеров — удерживай телефон в точке проверки'),
+      LinkDiagnosticPhase.complete when healthy => l.t(
+          'No stable signal/quality mismatch was found.',
+          'Устойчивого расхождения между сигналом и качеством не найдено.'),
+      LinkDiagnosticPhase.complete => _copy(primary!.kind, l).short,
+    };
     final facts = _compactFacts(report.summary, l);
+    final metadata = <String>[
+      if (complete && facts.isNotEmpty) facts,
+      if (apName != null && apName!.trim().isNotEmpty) apName!.trim(),
+      if (complete && completedAt != null) _clock(completedAt!),
+    ].join(' • ');
+    final actionLabel = switch (phase) {
+      LinkDiagnosticPhase.idle => l.t('Run diagnosis', 'Запустить диагностику'),
+      LinkDiagnosticPhase.waiting => l.t('Run now', 'Запустить сейчас'),
+      LinkDiagnosticPhase.collecting => l.t('Cancel', 'Отменить'),
+      LinkDiagnosticPhase.complete => l.t('Repeat', 'Повторить'),
+    };
+    final actionIcon = phase == LinkDiagnosticPhase.collecting
+        ? Icons.close
+        : Icons.play_arrow_rounded;
 
-    return InkWell(
-      onTap: report.ready ? () => showLinkDiagnostics(context, report) : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.35)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              collecting
-                  ? Icons.query_stats
-                  : healthy
-                      ? Icons.check_circle_outline
-                      : Icons.monitor_heart_outlined,
-              size: 21,
-              color: color,
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: color)),
-                  const SizedBox(height: 3),
-                  Text(subtitle,
-                      style: const TextStyle(fontSize: 12, height: 1.35)),
-                  if (!collecting && facts.isNotEmpty) ...[
-                    const SizedBox(height: 7),
-                    Text(facts,
-                        style: const TextStyle(fontSize: 10.5, color: _muted)),
-                  ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: complete ? () => showLinkDiagnostics(context, report) : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  switch (phase) {
+                    LinkDiagnosticPhase.idle => Icons.query_stats,
+                    LinkDiagnosticPhase.waiting => Icons.timer_outlined,
+                    LinkDiagnosticPhase.collecting => Icons.query_stats,
+                    LinkDiagnosticPhase.complete when healthy =>
+                      Icons.check_circle_outline,
+                    LinkDiagnosticPhase.complete =>
+                      Icons.monitor_heart_outlined,
+                  },
+                  size: 21,
+                  color: color,
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: color)),
+                      const SizedBox(height: 3),
+                      Text(subtitle,
+                          style: const TextStyle(fontSize: 12, height: 1.35)),
+                      if (metadata.isNotEmpty) ...[
+                        const SizedBox(height: 7),
+                        Text(
+                          metadata,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5, color: _muted),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (complete) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.chevron_right, size: 20, color: color),
                 ],
-              ),
+              ],
             ),
-            if (report.ready) ...[
-              const SizedBox(width: 6),
-              Icon(Icons.chevron_right, size: 20, color: color),
-            ],
-          ],
-        ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: color,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              onPressed: phase == LinkDiagnosticPhase.collecting
+                  ? onCancel
+                  : canStart
+                      ? onStart
+                      : null,
+              icon: Icon(actionIcon, size: 18),
+              label: Text(actionLabel),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _clock(DateTime value) {
+    String two(int part) => part.toString().padLeft(2, '0');
+    return '${two(value.hour)}:${two(value.minute)}:${two(value.second)}';
   }
 }
 
