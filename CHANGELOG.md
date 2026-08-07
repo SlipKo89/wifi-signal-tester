@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Separate LTE signal diagnostics** from ⋮ → LTE diagnostics. It connects to
+  a MikroTik over the read-only SSH transport, auto-selects an enabled LTE
+  interface and polls `monitor once` for RSRP, RSRQ, SINR and optional RSSI/CQI.
+  The screen shows the operator/modem, LTE band, bandwidth, EARFCN, PCI/cell,
+  recent min/average/max stability, and a plain-language diagnosis that
+  distinguishes weak-but-clean coverage from interference/sector load.
+  R11e-LTE and FG621-EA output formats are covered. IMEI, IMSI and ICCID are
+  deliberately discarded immediately and are never stored or displayed.
+
 ## [0.2.5] - 2026-08-06
 
 ### Added

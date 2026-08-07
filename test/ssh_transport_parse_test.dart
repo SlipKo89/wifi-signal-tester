@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wifi_apk/lte/lte_signal.dart';
 import 'package:wifi_apk/mikrotik/ssh_transport.dart';
 
 /// The samples below are verbatim RouterOS 7.22 output captured over SSH from a
@@ -118,6 +119,45 @@ void main() {
       expect(row.containsKey('managed'), isFalse); // `;;;` lines are not fields
       expect(row['channel'], '2412/20-Ce/gn(18dBm)');
       expect(row['overall-tx-ccq'], '65%');
+    });
+
+    test('LTE monitor: R11e-LTE labels feed the sanitised model', () {
+      const out = '               status: registered\n'
+          '         manufacturer: "MikroTik"\n'
+          '                model: "R11e-LTE"\n'
+          '     current-operator: Example Mobile\n'
+          '    access-technology: LTE\n'
+          '               earfcn: 2850 (band 7, bandwidth 20Mhz)\n'
+          '                  cqi: 12\n'
+          '                 rsrp: -102dBm\n'
+          '                 rsrq: -8dB\n'
+          '                 sinr: 13dB';
+      final row = SshTransport.parseLabelled(out);
+      final signal = LteSignal.fromMonitor(row, interfaceName: 'lte1');
+
+      expect(signal.modemModel, 'R11e-LTE');
+      expect(signal.band, 'B7');
+      expect(signal.cqi, 12);
+      expect(signal.sinr, 13);
+    });
+
+    test('LTE monitor: MBIM primary-band tail remains parseable', () {
+      const out = '            status: running\n'
+          '             model: FG621-EA\n'
+          '  current-operator: Example LTE\n'
+          '        data-class: LTE\n'
+          '      primary-band: B7@20Mhz earfcn: 3250 phy-cellid: 353\n'
+          '              rssi: -80dBm\n'
+          '              rsrp: -108dBm\n'
+          '              rsrq: -12.5dB\n'
+          '              sinr: -1dB';
+      final row = SshTransport.parseLabelled(out);
+      final signal = LteSignal.fromMonitor(row, interfaceName: 'lte1');
+
+      expect(signal.band, 'B7');
+      expect(signal.bandwidthMhz, 20);
+      expect(signal.earfcn, 3250);
+      expect(signal.rsrq, -12.5);
     });
   });
 }

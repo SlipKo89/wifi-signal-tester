@@ -48,14 +48,16 @@ const Map<String, MetricRef> kMetricRefs = {
         'the access point AND how the AP hears your device — the reverse '
         'direction normal analyzers can\'t show. It also runs a read-only '
         'Wi-Fi and system audit of your MikroTik, checks other devices on the '
-        'network, and measures latency. Built for installers and anyone tuning '
-        'MikroTik Wi-Fi. Read-only — it never changes your router.',
+        'network, and measures latency. A separate LTE tool diagnoses '
+        'RSRP/RSRQ/SINR on MikroTik cellular routers. Built for installers and '
+        'anyone tuning MikroTik Wi-Fi or LTE. Read-only — it never changes your router.',
     whatRu: 'Тестирует Wi-Fi с двух сторон на MikroTik: как твоё устройство '
         'слышит точку и как точка слышит устройство — обратную сторону обычные '
         'анализаторы не показывают. Ещё делает read-only аудит Wi-Fi и системы '
         'MikroTik, смотрит другие устройства сети и меряет задержку. Для '
-        'монтажников и всех, кто настраивает Wi-Fi на MikroTik. Только чтение '
-        '— настройки роутера не меняются.',
+        'отдельной диагностики LTE читает RSRP/RSRQ/SINR с сотового MikroTik. '
+        'Для монтажников и всех, кто настраивает Wi-Fi или LTE на MikroTik. '
+        'Только чтение — настройки роутера не меняются.',
     tipEn: 'Tap any number in the app for a plain-language explanation like '
         'these.',
     tipRu: 'Тапни по любой цифре в приложении — получишь такое же понятное '
@@ -65,7 +67,8 @@ const Map<String, MetricRef> kMetricRefs = {
     key: 'signal',
     titleEn: 'Signal (dBm)',
     titleRu: 'Сигнал (dBm)',
-    whatEn: 'How strongly one side receives the other, in dBm. It is negative — '
+    whatEn:
+        'How strongly one side receives the other, in dBm. It is negative — '
         'closer to 0 is stronger (−45 is great, −80 is weak).',
     whatRu: 'Насколько сильно одна сторона слышит другую, в dBm. Значение '
         'отрицательное — чем ближе к 0, тем сильнее (−45 отлично, −80 слабо).',
@@ -111,8 +114,8 @@ const Map<String, MetricRef> kMetricRefs = {
         'wireless — CAPsMAN его не отдаёт.',
     bands: [
       RefBand(_green, '≥ 80', '≥ 80', 'Clean link.', 'Чистый линк.'),
-      RefBand(_amber, '50…80', '50…80', 'Some retransmits.',
-          'Есть ретрансмиты.'),
+      RefBand(
+          _amber, '50…80', '50…80', 'Some retransmits.', 'Есть ретрансмиты.'),
       RefBand(_red, '< 50', '< 50', 'Many retransmits — poor efficiency.',
           'Много ретрансмитов — низкая эффективность.'),
     ],
@@ -124,7 +127,8 @@ const Map<String, MetricRef> kMetricRefs = {
     whatEn: 'The current negotiated PHY rate (e.g. 866Mbps-80MHz/2S): channel '
         'width, spatial streams and standard. It is the ceiling of the link, '
         'not the real traffic.',
-    whatRu: 'Текущая согласованная PHY-скорость (напр. 866Mbps-80MHz/2S): ширина '
+    whatRu:
+        'Текущая согласованная PHY-скорость (напр. 866Mbps-80MHz/2S): ширина '
         'канала, число потоков и стандарт. Это потолок линка, а не реальный '
         'трафик.',
     tipEn: 'Strong signal but low rate → interference or a legacy/1-stream '
@@ -163,15 +167,17 @@ const Map<String, MetricRef> kMetricRefs = {
     key: 'delta',
     titleEn: 'Δ AP−phone (asymmetry)',
     titleRu: 'Δ AP−phone (асимметрия)',
-    whatEn: 'Difference between the two directions. Negative = the AP hears you '
+    whatEn:
+        'Difference between the two directions. Negative = the AP hears you '
         'worse than you hear it (weak uplink). Tap the Δ badge for advice.',
-    whatRu: 'Разница между направлениями. Минус = точка слышит тебя хуже, чем ты '
+    whatRu:
+        'Разница между направлениями. Минус = точка слышит тебя хуже, чем ты '
         'её (слабый аплинк). Тапни по плашке Δ для советов.',
     bands: [
       RefBand(_green, '|Δ| ≤ 6', '|Δ| ≤ 6', 'Balanced — ideal.',
           'Симметрично — идеал.'),
-      RefBand(_amber, '≤ 12', '≤ 12', 'Noticeable imbalance.',
-          'Заметный перекос.'),
+      RefBand(
+          _amber, '≤ 12', '≤ 12', 'Noticeable imbalance.', 'Заметный перекос.'),
       RefBand(_red, '> 12', '> 12', 'Strong imbalance — act on it.',
           'Сильный перекос — стоит исправить.'),
     ],
@@ -180,7 +186,8 @@ const Map<String, MetricRef> kMetricRefs = {
     key: 'band',
     titleEn: 'Band / Frequency',
     titleRu: 'Диапазон / Частота',
-    whatEn: '2.4 GHz reaches further but is crowded and slower; 5 GHz is faster '
+    whatEn:
+        '2.4 GHz reaches further but is crowded and slower; 5 GHz is faster '
         'with more clean channels; 6 GHz is the newest and cleanest. Frequency '
         '(MHz) is the exact channel.',
     whatRu: '2.4 ГГц бьёт дальше, но забит и медленнее; 5 ГГц быстрее и чище; '
@@ -194,6 +201,108 @@ const Map<String, MetricRef> kMetricRefs = {
         'resets mean roaming or an unstable link.',
     whatRu: 'Как долго клиент держится на этой точке. Частые сбросы — роуминг '
         'или нестабильный линк.',
+  ),
+  'lte_rsrp': MetricRef(
+    key: 'lte_rsrp',
+    titleEn: 'LTE RSRP (dBm)',
+    titleRu: 'LTE RSRP (dBm)',
+    whatEn: 'Reference Signal Received Power: the power of LTE reference '
+        'signals received by the modem. It is the main coverage/antenna-level '
+        'number. Closer to zero is stronger.',
+    whatRu: 'Reference Signal Received Power — мощность опорных сигналов LTE, '
+        'принятых модемом. Главная цифра для оценки покрытия и уровня на '
+        'антенне. Чем ближе к нулю, тем сильнее.',
+    bands: [
+      RefBand(_green, '≥ −90', '≥ −90', 'Good to excellent power.',
+          'Хорошая или отличная мощность.'),
+      RefBand(_amber, '−90…−100', '−90…−100', 'Usable, with less margin.',
+          'Рабочий уровень, но запас меньше.'),
+      RefBand(_red, '< −100', '< −100', 'Weak; below −110 is very poor.',
+          'Слабо; ниже −110 — очень плохо.'),
+    ],
+    tipEn: 'Strong RSRP does not guarantee speed: always check RSRQ and SINR.',
+    tipRu: 'Сильный RSRP не гарантирует скорость: всегда смотри RSRQ и SINR.',
+  ),
+  'lte_rsrq': MetricRef(
+    key: 'lte_rsrq',
+    titleEn: 'LTE RSRQ (dB)',
+    titleRu: 'LTE RSRQ (dB)',
+    whatEn: 'Reference Signal Received Quality. It combines useful LTE signal '
+        'with total received energy, so it reacts to interference and sector '
+        'load. Closer to zero is better.',
+    whatRu: 'Reference Signal Received Quality — качество опорного сигнала с '
+        'учётом всей принятой энергии. Реагирует на помехи и загрузку сектора. '
+        'Чем ближе к нулю, тем лучше.',
+    bands: [
+      RefBand(
+          _green, '≥ −10', '≥ −10', 'Excellent quality.', 'Отличное качество.'),
+      RefBand(_amber, '−10…−15', '−10…−15', 'Good/usable.',
+          'Хорошо/рабочий уровень.'),
+      RefBand(_red, '< −15', '< −15', 'Poor quality or busy/noisy sector.',
+          'Плохое качество или загруженный/шумный сектор.'),
+    ],
+  ),
+  'lte_sinr': MetricRef(
+    key: 'lte_sinr',
+    titleEn: 'LTE SINR (dB)',
+    titleRu: 'LTE SINR (dB)',
+    whatEn: 'Useful signal versus interference plus noise. SINR strongly '
+        'affects modulation and speed. Higher is better; a negative value '
+        'means interference/noise is stronger than the useful signal.',
+    whatRu: 'Полезный сигнал относительно помех и шума. SINR сильно влияет на '
+        'модуляцию и скорость. Чем выше, тем лучше; отрицательное значение '
+        'означает, что помехи/шум сильнее полезного сигнала.',
+    bands: [
+      RefBand(_green, '≥ 13', '≥ 13', 'Good; ≥20 is excellent.',
+          'Хорошо; ≥20 — отлично.'),
+      RefBand(_amber, '0…13', '0…13', 'Usable, speed is limited.',
+          'Работает, но скорость ограничена.'),
+      RefBand(_red, '< 0', '< 0', 'Poor radio conditions.',
+          'Плохая радиообстановка.'),
+    ],
+    tipEn: 'When RSRP is good but SINR is poor, adding antenna gain alone is '
+        'unlikely to solve the problem.',
+    tipRu: 'Если RSRP хороший, а SINR плохой, одно усиление антенны вряд ли '
+        'решит проблему.',
+  ),
+  'lte_rssi': MetricRef(
+    key: 'lte_rssi',
+    titleEn: 'LTE RSSI (dBm)',
+    titleRu: 'LTE RSSI (dBm)',
+    whatEn: 'Total received wideband power: useful LTE signal, other cells, '
+        'interference and noise together. It is secondary to RSRP/RSRQ/SINR.',
+    whatRu: 'Полная широкополосная принятая мощность: полезный LTE-сигнал, '
+        'другие соты, помехи и шум вместе. Вторична по отношению к '
+        'RSRP/RSRQ/SINR.',
+    bands: [
+      RefBand(_green, '≥ −75', '≥ −75', 'Strong total power.',
+          'Высокая общая мощность.'),
+      RefBand(_amber, '−75…−85', '−75…−85', 'Usable.', 'Рабочий уровень.'),
+      RefBand(_red, '< −85', '< −85', 'Weak total power.',
+          'Низкая общая мощность.'),
+    ],
+    tipEn: 'A strong RSSI can include strong interference, so it is never the '
+        'main LTE quality verdict.',
+    tipRu: 'Сильный RSSI может включать сильные помехи, поэтому это не главная '
+        'оценка качества LTE.',
+  ),
+  'lte_cqi': MetricRef(
+    key: 'lte_cqi',
+    titleEn: 'LTE CQI',
+    titleRu: 'LTE CQI',
+    whatEn: 'Channel Quality Indicator, normally 0–15. The modem reports what '
+        'modulation/coding the current downlink can sustain. Higher usually '
+        'allows more throughput.',
+    whatRu: 'Channel Quality Indicator, обычно 0–15. Модем сообщает, какую '
+        'модуляцию и кодирование выдерживает текущий downlink. Больше обычно '
+        'означает выше возможную скорость.',
+    bands: [
+      RefBand(_green, '≥ 10', '≥ 10', 'Good; ≥13 is excellent.',
+          'Хорошо; ≥13 — отлично.'),
+      RefBand(_amber, '7…9', '7…9', 'Moderate.', 'Средне.'),
+      RefBand(_red, '< 7', '< 7', 'Low modulation / limited speed.',
+          'Низкая модуляция / ограниченная скорость.'),
+    ],
   ),
   'scan_throttle': MetricRef(
     key: 'scan_throttle',

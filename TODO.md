@@ -74,7 +74,11 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       classic wireless and WifiWave2 access lists
 - [x] In-app changelog + "what's new on update"
 - [x] Open-source licenses page + "built with AI" note + easter egg
-- [ ] LTE mode for LHG LTE (RSRP/RSRQ/SINR alignment) — high value, next
+- [x] Separate LTE diagnostics over read-only SSH: auto-select LTE interface,
+      live RSRP/RSRQ/SINR plus RSSI/CQI where supported, band/cell facts,
+      rolling stability and plain-language antenna/interference advice. Tested
+      against both R11e-LTE and FG621-EA monitor formats; modem/SIM identifiers
+      are discarded and never persisted
 - [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
 
 ## Docs & discoverability
@@ -113,6 +117,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Named measurement spots ("kitchen") with min/max/avg over a dwell window,
       compare spots
 - [x] Ping / latency probe to the gateway alongside signal (correlate signal↔lag)
+- [ ] LTE named measurement sessions with CSV export and optional GPS points
+- [ ] LTE band/cell A/B comparison (same location, min/avg/max and verdict diff)
 
 ### C. Bigger directions
 - [ ] A/B before/after snapshots (channel / power / AP placement change) with diff

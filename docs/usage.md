@@ -21,8 +21,10 @@ version history see [CHANGELOG.md](../CHANGELOG.md).
 11. [Targets and alerts](#11-targets-and-alerts)
 12. [Settings](#12-settings)
 13. [Reference and help](#13-reference-and-help)
-14. [Troubleshooting](#14-troubleshooting)
-15. [What the app never does](#15-what-the-app-never-does)
+14. [LTE signal diagnostics](#14-lte-signal-diagnostics)
+15. [Support report](#15-support-report)
+16. [Troubleshooting](#16-troubleshooting)
+17. [What the app never does](#17-what-the-app-never-does)
 
 ---
 
@@ -254,7 +256,45 @@ Two entries worth reading up front: **Δ / asymmetry**, and **Wi-Fi scan
 throttling** — Android limits how often apps may scan, which is why some numbers
 refresh more slowly than the poll interval.
 
-## 14. Support report
+## 14. LTE signal diagnostics
+
+⋮ → *LTE diagnostics* opens a completely separate tool for a MikroTik with an
+LTE modem. It does not use the phone's Wi-Fi measurements and does not require
+the phone to be associated with the MikroTik's Wi-Fi. The router only needs to
+be reachable over SSH.
+
+Enter the host, SSH port, read-only username and password. Leave *LTE interface*
+empty to auto-select a running interface, or enter a name such as `lte1`. The
+profile is stored in the device Keystore separately from Wi-Fi router profiles.
+
+The app runs only these read-only commands:
+
+```
+/interface lte print
+/interface lte monitor <interface> once
+/system resource print
+```
+
+The dashboard refreshes every three seconds and shows:
+
+- **RSRP** — received LTE reference-signal power; the main coverage/antenna
+  level;
+- **RSRQ** — reference-signal quality, affected by interference and sector load;
+- **SINR** — useful signal versus interference/noise; strongly affects speed;
+- **RSSI/CQI** where the modem reports them;
+- band, channel width, EARFCN, PCI, eNodeB/sector and Cell ID;
+- min/average/max values over the latest 60 samples.
+
+The verdict deliberately separates **weak but clean** coverage (alignment,
+height, cable/connectors are likely limiting) from **strong enough but noisy**
+radio (interference, reflections or sector load are more likely). Tap RSRP,
+RSRQ, SINR, RSSI or CQI for thresholds and an explanation.
+
+RouterOS often includes IMEI, IMSI and ICCID in the monitor response. The app
+does not model, display, log or persist those identifiers; they are discarded
+immediately after the response is parsed.
+
+## 15. Support report
 
 ⋮ → *Support report* creates troubleshooting material you can send to the
 developer. Nothing is collected remotely and nothing is uploaded automatically.
@@ -273,7 +313,7 @@ tokens, private keys, raw RouterOS responses and full lists of other clients are
 never included, even with that switch enabled. Review `report.txt` before
 sharing. *Copy readable report* is available when a ZIP is inconvenient.
 
-## 15. Troubleshooting
+## 16. Troubleshooting
 
 | Symptom | Cause and fix |
 |---------|---------------|
@@ -285,15 +325,19 @@ sharing. *Copy readable report* is available when a ZIP is inconvenient.
 | Values refresh slowly | Android Wi-Fi scan throttling — see the Reference entry, or raise the poll interval. |
 | SNR marked as estimate | The registration table doesn't report SNR (typical for CAPsMAN); it is derived from the radio's measured noise floor. |
 | Nothing at all over SSH | The user's group needs the `ssh` policy; check `/ip service` allows your subnet. |
+| LTE says no interface was found | Check that `/interface lte print` contains an enabled interface, or clear/correct the optional interface name in the LTE form. |
+| LTE is registered but metrics are empty | Wait for the modem to finish registering; some modem/RouterOS combinations need a current modem firmware before they expose radio metrics. |
 | Audit says "Report incomplete" | Those menus couldn't be read — usually a session dropped while the app was in the background (it reconnects, so just re-run), or a user without rights to them. |
 
-## 16. What the app never does
+## 17. What the app never does
 
 - **On the router:** no writes, ever. There is no write path in the code — the
   transport interface exposes only reads, and the SSH transport additionally
   whitelists `print` / `monitor once` and refuses anything else. It reads only
   what it needs: ARP/DHCP for IP→MAC, the registration table for your MAC,
-  wireless and system menus for the audit.
+  wireless and system menus for the audit, or the LTE interface/monitor in the
+  separate LTE tool. LTE modem/SIM identifiers returned by RouterOS are
+  discarded rather than stored.
 - **On the phone:** it reads the Wi-Fi chip but never changes, connects,
   disconnects or forgets a network — the permission to do so is explicitly
   removed from the manifest. It accesses no contacts or media. The only data it

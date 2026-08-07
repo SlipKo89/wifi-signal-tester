@@ -15,6 +15,7 @@ import 'delta_info.dart';
 import 'devices_screen.dart';
 import 'history_screen.dart';
 import 'link_diagnostics_sheet.dart';
+import 'lte_screen.dart';
 import 'reference_screen.dart';
 import 'settings_screen.dart';
 import 'support_diagnostics_screen.dart';
@@ -128,6 +129,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   open(const AuditScreen(phone: true));
                 case 'devices':
                   open(const DevicesScreen());
+                case 'lte':
+                  open(const LteScreen());
                 case 'reference':
                   open(const ReferenceScreen());
                 case 'guide':
@@ -166,6 +169,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   value: 'devices',
                   child: Text(l.t('Devices', 'Устройства')),
                 ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'lte',
+                child: Row(
+                  children: [
+                    const Icon(Icons.cell_tower, size: 19),
+                    const SizedBox(width: 10),
+                    Text(l.t('LTE diagnostics', 'Диагностика LTE')),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'reference',
                 child: Text(l.t('Reference', 'Справка')),

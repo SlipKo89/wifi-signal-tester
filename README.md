@@ -9,6 +9,10 @@ device** — signal, SNR, rates. This app reads that from a MikroTik (running
 CAPsMAN or plain Wi-Fi) **read-only**, for **your device's MAC only**, and puts
 it next to your phone's own readings.
 
+The app also contains a **separate LTE diagnostics tool** for MikroTik LTE
+routers. It reads modem radio quality over SSH and does not depend on or mix
+with the Wi-Fi dashboard.
+
 <table>
 <tr>
 <td width="33%"><img src="docs/screenshots/dashboard.png" alt="Two-sided dashboard"></td>
@@ -59,6 +63,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 - **Support report**: creates a ZIP only when you ask, with current diagnostics
   and a bounded event log. Network identifiers are masked by default;
   credentials and raw router responses are never included or uploaded.
+- **Separate LTE diagnostics**: read-only SSH polling of RSRP, RSRQ, SINR,
+  optional RSSI/CQI, band and serving-cell facts, stability and practical
+  antenna/interference advice. No Wi-Fi connection is required for this mode.
 
 ## Requirements (build machine — macOS)
 

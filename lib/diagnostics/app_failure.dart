@@ -109,6 +109,9 @@ class AppFailure {
       );
     }
     if (text.contains('no wireless registration table') ||
+        text.contains('no enabled lte interface') ||
+        text.contains('lte interface has no name') ||
+        text.contains('lte interface "') ||
         text.contains('rest api not available') ||
         text.contains('unexpected login reply')) {
       return AppFailure(
@@ -173,8 +176,8 @@ class AppFailure {
         AppFailureKind.tls =>
           l.t('Secure connection failed', 'Ошибка защищённого подключения'),
         AppFailureKind.unsupported => l.t(
-            'Transport or wireless stack is unavailable',
-            'Транспорт или Wi-Fi стек недоступен'),
+            'Transport or required RouterOS menu is unavailable',
+            'Транспорт или нужное меню RouterOS недоступны'),
         AppFailureKind.sessionClosed =>
           l.t('Router session was closed', 'Сессия с роутером закрылась'),
         AppFailureKind.offWifi =>
@@ -226,10 +229,10 @@ class AppFailure {
             'Не удалось установить TLS-соединение. Проверь порт HTTPS/API-SSL, '
                 'сертификат или выбери правильный транспорт.'),
         AppFailureKind.unsupported => l.t(
-            'The selected protocol or expected registration table is not '
-                'available on this RouterOS installation.',
-            'На этой установке RouterOS нет выбранного протокола или ожидаемой '
-                'registration table.'),
+            'The selected protocol or required Wi-Fi/LTE menu is not available '
+                'on this RouterOS installation.',
+            'На этой установке RouterOS нет выбранного протокола или нужного '
+                'меню Wi-Fi/LTE.'),
         AppFailureKind.sessionClosed => l.t(
             'Android or RouterOS closed an idle session. The app retries once; '
                 'use Retry if the session did not recover.',
