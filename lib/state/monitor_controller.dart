@@ -80,6 +80,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   final List<int?> _pingWindow = [];
   String? _pingHost;
   int _pingGeneration = 0;
+  int _pingRequestId = 0;
 
   int? get pingAvgMs {
     final ok = _pingWindow.whereType<int>().toList();
@@ -782,8 +783,9 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _pingTarget(String? host) {
-    if (host == null) return;
+    if (host == null || !_ping.isSupported) return;
     if (_pingHost != host) {
+      _cancelPing();
       _pingHost = host;
       pingMs = null;
       _pingWindow.clear();
@@ -792,6 +794,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     if (_pinging) return;
     final requestedHost = host;
     final requestedGeneration = _pingGeneration;
+    final requestId = ++_pingRequestId;
     _pinging = true;
     _ping.pingOnce(host).then((ms) {
       // A ping started on the previous network may finish after a roam. Do not
@@ -802,12 +805,22 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
         _pingWindow.add(ms);
         if (_pingWindow.length > 20) _pingWindow.removeAt(0);
       }
-      _pinging = false;
-      notifyListeners();
+    }).whenComplete(() {
+      if (requestId == _pingRequestId) {
+        _pinging = false;
+        notifyListeners();
+      }
     });
   }
 
+  void _cancelPing() {
+    _pingRequestId++;
+    _pinging = false;
+    unawaited(_ping.cancel());
+  }
+
   void _resetDiagnostics() {
+    _cancelPing();
     _cancelDiagnosticTimer();
     _diagnostics.reset();
     _diagnosticLinkKey = null;
@@ -1062,6 +1075,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       'Application lifecycle changed',
       details: {'state': state.name},
     );
+    if (state == AppLifecycleState.detached) _cancelPing();
   }
 
   @override
@@ -1069,6 +1083,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _diagnosticDelayTimer?.cancel();
+    _cancelPing();
     _beeper.dispose();
     _closeRouters();
     super.dispose();

@@ -1,20 +1,21 @@
-# Wi-Fi Signal Tester 0.3.1
+# Wi-Fi Signal Tester 0.3.2
 
-- Persistent named LTE measurement sessions with scalable 1×…20× charts, raw
-  CSV export and an A/B comparison of two antenna positions or visits.
-- A shared LTE Quality Score from 0 to 100 combines RSRP, RSRQ, SINR, optional
-  CQI and stability. It is used consistently by live monitoring, antenna
-  alignment and saved history, while keeping every raw radio metric available.
-- Initial macOS application for RouterOS connection, Wi-Fi/system audits and
-  LTE diagnostics/alignment. Android-only local RSSI remains unavailable on Mac
-  until the planned native CoreWLAN implementation.
-- GitHub Actions now builds Android and Apple-silicon macOS together and adds
-  both files to the same versioned Release.
+- Fixed a macOS startup freeze while reading the local Wi-Fi adapter. Every
+  platform query now has a hard timeout, independent facts are read in parallel
+  and the potentially blocking gateway lookup is skipped on Mac.
+- The macOS build no longer launches system ICMP `ping` processes. This keeps
+  the client-only app sandbox and prevents orphaned high-CPU processes after
+  the application is closed or killed.
+- The desktop dashboard explicitly explains that local Mac RSSI is not exposed
+  by the current plugin. Router-side signal, RouterOS audits and all LTE tools
+  remain available.
+- Android retains gateway ping; every probe is now stopped explicitly after a
+  response, timeout, disconnect or controller disposal.
 
 Assets:
 
-- `wifi-signal-tester-0.3.1.apk` — Android;
-- `wifi-signal-tester-0.3.1-macos-arm64.zip` — unpack to get
+- `wifi-signal-tester-0.3.2.apk` — Android;
+- `wifi-signal-tester-0.3.2-macos-arm64.zip` — unpack to get
   `Wi-Fi Signal Tester.app` for an Apple-silicon Mac.
 
 The Mac build is currently intended for testing and is not yet Developer ID
@@ -24,24 +25,24 @@ See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 ---
 
-# Wi-Fi Signal Tester 0.3.1
+# Wi-Fi Signal Tester 0.3.2
 
-- Постоянная история LTE с именованными сессиями, масштабируемыми графиками
-  1×…20×, выгрузкой исходных данных в CSV и сравнением двух положений антенны
-  или выездов A/B.
-- Единая оценка LTE от 0 до 100 объединяет RSRP, RSRQ, SINR, CQI при наличии и
-  стабильность. Одна формула используется в живом режиме, мастере юстировки и
-  истории, а исходные радиометрики всегда остаются доступными.
-- Первое приложение для macOS: подключение к RouterOS, Wi-Fi/системные аудиты и
-  LTE-диагностика с юстировкой. Локальный RSSI самого Mac появится позже через
-  запланированную нативную реализацию CoreWLAN.
-- GitHub Actions теперь одновременно собирает Android и macOS под Apple Silicon
-  и добавляет оба файла в единый релиз версии.
+- Исправлено зависание macOS при чтении локального Wi-Fi-адаптера. У каждого
+  платформенного вызова теперь есть жёсткий таймаут, независимые сведения
+  читаются параллельно, а потенциально зависающий поиск шлюза на Mac пропущен.
+- Сборка macOS больше не запускает системные процессы ICMP `ping`. Sandbox
+  остаётся только клиентским, а после закрытия или kill приложения не остаются
+  сиротские процессы с высокой загрузкой CPU.
+- Десктопный дашборд прямо сообщает, что текущий плагин не отдаёт локальный
+  RSSI Mac. Сигнал со стороны роутера, аудиты RouterOS и все LTE-инструменты
+  продолжают работать.
+- На Android ping до шлюза сохранён; каждый процесс теперь явно завершается
+  после ответа, таймаута, отключения или уничтожения контроллера.
 
 Файлы:
 
-- `wifi-signal-tester-0.3.1.apk` — Android;
-- `wifi-signal-tester-0.3.1-macos-arm64.zip` — распакуй, внутри будет
+- `wifi-signal-tester-0.3.2.apk` — Android;
+- `wifi-signal-tester-0.3.2-macos-arm64.zip` — распакуй, внутри будет
   `Wi-Fi Signal Tester.app` для Mac на Apple Silicon.
 
 Сборка для Mac пока предназначена для тестирования и не подписана Developer ID

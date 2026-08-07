@@ -107,6 +107,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       network access, desktop-safe Android plugin fallbacks
 - [x] GitHub Actions macOS ARM64 build: package `.app` as ZIP and publish it
       beside the Android APK in the same versioned release
+- [x] Bound macOS adapter queries and disable subprocess ICMP ping there; do
+      not add the broader incoming-network sandbox entitlement just for ping
 - [ ] Native macOS Wi-Fi facts via CoreWLAN (RSSI, noise, frequency/channel,
       SSID/BSSID where privacy permissions allow) and a real-Mac field test
 - [ ] Package, Developer ID sign and notarize the macOS app for distribution

@@ -321,6 +321,7 @@ class _Dashboard extends StatelessWidget {
     final phone = ctrl.phoneSignal;
     final ap = ctrl.stationSignal;
     final l = context.watch<SettingsController>().l;
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -346,10 +347,19 @@ class _Dashboard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SignalCard(
-          title: l.t('PHONE → hears AP', 'ТЕЛЕФОН → слышит точку'),
-          icon: Icons.smartphone,
+          title: isMacOS
+              ? l.t('MAC → hears AP', 'MAC → слышит точку')
+              : l.t('PHONE → hears AP', 'ТЕЛЕФОН → слышит точку'),
+          icon: isMacOS ? Icons.laptop_mac : Icons.smartphone,
           accent: AppTheme.phoneAccent,
           signalDbm: phone?.rssiDbm,
+          emptyHint: isMacOS && phone?.rssiDbm == null
+              ? l.t(
+                  'macOS does not expose local RSSI through the current plugin. '
+                      'Router-side signal, audits and LTE tools continue to work.',
+                  'Текущий плагин macOS не отдаёт локальный RSSI. Сигнал со '
+                      'стороны роутера, аудиты и LTE-инструменты продолжают работать.')
+              : null,
           metrics: [
             MetricTile(
               label: ctrl.phoneSnrIsEstimate ? 'SNR est.' : 'SNR',

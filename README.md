@@ -140,9 +140,11 @@ Copy that `.apk` to your Android device to install it.
 
 The initial Mac target supports RouterOS connection, audits and LTE tools. The
 current Android-only `wifi_iot` plugin cannot provide the Mac's local RSSI and
-frequency yet; a native CoreWLAN implementation is tracked in TODO. A locally
-built `.app` is suitable for testing. Distribution to other Macs additionally
-requires Developer ID signing and Apple notarization.
+frequency yet; a native CoreWLAN implementation is tracked in TODO. The Mac
+build also avoids spawning a sandboxed system `ping`, so gateway latency is
+currently Android-only. A locally built `.app` is suitable for testing.
+Distribution to other Macs additionally requires Developer ID signing and
+Apple notarization.
 
 ## MikroTik side
 

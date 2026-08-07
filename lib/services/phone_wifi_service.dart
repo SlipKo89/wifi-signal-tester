@@ -30,19 +30,45 @@ class LocationAccess {
 class PhoneWifiService {
   final NetworkInfo _info = NetworkInfo();
   static const _native = MethodChannel('wifi_apk/phone');
+  final bool _isMacOS;
+  final Duration queryTimeout;
+  final Future<String?> Function()? _wifiNameReader;
+  final Future<String?> Function()? _wifiBssidReader;
+  final Future<String?> Function()? _wifiIpReader;
+  final Future<String?> Function()? _gatewayReader;
+
+  PhoneWifiService({
+    bool? isMacOS,
+    this.queryTimeout = const Duration(seconds: 2),
+    Future<String?> Function()? wifiNameReader,
+    Future<String?> Function()? wifiBssidReader,
+    Future<String?> Function()? wifiIpReader,
+    Future<String?> Function()? gatewayReader,
+  })  : _isMacOS = isMacOS ?? Platform.isMacOS,
+        _wifiNameReader = wifiNameReader,
+        _wifiBssidReader = wifiBssidReader,
+        _wifiIpReader = wifiIpReader,
+        _gatewayReader = gatewayReader;
 
   Future<PhoneSignal> read() async {
-    final ssid = _clean(await _safe(_info.getWifiName));
-    final bssid = _clean(await _safe(_info.getWifiBSSID));
-    final ip = await _safe(_info.getWifiIP);
-    final gateway = await _safe(_info.getWifiGatewayIP);
-    // wifi_iot has no macOS implementation. Keep the desktop build useful for
-    // RouterOS and LTE work while treating local RSSI/frequency as unavailable.
-    final rssiPlugin = Platform.isMacOS
-        ? null
-        : await _safe(WiFiForIoTPlugin.getCurrentSignalStrength);
-    final freqPlugin =
-        Platform.isMacOS ? null : await _safe(WiFiForIoTPlugin.getFrequency);
+    if (_isMacOS) return _readMacOS();
+
+    // Run independent platform calls together. A stuck OEM/plugin call is
+    // bounded by [_safe], so one poll can never freeze live monitoring.
+    final facts = await Future.wait<Object?>([
+      _safe<String>(_wifiNameReader ?? _info.getWifiName),
+      _safe<String>(_wifiBssidReader ?? _info.getWifiBSSID),
+      _safe<String>(_wifiIpReader ?? _info.getWifiIP),
+      _safe<String>(_gatewayReader ?? _info.getWifiGatewayIP),
+      _safe<int>(WiFiForIoTPlugin.getCurrentSignalStrength),
+      _safe<int>(WiFiForIoTPlugin.getFrequency),
+    ]);
+    final ssid = _clean(facts[0] as String?);
+    final bssid = _clean(facts[1] as String?);
+    final ip = facts[2] as String?;
+    final gateway = facts[3] as String?;
+    final rssiPlugin = facts[4] as int?;
+    final freqPlugin = facts[5] as int?;
 
     // Richer facts from the native WifiManager (link speed, standard, security).
     final n = await _nativeInfo();
@@ -63,9 +89,46 @@ class PhoneWifiService {
     );
   }
 
+  Future<PhoneSignal> _readMacOS() async {
+    // wifi_iot and the Android MethodChannel do not exist on macOS. CoreWLAN
+    // SSID/BSSID are best-effort; resolve the Wi-Fi IP in Dart and deliberately
+    // skip network_info_plus's synchronous gateway sysctl path.
+    final facts = await Future.wait<String?>([
+      _safe<String>(_wifiNameReader ?? _info.getWifiName),
+      _safe<String>(_wifiBssidReader ?? _info.getWifiBSSID),
+      _safe<String>(_wifiIpReader ?? _macWifiIp),
+    ]);
+    return PhoneSignal(
+      ssid: _clean(facts[0]),
+      bssid: _clean(facts[1]),
+      ipAddress: facts[2],
+    );
+  }
+
+  Future<String?> _macWifiIp() async {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLoopback: false,
+    );
+    final ordered = [
+      ...interfaces.where((i) => i.name == 'en0'),
+      ...interfaces.where((i) => i.name != 'en0' && i.name.startsWith('en')),
+    ];
+    for (final interface in ordered) {
+      for (final address in interface.addresses) {
+        if (!address.isLoopback && !address.address.startsWith('169.254.')) {
+          return address.address;
+        }
+      }
+    }
+    return null;
+  }
+
   Future<Map?> _nativeInfo() async {
     try {
-      return await _native.invokeMapMethod<String, dynamic>('info');
+      return await _native
+          .invokeMapMethod<String, dynamic>('info')
+          .timeout(queryTimeout);
     } catch (_) {
       return null;
     }
@@ -118,7 +181,7 @@ class PhoneWifiService {
   Future<LocationAccess> ensureLocationAccess() async {
     // permission_handler does not register a macOS plugin in this project.
     // NetworkInfo remains best-effort there, without an Android GPS warning.
-    if (Platform.isMacOS) return const LocationAccess(true, true);
+    if (_isMacOS) return const LocationAccess(true, true);
     try {
       final status = await Permission.locationWhenInUse.request();
       final serviceOn = await Permission.location.serviceStatus.isEnabled;
@@ -130,7 +193,7 @@ class PhoneWifiService {
 
   Future<T?> _safe<T>(Future<T?> Function() fn) async {
     try {
-      return await fn();
+      return await fn().timeout(queryTimeout);
     } catch (_) {
       return null;
     }
