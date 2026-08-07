@@ -2,7 +2,8 @@
 
 *Русская версия — [README.ru.md](README.ru.md)*
 
-A Flutter app (Android now, iOS later) for **testing Wi-Fi from both sides**.
+A Flutter app (Android plus an initial macOS target, iOS later) for **testing
+Wi-Fi from both sides**.
 Regular analyzers show only how your phone hears the access point. For real
 site-survey work you also need to know **how the access point hears your
 device** — signal, SNR, rates. This app reads that from a MikroTik (running
@@ -83,9 +84,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 
 ## Requirements (build machine — macOS)
 
-You need Flutter, a JDK 17, and the Android SDK. On this Mac, Homebrew and Xcode
-are present but **Flutter, the Android SDK and a modern JDK are not** — install
-them:
+Android builds need Flutter, JDK 17 and the Android SDK. Native Mac builds need
+Flutter, the full Xcode application and CocoaPods. Xcode Command Line Tools
+alone are not enough.
 
 ```bash
 # 1) JDK 17 (the bundled Java 8 is too old for the Android toolchain)
@@ -101,6 +102,12 @@ brew install --cask android-studio
 # 4) Point tooling at the JDK and accept Android licenses
 flutter config --jdk-dir "$(/usr/libexec/java_home -v 17)"
 flutter doctor --android-licenses
+
+# 5) For the macOS app (install Xcode from the App Store first)
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -runFirstLaunch
+brew install cocoapods
+
 flutter doctor              # fix anything still flagged
 ```
 
@@ -112,15 +119,24 @@ flutter doctor              # fix anything still flagged
 
 ```bash
 cd wifi-apk
-./scripts/bootstrap.sh        # generates android/ & ios/, runs flutter pub get
+./scripts/bootstrap.sh        # generates platform runners, runs flutter pub get
 
 # add permissions once — see docs/android-setup.md
 
 flutter run                   # on a connected phone (USB debugging on)
 flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.apk
+
+flutter run -d macos          # run the desktop app
+flutter build macos --release # → build/macos/Build/Products/Release/
 ```
 
 Copy that `.apk` to your Android device to install it.
+
+The initial Mac target supports RouterOS connection, audits and LTE tools. The
+current Android-only `wifi_iot` plugin cannot provide the Mac's local RSSI and
+frequency yet; a native CoreWLAN implementation is tracked in TODO. A locally
+built `.app` is suitable for testing. Distribution to other Macs additionally
+requires Developer ID signing and Apple notarization.
 
 ## MikroTik side
 

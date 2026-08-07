@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Initial macOS target** with the proper Wi-Fi Signal Tester product name,
+  app sandboxing and outgoing/local-network access needed to read explicitly
+  configured MikroTik routers. RouterOS audits and LTE diagnostics share the
+  existing read-only transports. Android-only RSSI and permission plugins are
+  skipped cleanly; native Mac Wi-Fi RSSI remains a tracked follow-up.
 - **Persistent LTE measurement history**: the LTE dashboard can record every
   poll into a local, named session. Sessions show RSRP/RSRQ/SINR/RSSI/CQI
   min/average/max/spread, radio/cell facts, can be renamed or exported as CSV,

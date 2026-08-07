@@ -2,8 +2,8 @@
 
 *English version — [README.md](README.md)*
 
-Приложение на Flutter (сейчас Android, позже iOS) для **тестирования Wi-Fi с
-двух сторон**. Обычные анализаторы показывают только то, как телефон слышит
+Приложение на Flutter (Android и первый вариант под macOS, позже iOS) для
+**тестирования Wi-Fi с двух сторон**. Обычные анализаторы показывают только то, как телефон слышит
 точку доступа. Для реального обследования нужно ещё и то, **как точка слышит
 ваше устройство** — сигнал, SNR, скорости. Приложение читает это с MikroTik (с
 CAPsMAN или обычным Wi-Fi) **только на чтение**, **только для MAC вашего
@@ -84,8 +84,9 @@ Android-устройство.
 
 ## Что поставить на ноут (macOS)
 
-Нужны Flutter, JDK 17 и Android SDK. На этом маке Homebrew и Xcode есть, а вот
-**Flutter, Android SDK и свежая Java — нет**. Ставим:
+Для Android нужны Flutter, JDK 17 и Android SDK. Для нативной сборки под Mac
+нужны Flutter, полное приложение Xcode и CocoaPods. Одних Xcode Command Line
+Tools недостаточно.
 
 ```bash
 # 1) JDK 17 (встроенная Java 8 слишком старая для Android-тулчейна)
@@ -101,6 +102,12 @@ brew install --cask android-studio
 # 4) Указать тулчейну JDK и принять лицензии Android
 flutter config --jdk-dir "$(/usr/libexec/java_home -v 17)"
 flutter doctor --android-licenses
+
+# 5) Для приложения macOS (сначала установить Xcode из App Store)
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -runFirstLaunch
+brew install cocoapods
+
 flutter doctor              # починить всё, что подсветит
 ```
 
@@ -112,15 +119,24 @@ flutter doctor              # починить всё, что подсветит
 
 ```bash
 cd wifi-apk
-./scripts/bootstrap.sh        # создаёт android/ и ios/, делает flutter pub get
+./scripts/bootstrap.sh        # создаёт платформенные runner-ы, делает pub get
 
 # один раз добавить разрешения — см. docs/android-setup.md
 
 flutter run                   # на подключённом телефоне (включён USB-debug)
 flutter build apk --release   # → build/app/outputs/flutter-apk/app-release.apk
+
+flutter run -d macos          # запустить настольное приложение
+flutter build macos --release # → build/macos/Build/Products/Release/
 ```
 
 Готовый `.apk` копируем на телефон и ставим.
+
+Первый вариант под Mac уже умеет подключаться к RouterOS, запускать аудиты и
+LTE-инструменты. Android-плагин `wifi_iot` пока не умеет отдавать локальные RSSI
+и частоту самого Mac — нативная реализация через CoreWLAN записана в TODO.
+Локально собранный `.app` подходит для тестирования; для распространения на
+другие Mac понадобится подпись Developer ID и notarization у Apple.
 
 ## Сторона MikroTik
 

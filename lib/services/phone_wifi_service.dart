@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -34,8 +36,13 @@ class PhoneWifiService {
     final bssid = _clean(await _safe(_info.getWifiBSSID));
     final ip = await _safe(_info.getWifiIP);
     final gateway = await _safe(_info.getWifiGatewayIP);
-    final rssiPlugin = await _safe(WiFiForIoTPlugin.getCurrentSignalStrength);
-    final freqPlugin = await _safe(WiFiForIoTPlugin.getFrequency);
+    // wifi_iot has no macOS implementation. Keep the desktop build useful for
+    // RouterOS and LTE work while treating local RSSI/frequency as unavailable.
+    final rssiPlugin = Platform.isMacOS
+        ? null
+        : await _safe(WiFiForIoTPlugin.getCurrentSignalStrength);
+    final freqPlugin =
+        Platform.isMacOS ? null : await _safe(WiFiForIoTPlugin.getFrequency);
 
     // Richer facts from the native WifiManager (link speed, standard, security).
     final n = await _nativeInfo();
@@ -109,6 +116,9 @@ class PhoneWifiService {
   /// Requests location permission (needed for SSID/BSSID) and reports whether
   /// the location master switch is on. Never changes anything else on the phone.
   Future<LocationAccess> ensureLocationAccess() async {
+    // permission_handler does not register a macOS plugin in this project.
+    // NetworkInfo remains best-effort there, without an Android GPS warning.
+    if (Platform.isMacOS) return const LocationAccess(true, true);
     try {
       final status = await Permission.locationWhenInUse.request();
       final serviceOn = await Permission.location.serviceStatus.isEnabled;

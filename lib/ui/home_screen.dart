@@ -648,7 +648,7 @@ class _ConnectionSummary extends StatelessWidget {
       if (phone?.bssid != null) phone!.bssid!,
     ].join('  ·  ');
     // Only nag about location when we're connected but the name is hidden.
-    final showHint = connected && phone?.ssid == null;
+    final showHint = locationIssue && connected && phone?.ssid == null;
 
     return Card(
       child: Padding(

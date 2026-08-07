@@ -103,6 +103,11 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Short screen-recording / GIF of a walk-around survey for the README
 
 ## Later (v0.3+)
+- [x] Initial macOS runner: correct app identity, sandboxed outbound/local
+      network access, desktop-safe Android plugin fallbacks
+- [ ] Native macOS Wi-Fi facts via CoreWLAN (RSSI, noise, frequency/channel,
+      SSID/BSSID where privacy permissions allow) and a real-Mac field test
+- [ ] Package, Developer ID sign and notarize the macOS app for distribution
 - [ ] iOS build pass + platform-specific Wi-Fi permission flows
 - [ ] Localization framework (proper i18n, not hardcoded RU/EN strings)
 - [ ] Optional read-only user auto-check (warn if the API user has write policy)
