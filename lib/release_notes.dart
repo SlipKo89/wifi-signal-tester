@@ -9,6 +9,19 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.3.0', '2026-08-07', [
+    'Separate MikroTik LTE diagnostics over REST, binary API or read-only SSH',
+    'Guided antenna alignment with live RSRP/RSRQ/SINR charts, stable checkpoints and return-to-best directions',
+    'LTE diagnosis distinguishes weak coverage from interference and marks serving band/cell handoffs',
+    'Wi-Fi connection diagnosis can be run manually or automatically after a configurable post-roam delay',
+    'Long access-point names and LTE verdict cards are now responsive and use consistent severity colours',
+  ], [
+    'Отдельная LTE-диагностика MikroTik через REST, бинарный API или SSH только на чтение',
+    'Мастер юстировки антенны: живые графики RSRP/RSRQ/SINR, устойчивые точки и возврат к лучшей позиции',
+    'LTE-диагностика различает слабое покрытие и помехи, а также отмечает смену диапазона/соты',
+    'Анализ Wi-Fi-соединения запускается вручную или автоматически после настраиваемой паузы при роуминге',
+    'Длинные имена точек и LTE-вердикты стали адаптивными и используют согласованные цвета важности',
+  ]),
   Release('0.2.5', '2026-08-06', [
     'Support ZIP with readable/structured diagnostics and an in-memory event log',
     'Network identifiers are masked by default; credentials and raw RouterOS responses are never included',

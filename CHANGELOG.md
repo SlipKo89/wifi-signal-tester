@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-07
+
 ### Added
 - **Guided LTE antenna alignment assistant** with separate live RSRP, RSRQ and
   SINR charts. The operator records a stable baseline, moves the dish by one
@@ -365,7 +367,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.2...v0.2.3

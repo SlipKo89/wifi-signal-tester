@@ -1,37 +1,39 @@
-# Wi-Fi Signal Tester 0.2.5
+# Wi-Fi Signal Tester 0.3.0
 
-- Support diagnostics can be exported explicitly as a ZIP containing a
-  readable report, structured JSON, a bounded event log and a privacy note.
-- Network identifiers are masked by default. Passwords, tokens, private keys,
-  raw RouterOS responses and full client lists are never included.
-- Connection failures now have bilingual explanations, stable support codes
-  and relevant Retry, Edit connection and Support report actions.
-- The binary RouterOS API reconnects once and replays login after an idle socket
-  is closed while Android is in the background.
-- A push or merge to `main` now creates the version tag and GitHub Release
-  automatically; no manual tag is required.
+- Separate MikroTik LTE diagnostics over REST, the binary API or read-only SSH,
+  with RSRP, RSRQ, SINR, optional RSSI/CQI, serving-cell facts and practical
+  weak-signal/interference advice.
+- Guided antenna alignment records stable checkpoints, shows separate live
+  RSRP/RSRQ/SINR charts, proposes relative movements and guides the operator
+  back to the best measured position for a finer pass.
+- Wi-Fi connection diagnosis can now be started manually or automatically
+  after a configurable post-roam settling delay.
+- LTE verdict colours and wording now consistently distinguish usable weak
+  coverage from genuinely critical radio conditions.
+- Long access-point names remain inside their cards on narrow phone screens.
 
-Download `wifi-signal-tester-0.2.5.apk` below and install it on your Android
+Download `wifi-signal-tester-0.3.0.apk` below and install it on your Android
 device (allow installs from unknown sources when prompted).
 
 See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 ---
 
-# Wi-Fi Signal Tester 0.2.5
+# Wi-Fi Signal Tester 0.3.0
 
-- Диагностика для поддержки вручную выгружается в ZIP: читаемый отчёт,
-  структурированный JSON, ограниченный журнал событий и памятка о приватности.
-- Сетевые идентификаторы скрыты по умолчанию. Пароли, токены, приватные ключи,
-  сырые ответы RouterOS и полные списки клиентов не попадают в архив никогда.
-- Ошибки подключения получили двуязычные объяснения, стабильные коды и кнопки
-  повтора, изменения подключения и создания отчёта.
-- Бинарный API RouterOS один раз переподключается и повторяет вход, если Android
-  или RouterOS закрыли неактивный сокет в фоне.
-- Push или merge в `main` теперь сам создаёт тег версии и GitHub Release —
-  вручную создавать тег не требуется.
+- Отдельная LTE-диагностика MikroTik через REST, бинарный API или SSH только на
+  чтение: RSRP, RSRQ, SINR, RSSI/CQI при наличии, сведения о соте и понятные
+  советы по слабому сигналу и помехам.
+- Мастер юстировки фиксирует устойчивые контрольные точки, отдельно показывает
+  RSRP/RSRQ/SINR, предлагает относительные движения и ведёт оператора обратно к
+  лучшей позиции для точного прохода.
+- Анализ Wi-Fi-соединения теперь запускается вручную либо автоматически после
+  настраиваемой паузы при роуминге.
+- Цвет и текст LTE-вердикта согласованы: рабочий слабый сигнал больше не
+  выглядит критической ошибкой.
+- Длинные названия точек не вылезают из карточек на узких экранах телефона.
 
-Скачай `wifi-signal-tester-0.2.5.apk` ниже и установи на Android-устройство
+Скачай `wifi-signal-tester-0.3.0.apk` ниже и установи на Android-устройство
 (разреши установку из неизвестных источников, когда телефон спросит).
 
 Полная история изменений — в [CHANGELOG.md](../blob/main/CHANGELOG.md).
