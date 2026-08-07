@@ -11,7 +11,11 @@ class _FakeMikrotikService extends MikrotikService {
   }
 
   @override
-  Future<List<Map<String, String>>> readMenu(String path) async {
+  Future<List<Map<String, String>>> readMenu(
+    String path, {
+    Map<String, String>? filters,
+    List<String>? fields,
+  }) async {
     reads.add(path);
     return menus[path] ?? const [];
   }

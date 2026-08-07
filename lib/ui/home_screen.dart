@@ -21,6 +21,7 @@ import 'settings_screen.dart';
 import 'support_diagnostics_screen.dart';
 import 'theme.dart';
 import 'whats_new.dart';
+import 'wifi_log_screen.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/failure_banner.dart';
 import 'widgets/metric_tile.dart';
@@ -134,6 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   open(const AuditScreen(phone: true));
                 case 'devices':
                   open(const DevicesScreen());
+                case 'wifi_logs':
+                  open(const WifiLogScreen());
                 case 'lte':
                   open(const LteScreen());
                 case 'reference':
@@ -173,6 +176,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 PopupMenuItem(
                   value: 'devices',
                   child: Text(l.t('Devices', 'Устройства')),
+                ),
+              if (connected && !ctrl.phoneOnly)
+                PopupMenuItem(
+                  value: 'wifi_logs',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.event_note_outlined, size: 19),
+                      const SizedBox(width: 10),
+                      Text(l.t('Wi-Fi events', 'События Wi-Fi')),
+                    ],
+                  ),
                 ),
               const PopupMenuDivider(),
               PopupMenuItem(

@@ -1,5 +1,13 @@
 # Wi-Fi Signal Tester 0.3.2
 
+- Added read-only RouterOS Wi-Fi event analysis for the current phone and any
+  currently-associated device selected from the Devices screen. It explains
+  explicit disconnect, access-list, authentication, weak-radio, DFS and
+  CAP/CAPsMAN control-path events, and measures reconnect/roaming gaps.
+- REST, binary API and SSH produce the same normalized report; Auto remains the
+  recommended transport setting. Only `time`, `topics` and `message` are read,
+  with at most the latest 2,000 rows analyzed per router. Raw logs and unrelated
+  client MACs are not retained, and logging settings are never changed.
 - The macOS app now carries a visible `macOS ALPHA` badge in its title bar and
   About dialog. The dialog also explains which desktop-preview features are
   still incomplete; the Android interface is unchanged.
@@ -30,6 +38,14 @@ See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 # Wi-Fi Signal Tester 0.3.2
 
+- Добавлен read-only анализ событий Wi-Fi из RouterOS для текущего телефона и
+  любого подключённого устройства, выбранного на экране «Устройства». Он
+  объясняет явные причины разрывов, access-list, аутентификации, слабого
+  радиоканала, DFS и сбоев CAP/CAPsMAN, а также измеряет время роуминга.
+- REST, binary API и SSH формируют одинаковый нормализованный отчёт; Auto
+  остаётся рекомендуемым выбором транспорта. Читаются только `time`, `topics` и
+  `message`, анализируются максимум 2000 последних строк каждого роутера. Сырые
+  логи и MAC посторонних клиентов не сохраняются, настройки логов не меняются.
 - В верхней панели и окне «О программе» сборка теперь явно помечена бейджем
   `macOS ALPHA`. Там же перечислены ещё не готовые части десктопной версии;
   интерфейс Android не изменился.

@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.2] - 2026-08-08
 
+### Added
+- **Read-only RouterOS Wi-Fi event analysis** for the current phone or any
+  currently-associated device selected from the Devices screen. It recognizes
+  client connect/disconnect and association attempts, access-list rejects,
+  authentication/key-exchange failures, weak-signal policies, extensive radio
+  loss, DFS radar events and CAP/CAPsMAN control-path failures.
+- **Measured reconnect and roaming gaps** from RouterOS log timestamps, with
+  confirmed/likely/context confidence labels and bilingual explanations.
+
+### Security
+- Log analysis requests only `time`, `topics` and `message`, examines at most
+  the newest 2,000 rows per router, retains normalized events only and never
+  stores raw logs or unrelated client MAC addresses. The app only reads
+  `/system/logging`; it never enables debug topics or changes the router.
+- REST, binary API and SSH share the same analysis. Transport selection remains
+  automatic; binary/REST use field projection and SSH projects locally.
+
 ### Changed
 - macOS builds now show a persistent `macOS ALPHA` badge in the title bar and
   About dialog, with a concise explanation of the desktop preview limitations.

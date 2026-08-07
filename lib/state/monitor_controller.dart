@@ -10,12 +10,15 @@ import '../diagnostics/link_diagnostics.dart';
 import '../diagnostics/support_bundle.dart';
 import '../history/history_store.dart';
 import '../mikrotik/mikrotik_service.dart';
+import '../mikrotik/router_os_transport.dart' show RouterOsException;
 import '../models/phone_signal.dart';
 import '../models/station_signal.dart';
 import '../models/wireless_stack.dart';
 import '../services/beeper.dart';
 import '../services/phone_wifi_service.dart';
 import '../services/ping_service.dart';
+import '../wifi_logs/wifi_log_analysis.dart';
+import '../wifi_logs/wifi_log_service.dart';
 
 enum MonitorState { idle, connecting, connected, error }
 
@@ -29,6 +32,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   final List<MikrotikService> _routers = [];
   final PhoneWifiService _phone = PhoneWifiService();
   final DeviceInfoService _deviceInfo = DeviceInfoService();
+  final WifiLogService _wifiLogService = WifiLogService();
   final DateTime _startedAt = DateTime.now();
 
   MonitorController() {
@@ -130,6 +134,49 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   /// Our MAC as last resolved from ARP (re-resolved every poll).
   String? _ourMac;
 
+  /// Last explicit, read-only RouterOS log analysis. Raw router logs are never
+  /// retained here; the report contains normalized events for one selected MAC
+  /// plus a small whitelist of AP infrastructure events.
+  WifiLogReport? lastWifiLogReport;
+
+  Future<WifiLogReport> analyzeWifiLogs({
+    String? targetMac,
+    String? targetLabel,
+    String? targetInterface,
+  }) async {
+    if (_routers.isEmpty) {
+      throw RouterOsException('Connect to a MikroTik first');
+    }
+    final selectedMac = targetMac ?? _ourMac;
+    if (selectedMac == null || selectedMac.isEmpty) {
+      throw RouterOsException(
+          'Could not resolve the selected device MAC address');
+    }
+    final sources = await Future.wait(
+      _routers.map(_wifiLogService.readSource),
+    );
+    final report = WifiLogAnalyzer.analyze(
+      targetMac: selectedMac,
+      targetLabel: targetLabel,
+      targetInterface: targetInterface ?? stationSignal?.interfaceName,
+      sources: sources,
+    );
+    lastWifiLogReport = report;
+    diagnosticLog.record(
+      'WIFI-LOG-ANALYSIS',
+      'Read-only Wi-Fi log analysis completed',
+      details: {
+        'router_count': sources.length,
+        'rows_scanned': report.rowsScanned,
+        'normalized_event_count': report.events.length,
+        'severity': report.severity.name,
+        'debug_logging_available': report.hasDebug,
+      },
+    );
+    notifyListeners();
+    return report;
+  }
+
   /// True when the phone isn't on Wi-Fi (e.g. switched to mobile data).
   bool offWifi = false;
 
@@ -230,6 +277,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     phoneOnly = false;
     failure = null;
     _connectionWarning = null;
+    lastWifiLogReport = null;
     _lastConfigs = List.unmodifiable(cfgs);
     diagnosticLog.record(
       'CONNECT-START',
@@ -289,6 +337,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     state = MonitorState.connected;
     _serving = null;
     _ourMac = null;
+    lastWifiLogReport = null;
     _connectionWarning = failures.isEmpty
         ? null
         : AppFailure.partial(failures.length, cfgs.length);
@@ -301,6 +350,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   /// Monitor only the phone's own Wi-Fi, no router connection.
   Future<void> startPhoneOnly() async {
     _sessionGeneration++;
+    lastWifiLogReport = null;
     final access = await _phone.ensureLocationAccess();
     locationGranted = access.granted;
     locationServiceOn = access.serviceOn;
@@ -867,6 +917,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     _serving = null;
     connectedApName = null;
     _ourMac = null;
+    lastWifiLogReport = null;
     downKbps = upKbps = null;
     _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
     routerResource = null;
@@ -1055,6 +1106,17 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
           'phone_rssi_history': List<int>.of(phoneHistory),
           'ap_rssi_history': List<int>.of(apHistory),
         },
+        if (lastWifiLogReport != null)
+          'wifi_log_analysis': {
+            'severity': lastWifiLogReport!.severity.name,
+            'rows_scanned': lastWifiLogReport!.rowsScanned,
+            'debug_logging_available': lastWifiLogReport!.hasDebug,
+            'event_count': lastWifiLogReport!.events.length,
+            'handoff_count': lastWifiLogReport!.handoffs.length,
+            'event_kinds': [
+              for (final event in lastWifiLogReport!.events) event.kind.name,
+            ],
+          },
         if (failure != null) 'last_failure': failure!.toJson(),
       },
     );

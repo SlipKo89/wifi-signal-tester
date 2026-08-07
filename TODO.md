@@ -64,10 +64,16 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Roam counter (AP switches this session)
 - [ ] Audit: extend to WifiWave2 (/interface/wifi) config
 - [ ] Audit: PMF/802.11w recommendation (careful — "required" drops old clients)
-- [ ] Wireless log analysis — /log is often huge (12k+ entries) and wifi
-      logging is off by default; needs a filtered/limited read + "enable
-      topic wireless/caps" hint. Deferred
-- [ ] Roaming handoff time (proper reconnect-speed measurement, not just count)
+- [x] Passive wireless/CAPsMAN log analysis for one selected MAC: projected
+      `time/topics/message`, newest 2k rows per router, normalized event model,
+      explicit reason/confidence, infrastructure whitelist and no raw-log
+      retention. Works through REST, binary API and SSH; reports missing debug
+      without ever enabling it
+- [x] Roaming/reconnect handoff time from paired RouterOS disconnect/connect
+      timestamps (millisecond precision where the router provides it)
+- [ ] Bounded live log-capture session and a field-tested pattern corpus for
+      classic wireless, legacy CAPsMAN and several `/interface/wifi` RouterOS
+      versions; add optional RADIUS/dot1x correlation without packet/raw logs
 - [ ] Verify PDF export on a real device (built, not yet field-tested)
 - [x] Phone-only mode + phone-side audit (native WifiManager facts)
 - [x] Inspect currently associated third-party devices (AP-side signal),
@@ -135,7 +141,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 ### B. New diagnostic features
 - [ ] Pass/Fail site-survey mode driven by the thresholds above
 - [ ] CAPsMAN roaming tracking — log which AP/radio the client sits on over time,
-      catch sticky-client / handover issues
+      catch sticky-client / handover issues (recent log handoffs are parsed;
+      persistent sessions and sticky-client trends remain)
 - [ ] Named measurement spots ("kitchen") with min/max/avg over a dwell window,
       compare spots
 - [x] Ping / latency probe to the gateway alongside signal (correlate signal↔lag)

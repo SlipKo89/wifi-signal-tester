@@ -12,9 +12,12 @@ abstract class RouterOsTransport {
   ///
   /// [filters] are equality filters (`key == value`). Implementations may
   /// apply them server-side or client-side; callers must not rely on which.
+  /// [fields] limits returned properties. It is a performance hint only: all
+  /// implementations still project the rows locally before returning them.
   Future<List<Map<String, String>>> read(
     String menuPath, {
     Map<String, String>? filters,
+    List<String>? fields,
   });
 
   /// Runs a read-only command that isn't a plain print — e.g. `monitor once`
@@ -28,6 +31,29 @@ abstract class RouterOsTransport {
 
   /// Human-readable transport name for the UI ("REST" / "API").
   String get kind;
+}
+
+final _readFieldName = RegExp(r'^[A-Za-z0-9._-]+$');
+
+/// Keeps field projections safe for transports that place them in a RouterOS
+/// command sentence. Callers only use constants, but the transport boundary
+/// validates them as defence in depth.
+void validateReadFields(List<String>? fields) {
+  if (fields == null) return;
+  if (fields.any((field) => field.isEmpty || !_readFieldName.hasMatch(field))) {
+    throw RouterOsException('Invalid read field projection');
+  }
+}
+
+Map<String, String> projectReadFields(
+  Map<String, String> row,
+  List<String>? fields,
+) {
+  if (fields == null || fields.isEmpty) return row;
+  return {
+    for (final field in fields)
+      if (row.containsKey(field)) field: row[field]!,
+  };
 }
 
 /// User preference for choosing one of the read-only RouterOS transports.

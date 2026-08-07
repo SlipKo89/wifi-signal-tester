@@ -8,6 +8,7 @@ import '../models/station_signal.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import 'theme.dart';
+import 'wifi_log_screen.dart';
 
 class _Dev {
   final StationSignal station;
@@ -303,6 +304,28 @@ class _DeviceSheet extends StatelessWidget {
                 if (s.rxCcq != null) _tile('RX CCQ', '${s.rxCcq}%'),
                 if (s.uptime != null) _tile(l.t('Uptime', 'Аптайм'), s.uptime!),
               ]),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => WifiLogScreen(
+                          targetMac: dev.mac,
+                          targetLabel: dev.name,
+                          targetInterface: s.interfaceName,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.event_note_outlined),
+                  label: Text(
+                    l.t('Analyze Wi-Fi events', 'Анализировать события Wi-Fi'),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

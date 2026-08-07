@@ -89,10 +89,14 @@ class MikrotikService {
       bssid == null ? null : _bssidToAp[bssid.toLowerCase()];
 
   /// Reads any menu directly (read-only) — used by the config audit.
-  Future<List<Map<String, String>>> readMenu(String path) async {
+  Future<List<Map<String, String>>> readMenu(
+    String path, {
+    Map<String, String>? filters,
+    List<String>? fields,
+  }) async {
     final t = _transport;
     if (t == null) throw RouterOsException('Not connected');
-    return t.read(path);
+    return t.read(path, filters: filters, fields: fields);
   }
 
   /// Router health: cpu-load, version, board-name, uptime, free/total memory.

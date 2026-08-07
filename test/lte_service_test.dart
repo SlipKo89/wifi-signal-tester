@@ -22,6 +22,14 @@ void main() {
       ),
       throwsA(isA<RouterOsException>()),
     );
+    expect(
+      () => validateReadFields(const ['time', 'topics', 'message']),
+      returnsNormally,
+    );
+    expect(
+      () => validateReadFields(const ['message; /system reboot']),
+      throwsA(isA<RouterOsException>()),
+    );
   });
 
   test('LTE auto fallback uses the first transport that can read LTE',
@@ -132,8 +140,11 @@ class _FakeTransport implements RouterOsTransport {
   Future<List<Map<String, String>>> read(
     String menuPath, {
     Map<String, String>? filters,
+    List<String>? fields,
   }) async =>
-      reads[menuPath] ?? const [];
+      (reads[menuPath] ?? const [])
+          .map((row) => projectReadFields(row, fields))
+          .toList();
 
   @override
   Future<List<Map<String, String>>> command(

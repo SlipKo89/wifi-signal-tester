@@ -161,7 +161,9 @@ class SshTransport implements RouterOsTransport {
   Future<List<Map<String, String>>> read(
     String menuPath, {
     Map<String, String>? filters,
+    List<String>? fields,
   }) async {
+    validateReadFields(fields);
     final menu = _consoleMenu(menuPath);
     final isRegTable = menuPath.endsWith('registration-table');
 
@@ -172,11 +174,13 @@ class SshTransport implements RouterOsTransport {
     //   * `print` — single-record menus (e.g. /system/resource) reject both of
     //     the above and answer with an aligned `label: value` block.
     final variants = [if (isRegTable) 'print stats', 'print terse', 'print'];
+    final projection =
+        fields == null || fields.isEmpty ? '' : ' proplist=${fields.join(',')}';
 
     var rows = <Map<String, String>>[];
     String? lastError;
     for (final variant in variants) {
-      final out = await _run('$menu $variant');
+      final out = await _run('$menu $variant$projection');
       if (_isSyntaxError(out)) {
         lastError = out.trim().split('\n').first;
         continue; // this flavour isn't supported here — try the next
@@ -202,12 +206,18 @@ class SshTransport implements RouterOsTransport {
       if (!_isSyntaxError(terse)) _mergeByMac(rows, parseRecords(terse));
     }
 
-    if (filters == null || filters.isEmpty) return rows;
-    // Filtering client-side, as the contract allows — registration tables and
-    // ARP caches are small, and it keeps the command line free of user input.
-    return rows
-        .where((r) => filters.entries.every((f) => r[f.key] == f.value))
-        .toList();
+    if (filters != null && filters.isNotEmpty) {
+      // Filtering client-side, as the contract allows — registration tables
+      // and ARP caches are small, and it keeps the command line free of user
+      // input.
+      rows = rows
+          .where((r) => filters.entries.every((f) => r[f.key] == f.value))
+          .toList();
+    }
+    if (fields != null && fields.isNotEmpty) {
+      rows = rows.map((row) => projectReadFields(row, fields)).toList();
+    }
+    return rows;
   }
 
   @override

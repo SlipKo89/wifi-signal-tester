@@ -71,6 +71,11 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 - **Focused link diagnosis**: run a fixed six-sample check manually, or let it
   start automatically after a configurable post-roam settling delay. The result
   is frozen for the current AP with likely causes and practical advice.
+- **RouterOS Wi-Fi event analysis**: read the latest wireless/CAPsMAN logs for
+  the current phone or a selected associated device, explain disconnect and
+  authentication reasons, and measure reconnect/roaming gaps. It works through
+  REST, binary API or SSH without changing the router; raw logs and unrelated
+  client MACs are not retained.
 - **Support report**: creates a ZIP only when you ask, with current diagnostics
   and a bounded event log. Network identifiers are masked by default;
   credentials and raw router responses are never included or uploaded.

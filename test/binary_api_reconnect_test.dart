@@ -53,6 +53,55 @@ void main() {
       await Future.wait(handled);
     }
   });
+
+  // Field projections must be encoded as a print argument rather than a query
+  // word. RouterOS then returns only the fields needed by a large `/log` read.
+  test('binary API sends .proplist for projected reads', () async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final handled = <Future<void>>[];
+    final subscription = server.listen((socket) {
+      handled.add(() async {
+        final reader = _SentenceReader(socket);
+        await reader.read();
+        socket.add(_sentence(['!done']));
+        final command = await reader.read();
+        expect(command, [
+          '/log/print',
+          '=.proplist=time,topics,message',
+        ]);
+        socket.add(_sentence([
+          '!re',
+          '=time=12:00:00',
+          '=topics=wireless,info',
+          '=message=client connected',
+          '=buffer=memory',
+        ]));
+        socket.add(_sentence(['!done']));
+        await socket.flush();
+      }());
+    });
+    final transport = BinaryApiTransport(
+      host: InternetAddress.loopbackIPv4.address,
+      port: server.port,
+      username: 'readonly',
+      password: 'test',
+      timeout: const Duration(seconds: 2),
+    );
+
+    try {
+      await transport.connect();
+      final rows = await transport.read(
+        '/log',
+        fields: const ['time', 'topics', 'message'],
+      );
+      expect(rows.single.keys, {'time', 'topics', 'message'});
+    } finally {
+      await transport.close();
+      await subscription.cancel();
+      await server.close();
+      await Future.wait(handled);
+    }
+  });
 }
 
 class _SentenceReader {

@@ -187,6 +187,19 @@ interval.
 currently associated, enriched with IP and name from the DHCP leases. Pick one to
 see how the APs hear *it*. Useful for devices that cannot run an analyzer.
 
+**Explain a disconnect or roam.** Open ⋮ → *Wi-Fi events* for this phone, or
+open a currently-associated device and press *Analyze Wi-Fi events*. The app
+reads the latest RouterOS `wireless`/`caps` events on demand, classifies explicit
+reasons and pairs a disconnect with the next connection to measure the handoff.
+The source card shows the transport actually used; Auto is recommended because
+REST, binary API and SSH provide the same result.
+
+Only `time`, `topics` and `message` are requested, and no more than the newest
+2,000 rows per router are examined. The app keeps normalized findings, not raw
+router logs or unrelated client MACs. If wireless debug logging is absent, the
+screen says so. It never enables logging itself: that would be a RouterOS write
+and is deliberately outside the app's read-only contract.
+
 **Before/after a config change.** Run the Wi-Fi audit, apply the fixes yourself
 on the router, run the audit again, export both to PDF.
 

@@ -125,14 +125,23 @@ class BinaryApiTransport implements RouterOsTransport {
   Future<List<Map<String, String>>> read(
     String menuPath, {
     Map<String, String>? filters,
-  }) =>
-      _serialized(() => _withReconnect(() => _readOnce(menuPath, filters)));
+    List<String>? fields,
+  }) {
+    validateReadFields(fields);
+    return _serialized(
+      () => _withReconnect(() => _readOnce(menuPath, filters, fields)),
+    );
+  }
 
   Future<List<Map<String, String>>> _readOnce(
     String menuPath,
     Map<String, String>? filters,
+    List<String>? fields,
   ) async {
     final words = <String>['$menuPath/print'];
+    if (fields != null && fields.isNotEmpty) {
+      words.add('=.proplist=${fields.join(',')}');
+    }
     filters?.forEach((k, v) => words.add('?$k=$v'));
     _writeSentence(words);
 
@@ -142,7 +151,10 @@ class BinaryApiTransport implements RouterOsTransport {
       if (sentence.isEmpty) continue;
       final tag = sentence.first;
       if (tag == '!re') {
-        rows.add(_parseAttributes(sentence.skip(1)));
+        rows.add(projectReadFields(
+          _parseAttributes(sentence.skip(1)),
+          fields,
+        ));
       } else if (tag == '!done') {
         break;
       } else if (tag == '!trap') {

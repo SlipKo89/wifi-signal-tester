@@ -10,11 +10,17 @@ class Release {
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
   Release('0.3.2', '2026-08-08', [
+    'Read-only RouterOS Wi-Fi event analysis explains disconnects, authentication failures, weak-signal policies, DFS and CAP/CAPsMAN failures for one selected device',
+    'RouterOS timestamps now measure reconnect and roaming gaps; REST, binary API and SSH work through the same automatic transport flow',
+    'Only a bounded time/topics/message window is analyzed; raw logs, unrelated client MACs and RouterOS writes remain outside the feature',
     'The title bar and About dialog now clearly mark the desktop build as macOS Alpha and explain its current preview limitations',
     'macOS adapter discovery can no longer freeze monitoring: every platform call has a hard timeout and the gateway lookup avoids the blocking plugin path',
     'The Mac build no longer starts system ping subprocesses, preventing orphaned high-CPU processes after exit',
     'The desktop dashboard now explains that local Mac RSSI is unavailable while Router-side signal, audits and LTE tools continue to work',
   ], [
+    'Read-only анализ событий Wi-Fi из RouterOS объясняет разрывы, ошибки аутентификации, пороги сигнала, DFS и сбои CAP/CAPsMAN для одного выбранного устройства',
+    'По меткам времени RouterOS измеряется роуминг и переподключение; REST, binary API и SSH работают через общий автоматический выбор транспорта',
+    'Анализируется только ограниченный набор time/topics/message; сырые логи, MAC посторонних клиентов и запись в RouterOS исключены',
     'Верхняя панель и окно «О программе» теперь явно помечают десктопную сборку как macOS Alpha и объясняют текущие ограничения',
     'Опрос адаптера macOS больше не может повесить мониторинг: у каждого платформенного вызова есть жёсткий таймаут, а поиск шлюза не использует зависающий путь плагина',
     'Сборка для Mac больше не запускает системные ping-процессы, поэтому после выхода не остаются сиротские процессы с высокой загрузкой CPU',

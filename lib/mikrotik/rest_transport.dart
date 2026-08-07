@@ -60,10 +60,16 @@ class RestTransport implements RouterOsTransport {
   Future<List<Map<String, String>>> read(
     String menuPath, {
     Map<String, String>? filters,
+    List<String>? fields,
   }) async {
+    validateReadFields(fields);
     var uri = Uri.parse('$_scheme://$host:$port/rest$menuPath');
-    if (filters != null && filters.isNotEmpty) {
-      uri = uri.replace(queryParameters: filters);
+    final query = <String, String>{
+      ...?filters,
+      if (fields != null && fields.isNotEmpty) '.proplist': fields.join(','),
+    };
+    if (query.isNotEmpty) {
+      uri = uri.replace(queryParameters: query);
     }
     final resp = await _client
         .get(uri, headers: {'Authorization': _authHeader}).timeout(timeout);
@@ -80,8 +86,14 @@ class RestTransport implements RouterOsTransport {
         row.map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
     // Most menus return a JSON array; a few (e.g. /system/resource) return a
     // single object — wrap it so callers always get a list of rows.
-    if (decoded is List) return decoded.whereType<Map>().map(asRow).toList();
-    if (decoded is Map) return [asRow(decoded)];
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map(asRow)
+          .map((row) => projectReadFields(row, fields))
+          .toList();
+    }
+    if (decoded is Map) return [projectReadFields(asRow(decoded), fields)];
     return const [];
   }
 
