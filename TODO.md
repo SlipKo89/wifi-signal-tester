@@ -81,6 +81,11 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       rolling stability and plain-language antenna/interference advice. Tested
       against both R11e-LTE and FG621-EA monitor formats; modem/SIM identifiers
       are discarded and never persisted
+- [x] Guided LTE antenna alignment: live RSRP/RSRQ/SINR charts, stable
+      six-sample checkpoints, multi-metric score with an instability penalty,
+      relative step-by-step grid search, return-to-best directions and a fine
+      pass. Band/cell handoffs are marked so they are not mistaken for a pure
+      antenna-angle improvement
 - [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
 
 ## Docs & discoverability
@@ -119,7 +124,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Named measurement spots ("kitchen") with min/max/avg over a dwell window,
       compare spots
 - [x] Ping / latency probe to the gateway alongside signal (correlate signal↔lag)
-- [ ] LTE named measurement sessions with CSV export and optional GPS points
+- [ ] LTE named/persistent alignment sessions with CSV export and optional GPS
+      points (the current alignment session is kept only until disconnect)
 - [ ] LTE band/cell A/B comparison (same location, min/avg/max and verdict diff)
 
 ### C. Bigger directions

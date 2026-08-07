@@ -302,6 +302,35 @@ height, cable/connectors are likely limiting) from **strong enough but noisy**
 radio (interference, reflections or sector load are more likely). Tap RSRP,
 RSRQ, SINR, RSSI or CQI for thresholds and an explanation.
 
+### Antenna alignment assistant
+
+On the LTE dashboard, press *Start antenna alignment assistant*. Choose a small
+physical movement that you can repeat consistently — for example, one mark on
+the bracket. The app cannot know the antenna's absolute azimuth or elevation,
+so its X/Y coordinates mean operator-confirmed **steps**, not degrees.
+
+1. Keep the dish still and capture the baseline.
+2. Follow the proposed relative move, then press *I moved — measure*.
+3. The app waits four seconds for the radio to settle and records six fresh
+   readings. Do not move the dish during this window.
+4. Repeat the suggested probes. The assistant continues in an improving
+   direction, then checks the unvisited neighbours around the confirmed best
+   checkpoint.
+5. When no neighbouring checkpoint is meaningfully better, return by the shown
+   number of steps, halve the physical step and start the fine pass.
+
+Three live charts keep RSRP, RSRQ and SINR visible separately. The checkpoint
+score is only a navigation aid: when RSRP is very weak it gives coverage more
+weight; once power is usable it prioritises SINR/RSRQ, includes CQI where
+available and penalises unstable peaks. Always keep the raw metrics visible.
+A band or serving-cell handoff is marked because a score change may then come
+from the handoff rather than antenna movement alone.
+
+The checkpoints remain available if you leave and reopen the assistant, but
+the current in-memory session is cleared when you disconnect from the LTE
+router. Use the restart icon to discard it and take a new baseline. Persistent
+named sessions and export are planned separately.
+
 RouterOS often includes IMEI, IMSI and ICCID in the monitor response. The app
 does not model, display, log or persist those identifiers; they are discarded
 immediately after the response is parsed.

@@ -22,6 +22,7 @@ class LteController extends ChangeNotifier {
   Map<String, String>? routerResource;
   final List<LteSignal> history = [];
   DateTime? lastUpdated;
+  Duration pollInterval = const Duration(seconds: 3);
 
   String? get interfaceName => _service.interfaceName;
   String? get transportKind => _service.transportKind;
@@ -107,8 +108,16 @@ class LteController extends ChangeNotifier {
 
   void startLive() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => refresh());
+    _timer = Timer.periodic(pollInterval, (_) => refresh());
     notifyListeners();
+  }
+
+  void setPollInterval(Duration value) {
+    final milliseconds = value.inMilliseconds.clamp(1000, 30000);
+    final next = Duration(milliseconds: milliseconds);
+    if (next == pollInterval) return;
+    pollInterval = next;
+    if (isLive) startLive();
   }
 
   void stopLive({bool notify = true}) {

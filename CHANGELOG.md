@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Guided LTE antenna alignment assistant** with separate live RSRP, RSRQ and
+  SINR charts. The operator records a stable baseline, moves the dish by one
+  repeatable physical step and confirms each position; the app samples six
+  fresh values, scores the checkpoint, suggests the next relative move and
+  remembers how to return to the best position. It marks band/cell handoffs,
+  penalises unstable peaks and offers a second fine pass after finding a local
+  optimum. No router setting is changed: it only repeats the existing
+  `/interface/lte/monitor ... once` read.
 - **Focused Wi-Fi connection diagnosis** can now be started manually from the
   dashboard. Each run clears the old measurement window, collects six fresh
   samples for the current access point, then freezes the verdict together with

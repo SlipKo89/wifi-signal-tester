@@ -47,6 +47,24 @@ fields, so those identifiers do not cross the service boundary. `LteDiagnostics`
 evaluates RSRP/RSRQ/SINR, optional RSSI/CQI and recent stability independently
 of all Wi-Fi state.
 
+The alignment screen reuses the same live controller and does not introduce a
+new RouterOS command:
+
+```
+LteAlignmentScreen → LteAlignmentController → LteController.refresh()
+                              │
+                              └─ LteAlignmentSession + LteAlignmentAnalyzer
+                                 stable window → checkpoint → next relative step
+```
+
+While the screen is open, polling is temporarily reduced from three to two
+seconds. Each checkpoint starts after a four-second settling delay and contains
+six fresh samples. The pure analyzer combines RSRP/RSRQ/SINR/CQI, penalises
+spread and marks a serving band/cell change. `LteAlignmentSession` stores an
+operator-relative integer grid; coordinates are physical steps, never claimed
+degrees or compass headings. The in-memory session survives leaving and
+reopening the assistant, and is cleared when the LTE router disconnects.
+
 ## Why three transports
 
 `RouterOsTransport` exposes `read(menuPath, {filters})` plus `command()` for

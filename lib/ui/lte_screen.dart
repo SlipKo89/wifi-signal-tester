@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../diagnostics/app_failure.dart';
 import '../l10n/l10n.dart';
+import '../lte/lte_alignment.dart';
 import '../lte/lte_controller.dart';
 import '../lte/lte_credentials_store.dart';
 import '../lte/lte_diagnostics.dart';
@@ -10,6 +11,7 @@ import '../lte/lte_service.dart';
 import '../lte/lte_signal.dart';
 import '../mikrotik/router_os_transport.dart';
 import '../settings/settings_controller.dart';
+import 'lte_alignment_screen.dart';
 import 'theme.dart';
 import 'widgets/metric_tile.dart';
 
@@ -22,6 +24,7 @@ class LteScreen extends StatefulWidget {
 
 class _LteScreenState extends State<LteScreen> {
   final _controller = LteController();
+  final _alignmentSession = LteAlignmentSession();
   final _store = LteCredentialsStore();
   final _host = TextEditingController();
   final _username = TextEditingController();
@@ -100,12 +103,19 @@ class _LteScreenState extends State<LteScreen> {
           _interface.text.trim().isEmpty ? null : _interface.text.trim(),
     );
     if (await _controller.connect(connection)) {
+      _alignmentSession.reset();
       await _store.save(connection);
     }
   }
 
+  Future<void> _disconnect() async {
+    _alignmentSession.reset();
+    await _controller.disconnect();
+  }
+
   Future<void> _forget(L10n l) async {
     await _controller.disconnect();
+    _alignmentSession.reset();
     await _store.clear();
     if (!mounted) return;
     setState(() {
@@ -172,7 +182,7 @@ class _LteScreenState extends State<LteScreen> {
             IconButton(
               tooltip: l.t('Disconnect', 'Отключить'),
               icon: const Icon(Icons.logout),
-              onPressed: _controller.disconnect,
+              onPressed: _disconnect,
             ),
         ],
       ),
@@ -187,7 +197,18 @@ class _LteScreenState extends State<LteScreen> {
                 onRetry: _controller.retry,
               ),
             if (connected)
-              _LteDashboard(controller: _controller, l: l)
+              _LteDashboard(
+                controller: _controller,
+                l: l,
+                onAlign: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LteAlignmentScreen(
+                      monitor: _controller,
+                      session: _alignmentSession,
+                    ),
+                  ),
+                ),
+              )
             else
               _connectionForm(l),
           ],
@@ -426,8 +447,13 @@ class _LteScreenState extends State<LteScreen> {
 class _LteDashboard extends StatelessWidget {
   final LteController controller;
   final L10n l;
+  final VoidCallback onAlign;
 
-  const _LteDashboard({required this.controller, required this.l});
+  const _LteDashboard({
+    required this.controller,
+    required this.l,
+    required this.onAlign,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -445,6 +471,16 @@ class _LteDashboard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _VerdictCard(report: diagnosis, l: l),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed:
+              signal.registered && signal.hasRadioMetrics ? onAlign : null,
+          icon: const Icon(Icons.explore_outlined),
+          label: Text(l.t(
+            'Start antenna alignment assistant',
+            'Запустить мастер юстировки антенны',
+          )),
+        ),
         const SizedBox(height: 12),
         _IdentityCard(signal: signal, controller: controller, l: l),
         const SizedBox(height: 12),

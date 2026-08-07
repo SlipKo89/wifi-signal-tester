@@ -9,9 +9,9 @@ device** — signal, SNR, rates. This app reads that from a MikroTik (running
 CAPsMAN or plain Wi-Fi) **read-only**, for **your device's MAC only**, and puts
 it next to your phone's own readings.
 
-The app also contains a **separate LTE diagnostics tool** for MikroTik LTE
-routers. It reads modem radio quality over REST, the binary API or SSH and does
-not depend on or mix with the Wi-Fi dashboard.
+The app also contains a **separate LTE diagnostics and antenna-alignment tool**
+for MikroTik LTE routers. It reads modem radio quality over REST, the binary API
+or SSH and does not depend on or mix with the Wi-Fi dashboard.
 
 <table>
 <tr>
@@ -70,6 +70,10 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
   RSRP, RSRQ, SINR, optional RSSI/CQI, band and serving-cell facts, stability
   and practical antenna/interference advice. Auto tries REST → API → SSH; no
   Wi-Fi connection is required for this mode.
+- **Guided LTE antenna alignment**: record stable checkpoints while moving the
+  dish in repeatable steps. The assistant combines signal power, quality and
+  stability, proposes the next move and tells you how to return to the best
+  measured position before a finer pass.
 
 ## Requirements (build machine — macOS)
 
