@@ -1,8 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wifi_apk/lte/lte_alignment.dart';
+import 'package:wifi_apk/lte/lte_quality_score.dart';
 import 'package:wifi_apk/lte/lte_signal.dart';
 
 void main() {
+  test('alignment and general LTE quality use the same score', () {
+    final samples = _window(rsrp: -97, rsrq: -10, sinr: 16, cqi: 10);
+    final point = LteAlignmentAnalyzer.capture(
+      id: 1,
+      target: const LteAlignmentTarget(round: 0, x: 0, y: 0),
+      samples: samples,
+      previousBest: null,
+    );
+    final quality = LteQualityScorer.evaluateSignals(samples);
+
+    expect(point.score, quality.score);
+    expect(point.confidence, quality.confidence);
+  });
+
   test('clean usable signal beats stronger but noisy signal', () {
     final clean = LteAlignmentAnalyzer.capture(
       id: 1,

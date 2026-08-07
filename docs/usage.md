@@ -297,6 +297,18 @@ The dashboard refreshes every three seconds and shows:
 - band, channel width, EARFCN, PCI, eNodeB/sector and Cell ID;
 - min/average/max values over the latest 60 samples.
 
+Above the technical charts, **LTE Quality 0–100** provides one simpler line:
+higher is better. It combines RSRP, RSRQ, SINR and optional CQI, gives received
+power more weight when coverage is weak, and penalises unstable readings. The
+line is smoothed over five recent samples; a known band/cell handoff is marked
+and starts a fresh window instead of mixing two radios. The card shows the
+current and best stable result. Tap a point for its underlying radio values or
+expand the technical charts. The zones are 0–39 poor, 40–59 attention, 60–79
+good and 80–100 excellent.
+
+This score compares **radio conditions**, not Internet speed. Sector load,
+routing and provider congestion can still make a high-scoring link slow.
+
 The verdict deliberately separates **weak but clean** coverage (alignment,
 height, cable/connectors are likely limiting) from **strong enough but noisy**
 radio (interference, reflections or sector load are more likely). Tap RSRP,
@@ -319,10 +331,11 @@ so its X/Y coordinates mean operator-confirmed **steps**, not degrees.
 5. When no neighbouring checkpoint is meaningfully better, return by the shown
    number of steps, halve the physical step and start the fine pass.
 
-Three live charts keep RSRP, RSRQ and SINR visible separately. The checkpoint
+The same Quality Score line is used here and on the dashboard; expand the
+technical block to keep RSRP, RSRQ and SINR visible separately. The checkpoint
 score is only a navigation aid: when RSRP is very weak it gives coverage more
 weight; once power is usable it prioritises SINR/RSRQ, includes CQI where
-available and penalises unstable peaks. Always keep the raw metrics visible.
+available and penalises unstable peaks. Always verify the raw metrics.
 A band or serving-cell handoff is marked because a score change may then come
 from the handoff rather than antenna movement alone.
 
@@ -337,6 +350,8 @@ Every successful LTE poll is then stored locally; tap Stop or disconnect to
 finish it. Open *LTE history* from the dashboard menu to rename, inspect,
 export or delete a session. Select exactly two sessions to compare their
 RSRP/RSRQ/SINR/RSSI/CQI averages, spreads, bands and serving cells.
+The comparison also includes the average LTE Quality Score and P10: the score
+that 90% of stable measurements were no worse than.
 
 At 1× each live or saved chart fits its whole series into the available width.
 Use −/+, the 1×…20× slider or a two-finger pinch to expand it, then pan

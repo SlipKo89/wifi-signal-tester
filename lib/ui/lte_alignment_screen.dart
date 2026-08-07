@@ -8,7 +8,9 @@ import '../l10n/l10n.dart';
 import '../lte/lte_alignment.dart';
 import '../lte/lte_alignment_controller.dart';
 import '../lte/lte_controller.dart';
+import '../lte/lte_quality_score.dart';
 import '../settings/settings_controller.dart';
+import 'metric_help.dart';
 import 'widgets/zoomable_lte_chart.dart';
 
 const _green = Color(0xFF3FB950);
@@ -208,6 +210,7 @@ class _LiveHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final quality = LteQualityScorer.signalTimeline(controller.liveHistory);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(15),
@@ -222,19 +225,32 @@ class _LiveHistoryCard extends StatelessWidget {
                 LteChartDataset(
                   name: l.t('Live', 'Сейчас'),
                   color: _green,
-                  points: controller.liveHistory
-                      .map((sample) => LteChartPoint(
-                            sampledAt: sample.sampledAt,
-                            rsrp: sample.rsrp,
-                            rsrq: sample.rsrq,
-                            sinr: sample.sinr,
-                            rssi: sample.rssi,
-                            cqi: sample.cqi,
-                          ))
-                      .toList(growable: false),
+                  points: List.generate(
+                    controller.liveHistory.length,
+                    (index) {
+                      final sample = controller.liveHistory[index];
+                      return LteChartPoint(
+                        sampledAt: sample.sampledAt,
+                        rsrp: sample.rsrp,
+                        rsrq: sample.rsrq,
+                        sinr: sample.sinr,
+                        rssi: sample.rssi,
+                        cqi: sample.cqi,
+                        quality: quality[index].score,
+                        qualityConfidence: quality[index].confidence,
+                        radioChanged: quality[index].radioChanged,
+                      );
+                    },
+                    growable: false,
+                  ),
                 ),
               ],
               autoFollow: true,
+              showQuality: true,
+              showRssiAndCqi: true,
+              technicalInitiallyExpanded: false,
+              ru: l.ru,
+              onQualityHelp: () => showMetricHelp(context, 'lte_quality'),
               zoomHint: l.t(
                 '1× — complete live history · pinch with two fingers or use the slider',
                 '1× — вся живая история · масштабируй двумя пальцами или ползунком',

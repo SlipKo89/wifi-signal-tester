@@ -79,6 +79,13 @@ Zoomable charts keep up to 600 current samples in memory, while the live
 diagnosis intentionally evaluates only the latest 60 so old movement does not
 contaminate the current verdict.
 
+`LteQualityScorer` is the single source of truth for the 0–100 radio score used
+by live monitoring, alignment checkpoints and persisted-session comparison. It
+uses a five-sample rolling median for charts, applies the same instability
+penalty as a six-sample alignment checkpoint and resets the rolling window on a
+known band/cell change. Low-confidence warm-up points remain visible but are
+excluded from “best” and summary statistics when stable points exist.
+
 ## Why three transports
 
 `RouterOsTransport` exposes `read(menuPath, {filters})` plus `command()` for

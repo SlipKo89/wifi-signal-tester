@@ -89,6 +89,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Persistent named LTE measurement sessions: local SQLite history,
       min/average/max/spread, scalable charts, CSV export and two-session A/B
       comparison by radio metric, band and cell
+- [x] Unified LTE Quality Score 0–100 for live monitoring, alignment and saved
+      A/B sessions: adaptive RSRP/RSRQ/SINR/CQI weighting, stability penalty,
+      band/cell reset, current/best and P10; clearly labelled as radio-only
 - [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
 
 ## Docs & discoverability

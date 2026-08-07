@@ -7,7 +7,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import '../lte/lte_history_store.dart';
+import '../lte/lte_quality_score.dart';
 import '../settings/settings_controller.dart';
+import 'metric_help.dart';
 import 'widgets/zoomable_lte_chart.dart';
 
 const _green = Color(0xFF3FB950);
@@ -359,6 +361,11 @@ class LteSessionScreen extends StatelessWidget {
                       ZoomableLteChart(
                         datasets: [_dataset(session.title, _green, samples)],
                         showRssiAndCqi: true,
+                        showQuality: true,
+                        technicalInitiallyExpanded: false,
+                        ru: l.ru,
+                        onQualityHelp: () =>
+                            showMetricHelp(context, 'lte_quality'),
                         zoomHint: _zoomHint(l),
                         zoomInTooltip: l.t('Zoom in', 'Увеличить'),
                         zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
@@ -422,6 +429,10 @@ class LteComparisonScreen extends StatelessWidget {
                       _dataset('B', _blue, b),
                     ],
                     showRssiAndCqi: true,
+                    showQuality: true,
+                    technicalInitiallyExpanded: false,
+                    ru: l.ru,
+                    onQualityHelp: () => showMetricHelp(context, 'lte_quality'),
                     zoomHint: _zoomHint(l),
                     zoomInTooltip: l.t('Zoom in', 'Увеличить'),
                     zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
@@ -443,6 +454,21 @@ class LteComparisonScreen extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 12),
+                      _CompareRow(
+                        l.t('QUALITY', 'КАЧЕСТВО'),
+                        l.t('pts', 'п.'),
+                        aa.quality,
+                        bb.quality,
+                      ),
+                      if (aa.qualityP10 != null && bb.qualityP10 != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'P10: A ${_number(aa.qualityP10!)} · '
+                            'B ${_number(bb.qualityP10!)}',
+                            style: const TextStyle(fontSize: 11, color: _muted),
+                          ),
+                        ),
                       _CompareRow('RSRP', 'dBm', aa.rsrp, bb.rsrp),
                       _CompareRow('RSRQ', 'dB', aa.rsrq, bb.rsrq),
                       _CompareRow('SINR', 'dB', aa.sinr, bb.sinr),
@@ -520,18 +546,29 @@ class _StatsCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               _statsHeader(l),
+              _statsRow(l.t('QUALITY', 'КАЧЕСТВО'), analysis.quality),
               _statsRow('RSRP', analysis.rsrp),
               _statsRow('RSRQ', analysis.rsrq),
               _statsRow('SINR', analysis.sinr),
               _statsRow('RSSI', analysis.rssi),
               _statsRow('CQI', analysis.cqi),
+              if (analysis.qualityP10 != null) ...[
+                const SizedBox(height: 11),
+                Text(
+                  l.t(
+                    'Quality P10: ${_number(analysis.qualityP10!)} — 90% of measurements were no worse than this.',
+                    'Качество P10: ${_number(analysis.qualityP10!)} — 90% замеров были не хуже этого значения.',
+                  ),
+                  style: const TextStyle(fontSize: 11, color: _muted),
+                ),
+              ],
             ],
           ),
         ),
       );
 
   Widget _statsHeader(L10n l) => Row(children: [
-        const SizedBox(width: 48),
+        const SizedBox(width: 64),
         for (final label in [
           l.t('min', 'мин'),
           l.t('avg', 'ср'),
@@ -551,7 +588,7 @@ class _StatsCard extends StatelessWidget {
       padding: const EdgeInsets.only(top: 9),
       child: Row(children: [
         SizedBox(
-          width: 48,
+          width: 64,
           child:
               Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
@@ -623,7 +660,7 @@ class _CompareRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 48,
+            width: 64,
             child: Text(label,
                 style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
@@ -649,21 +686,29 @@ LteChartDataset _dataset(
   String name,
   Color color,
   List<LteRecordedSample> samples,
-) =>
-    LteChartDataset(
-      name: name,
-      color: color,
-      points: samples
-          .map((sample) => LteChartPoint(
-                sampledAt: DateTime.fromMillisecondsSinceEpoch(sample.tsMs),
-                rsrp: sample.rsrp,
-                rsrq: sample.rsrq,
-                sinr: sample.sinr,
-                rssi: sample.rssi,
-                cqi: sample.cqi,
-              ))
-          .toList(growable: false),
-    );
+) {
+  final quality = LteQualityScorer.timeline(
+    samples.map((sample) => sample.toQualitySample()).toList(growable: false),
+  );
+  return LteChartDataset(
+    name: name,
+    color: color,
+    points: List.generate(samples.length, (index) {
+      final sample = samples[index];
+      return LteChartPoint(
+        sampledAt: DateTime.fromMillisecondsSinceEpoch(sample.tsMs),
+        rsrp: sample.rsrp,
+        rsrq: sample.rsrq,
+        sinr: sample.sinr,
+        rssi: sample.rssi,
+        cqi: sample.cqi,
+        quality: quality[index].score,
+        qualityConfidence: quality[index].confidence,
+        radioChanged: quality[index].radioChanged,
+      );
+    }, growable: false),
+  );
+}
 
 Widget _fact(String label, String? value) {
   if (value == null || value.isEmpty) return const SizedBox.shrink();

@@ -47,6 +47,8 @@ void main() {
     expect(analysis.rsrp?.average, -100);
     expect(analysis.rsrp?.max, -90);
     expect(analysis.rsrp?.spread, 20);
+    expect(analysis.quality, isNotNull);
+    expect(analysis.qualityP10, isNotNull);
     expect(analysis.dominantBand, 'B7');
     expect(analysis.dominantCell, 'a');
   });

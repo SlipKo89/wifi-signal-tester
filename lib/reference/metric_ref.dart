@@ -202,6 +202,35 @@ const Map<String, MetricRef> kMetricRefs = {
     whatRu: 'Как долго клиент держится на этой точке. Частые сбросы — роуминг '
         'или нестабильный линк.',
   ),
+  'lte_quality': MetricRef(
+    key: 'lte_quality',
+    titleEn: 'LTE Quality Score (0–100)',
+    titleRu: 'Оценка качества LTE (0–100)',
+    whatEn: 'A simplified radio-link score where higher is better. It combines '
+        'RSRP, RSRQ, SINR and optional CQI, adapts their weights when coverage '
+        'is weak, and penalises unstable readings. It is smoothed over recent '
+        'samples and starts a fresh window after a band/cell handoff.',
+    whatRu:
+        'Упрощённая оценка радиоканала: чем выше, тем лучше. Она объединяет '
+        'RSRP, RSRQ, SINR и при наличии CQI, меняет их вес при слабом покрытии '
+        'и штрафует нестабильные значения. Оценка сглаживается по последним '
+        'замерам и начинает новое окно после смены диапазона/соты.',
+    bands: [
+      RefBand(_green, '80…100', '80…100', 'Excellent radio conditions.',
+          'Отличная радиообстановка.'),
+      RefBand(
+          _green, '60…79', '60…79', 'Good radio link.', 'Хороший радиоканал.'),
+      RefBand(_amber, '40…59', '40…59', 'Usable, but needs attention.',
+          'Работает, но требует внимания.'),
+      RefBand(_red, '0…39', '0…39', 'Poor radio link.', 'Плохой радиоканал.'),
+    ],
+    tipEn: 'This is not a speed test. Sector load, routing and provider '
+        'congestion can reduce Internet speed even with a high score. Use the '
+        'score to compare antenna positions, then verify speed separately.',
+    tipRu: 'Это не тест скорости. Нагрузка сектора, маршрутизация и сеть '
+        'оператора могут снижать скорость даже при высокой оценке. Используй '
+        'оценку для сравнения положений антенны, затем проверь скорость отдельно.',
+  ),
   'lte_rsrp': MetricRef(
     key: 'lte_rsrp',
     titleEn: 'LTE RSRP (dBm)',

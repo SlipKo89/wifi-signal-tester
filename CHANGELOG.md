@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and in saved sessions. At 1× the full series fits; use −/+, the 1×…20× slider
   or a two-finger pinch to zoom, then pan horizontally through individual
   measurements.
+- **LTE Quality Score (0–100)** adds one plain-language “higher is better” line
+  above the technical LTE charts. The shared formula combines RSRP, RSRQ, SINR
+  and optional CQI, changes emphasis under weak coverage, penalises unstable
+  peaks and resets smoothing after a band/cell handoff. Current/best values,
+  coloured quality zones, raw-metric tap details and saved-session P10/A/B
+  comparisons are included. It is explicitly a radio score, not a speed test.
 
 ## [0.3.0] - 2026-08-07
 

@@ -77,6 +77,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 - **Persistent LTE history and A/B comparison**: record named sessions locally,
   inspect scalable 1×…20× radio charts and min/average/max/spread, compare two
   visits or antenna positions, and export the raw samples as CSV.
+- **One understandable LTE score**: a 0–100 “higher is better” line combines
+  power, quality and stability, shows the current and best result, and keeps
+  the raw radio charts one tap away. It grades the radio link, not Internet speed.
 
 ## Requirements (build machine — macOS)
 

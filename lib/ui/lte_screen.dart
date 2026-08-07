@@ -7,12 +7,14 @@ import '../lte/lte_alignment.dart';
 import '../lte/lte_controller.dart';
 import '../lte/lte_credentials_store.dart';
 import '../lte/lte_diagnostics.dart';
+import '../lte/lte_quality_score.dart';
 import '../lte/lte_service.dart';
 import '../lte/lte_signal.dart';
 import '../mikrotik/router_os_transport.dart';
 import '../settings/settings_controller.dart';
 import 'lte_alignment_screen.dart';
 import 'lte_history_screen.dart';
+import 'metric_help.dart';
 import 'theme.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/zoomable_lte_chart.dart';
@@ -884,6 +886,7 @@ class _StabilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final quality = LteQualityScorer.signalTimeline(controller.history);
     final rows = <({
       String label,
       String unit,
@@ -901,7 +904,7 @@ class _StabilityCard extends StatelessWidget {
           children: [
             _sectionTitle(
               Icons.timeline,
-              '${l.t('Stability', 'Стабильность')} · ${controller.history.length}',
+              '${l.t('LTE quality history', 'История качества LTE')} · ${controller.history.length}',
             ),
             const SizedBox(height: 12),
             ZoomableLteChart(
@@ -909,19 +912,32 @@ class _StabilityCard extends StatelessWidget {
                 LteChartDataset(
                   name: l.t('Live', 'Сейчас'),
                   color: const Color(0xFF3FB950),
-                  points: controller.history
-                      .map((sample) => LteChartPoint(
-                            sampledAt: sample.sampledAt,
-                            rsrp: sample.rsrp,
-                            rsrq: sample.rsrq,
-                            sinr: sample.sinr,
-                            rssi: sample.rssi,
-                            cqi: sample.cqi,
-                          ))
-                      .toList(growable: false),
+                  points: List.generate(
+                    controller.history.length,
+                    (index) {
+                      final sample = controller.history[index];
+                      return LteChartPoint(
+                        sampledAt: sample.sampledAt,
+                        rsrp: sample.rsrp,
+                        rsrq: sample.rsrq,
+                        sinr: sample.sinr,
+                        rssi: sample.rssi,
+                        cqi: sample.cqi,
+                        quality: quality[index].score,
+                        qualityConfidence: quality[index].confidence,
+                        radioChanged: quality[index].radioChanged,
+                      );
+                    },
+                    growable: false,
+                  ),
                 ),
               ],
               autoFollow: true,
+              showQuality: true,
+              showRssiAndCqi: true,
+              technicalInitiallyExpanded: false,
+              ru: l.ru,
+              onQualityHelp: () => showMetricHelp(context, 'lte_quality'),
               zoomHint: l.t(
                 '1× — complete live history · pinch with two fingers or use the slider',
                 '1× — вся живая история · масштабируй двумя пальцами или ползунком',

@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import 'lte_quality_score.dart';
 import 'lte_signal.dart';
 
 /// One LTE sample stored by this app. Modem/SIM identifiers are deliberately
@@ -80,6 +81,24 @@ class LteRecordedSample {
         physicalCellId: (row['pci'] as num?)?.toInt(),
         cellId: row['cell_id'] as String?,
       );
+
+  LteQualitySample toQualitySample() => LteQualitySample(
+        sampledAt: DateTime.fromMillisecondsSinceEpoch(tsMs),
+        registered: registered,
+        rsrp: rsrp,
+        rsrq: rsrq,
+        sinr: sinr,
+        rssi: rssi,
+        cqi: cqi,
+        band: band,
+        radioKey: _radioKey,
+      );
+
+  String? get _radioKey {
+    if (cellId != null) return 'cell:$cellId';
+    if (physicalCellId != null) return 'pci:$physicalCellId';
+    return null;
+  }
 }
 
 class LteMetricStats {
@@ -115,6 +134,8 @@ class LteSessionAnalysis {
   final LteMetricStats? sinr;
   final LteMetricStats? rssi;
   final LteMetricStats? cqi;
+  final LteMetricStats? quality;
+  final double? qualityP10;
   final String? dominantBand;
   final String? dominantCell;
 
@@ -125,21 +146,36 @@ class LteSessionAnalysis {
     this.sinr,
     this.rssi,
     this.cqi,
+    this.quality,
+    this.qualityP10,
     this.dominantBand,
     this.dominantCell,
   });
 
-  factory LteSessionAnalysis.fromSamples(List<LteRecordedSample> samples) =>
-      LteSessionAnalysis(
-        sampleCount: samples.length,
-        rsrp: LteMetricStats.from(samples.map((sample) => sample.rsrp)),
-        rsrq: LteMetricStats.from(samples.map((sample) => sample.rsrq)),
-        sinr: LteMetricStats.from(samples.map((sample) => sample.sinr)),
-        rssi: LteMetricStats.from(samples.map((sample) => sample.rssi)),
-        cqi: LteMetricStats.from(samples.map((sample) => sample.cqi)),
-        dominantBand: _dominant(samples.map((sample) => sample.band)),
-        dominantCell: _dominant(samples.map((sample) => sample.cellId)),
-      );
+  factory LteSessionAnalysis.fromSamples(List<LteRecordedSample> samples) {
+    final qualityTimeline = LteQualityScorer.timeline(
+      samples.map((sample) => sample.toQualitySample()).toList(growable: false),
+    );
+    final quality = LteQualityScorer.summarise(qualityTimeline);
+    return LteSessionAnalysis(
+      sampleCount: samples.length,
+      rsrp: LteMetricStats.from(samples.map((sample) => sample.rsrp)),
+      rsrq: LteMetricStats.from(samples.map((sample) => sample.rsrq)),
+      sinr: LteMetricStats.from(samples.map((sample) => sample.sinr)),
+      rssi: LteMetricStats.from(samples.map((sample) => sample.rssi)),
+      cqi: LteMetricStats.from(samples.map((sample) => sample.cqi)),
+      quality: quality == null
+          ? null
+          : LteMetricStats(
+              min: quality.min,
+              average: quality.average,
+              max: quality.max,
+            ),
+      qualityP10: quality?.p10,
+      dominantBand: _dominant(samples.map((sample) => sample.band)),
+      dominantCell: _dominant(samples.map((sample) => sample.cellId)),
+    );
+  }
 
   static String? _dominant(Iterable<String?> source) {
     final counts = <String, int>{};
@@ -350,8 +386,11 @@ class LteHistoryStore {
 
   Future<String> exportCsv(int sessionId) async {
     final samples = await samplesFor(sessionId);
+    final qualityTimeline = LteQualityScorer.timeline(
+      samples.map((sample) => sample.toQualitySample()).toList(growable: false),
+    );
     final buffer = StringBuffer(
-      'timestamp_ms,registered,rsrp_dbm,rsrq_db,sinr_db,rssi_dbm,cqi,'
+      'timestamp_ms,registered,rsrp_dbm,rsrq_db,sinr_db,rssi_dbm,cqi,quality_score,'
       'band,bandwidth_mhz,earfcn,pci,cell_id\n',
     );
     String csv(Object? value) {
@@ -359,7 +398,8 @@ class LteHistoryStore {
       return text.contains(',') || text.contains('"') ? '"$text"' : text;
     }
 
-    for (final sample in samples) {
+    for (var index = 0; index < samples.length; index++) {
+      final sample = samples[index];
       buffer.writeln([
         sample.tsMs,
         sample.registered,
@@ -368,6 +408,7 @@ class LteHistoryStore {
         sample.sinr,
         sample.rssi,
         sample.cqi,
+        qualityTimeline[index].score?.toStringAsFixed(1),
         sample.band,
         sample.bandwidthMhz,
         sample.earfcn,

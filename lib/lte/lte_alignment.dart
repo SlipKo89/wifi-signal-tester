@@ -1,3 +1,4 @@
+import 'lte_quality_score.dart';
 import 'lte_signal.dart';
 
 enum LteAlignmentDirection { left, right, up, down }
@@ -86,38 +87,20 @@ class LteAlignmentAnalyzer {
     required List<LteSignal> samples,
     required LteAlignmentPoint? previousBest,
   }) {
-    final registered = samples.isNotEmpty &&
-        samples.where((sample) => sample.registered).length * 2 >=
-            samples.length;
-    final rsrp = _median(samples.map((sample) => sample.rsrp));
-    final rsrq = _median(samples.map((sample) => sample.rsrq));
-    final sinr = _median(samples.map((sample) => sample.sinr));
-    final rssi = _median(samples.map((sample) => sample.rssi));
-    final cqiValue = _median(samples.map((sample) => sample.cqi?.toDouble()));
-    final rsrpSpread = _spread(samples.map((sample) => sample.rsrp));
-    final rsrqSpread = _spread(samples.map((sample) => sample.rsrq));
-    final sinrSpread = _spread(samples.map((sample) => sample.sinr));
+    final quality = LteQualityScorer.evaluateSignals(samples);
+    final registered = quality.registered;
+    final rsrp = quality.rsrp;
+    final rsrq = quality.rsrq;
+    final sinr = quality.sinr;
+    final rssi = quality.rssi;
+    final cqiValue = quality.cqi;
+    final rsrpSpread = quality.rsrpSpread;
+    final rsrqSpread = quality.rsrqSpread;
+    final sinrSpread = quality.sinrSpread;
     final band = _dominant(samples.map((sample) => sample.band));
     final cellKey = _dominant(samples.map(_cellKey));
-    final score = registered
-        ? _score(
-            rsrp: rsrp,
-            rsrq: rsrq,
-            sinr: sinr,
-            cqi: cqiValue,
-            rsrpSpread: rsrpSpread,
-            rsrqSpread: rsrqSpread,
-            sinrSpread: sinrSpread,
-          )
-        : 0.0;
-    final confidence = _confidence(
-      sampleCount: samples.length,
-      registered: registered,
-      availableCoreMetrics: [rsrp, rsrq, sinr].whereType<double>().length,
-      rsrpSpread: rsrpSpread,
-      rsrqSpread: rsrqSpread,
-      sinrSpread: sinrSpread,
-    );
+    final score = quality.score ?? 0;
+    final confidence = quality.confidence;
 
     double? delta;
     var outcome = LteAlignmentOutcome.first;
@@ -152,7 +135,7 @@ class LteAlignmentAnalyzer {
       rsrq: rsrq,
       sinr: sinr,
       rssi: rssi,
-      cqi: cqiValue?.round(),
+      cqi: cqiValue,
       rsrpSpread: rsrpSpread,
       rsrqSpread: rsrqSpread,
       sinrSpread: sinrSpread,
@@ -164,75 +147,6 @@ class LteAlignmentAnalyzer {
       outcome: outcome,
       probeDirection: target.probeDirection,
     );
-  }
-
-  static double _score({
-    required double? rsrp,
-    required double? rsrq,
-    required double? sinr,
-    required double? cqi,
-    required double rsrpSpread,
-    required double rsrqSpread,
-    required double sinrSpread,
-  }) {
-    final weakCoverage = rsrp != null && rsrp < -105;
-    final metrics = <(double?, double)>[
-      (_normalise(rsrp, -120, -80), weakCoverage ? 0.45 : 0.25),
-      (_normalise(rsrq, -20, -8), weakCoverage ? 0.20 : 0.25),
-      (_normalise(sinr, -5, 25), weakCoverage ? 0.30 : 0.45),
-      (_normalise(cqi, 0, 15), 0.05),
-    ];
-    var weighted = 0.0;
-    var weight = 0.0;
-    for (final metric in metrics) {
-      if (metric.$1 == null) continue;
-      weighted += metric.$1! * metric.$2;
-      weight += metric.$2;
-    }
-    if (weight == 0) return 0;
-
-    // Ordinary sub-dB jitter should not affect the verdict. Large swings do:
-    // an unstable peak is less useful for alignment than a repeatable one.
-    final penalty = ((rsrpSpread - 3).clamp(0, 12) * 0.8) +
-        ((rsrqSpread - 2).clamp(0, 8) * 0.9) +
-        ((sinrSpread - 4).clamp(0, 20) * 0.7);
-    return ((weighted / weight) - penalty).clamp(0, 100).toDouble();
-  }
-
-  static double _confidence({
-    required int sampleCount,
-    required bool registered,
-    required int availableCoreMetrics,
-    required double rsrpSpread,
-    required double rsrqSpread,
-    required double sinrSpread,
-  }) {
-    if (!registered || availableCoreMetrics == 0) return 0;
-    final countFactor = (sampleCount / 6).clamp(0, 1).toDouble();
-    final completeness = (availableCoreMetrics / 3).clamp(0, 1).toDouble();
-    final instability =
-        (rsrpSpread / 12 + rsrqSpread / 8 + sinrSpread / 20) / 3;
-    return (countFactor * completeness * (1 - instability.clamp(0, 0.55)))
-        .clamp(0, 1)
-        .toDouble();
-  }
-
-  static double? _normalise(double? value, double bad, double good) {
-    if (value == null) return null;
-    return ((value - bad) * 100 / (good - bad)).clamp(0, 100).toDouble();
-  }
-
-  static double? _median(Iterable<double?> source) {
-    final values = source.whereType<double>().toList()..sort();
-    if (values.isEmpty) return null;
-    final middle = values.length ~/ 2;
-    if (values.length.isOdd) return values[middle];
-    return (values[middle - 1] + values[middle]) / 2;
-  }
-
-  static double _spread(Iterable<double?> source) {
-    final values = source.whereType<double>().toList()..sort();
-    return values.length < 2 ? 0 : values.last - values.first;
   }
 
   static String? _dominant(Iterable<String?> source) {
