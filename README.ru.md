@@ -28,14 +28,21 @@ API или SSH и никак не смешивается с Wi-Fi-дашборд
 
 ## Скачать
 
-Свежий APK — на [странице релизов](../../releases/latest): скачай
-`wifi-signal-tester-<версия>.apk` в разделе *Assets* и установи на
-Android-устройство.
+Свежие сборки лежат на [странице релизов](../../releases/latest):
 
-Каждый push/merge в `main` собирает APK, сам создаёт тег `v<версия>` из файла
-`VERSION` и автоматически публикует GitHub Release. Тот же APK можно скачать из
-*Artifacts* соответствующего запуска в [Actions](../../actions/workflows/release.yml).
-Релизный тег вручную создавать не нужно — перед merge поднимается версия.
+- Android: `wifi-signal-tester-<версия>.apk`;
+- Mac на Apple Silicon: `wifi-signal-tester-<версия>-macos-arm64.zip` — после
+  распаковки внутри будет `Wi-Fi Signal Tester.app`.
+
+Каждый push/merge в `main` собирает обе платформы, сам создаёт тег `v<версия>`
+из файла `VERSION` и автоматически публикует единый GitHub Release. Обе сборки
+можно скачать и из *Artifacts* соответствующего запуска в
+[Actions](../../actions/workflows/release.yml). Релизный тег вручную создавать
+не нужно — перед merge поднимается версия.
+
+Сейчас ZIP для Mac подписывается временной ad-hoc подписью для тестирования,
+поэтому Gatekeeper на другом Mac может показать предупреждение. Developer ID и
+Apple notarization подключаются отдельно.
 
 ## Как пользоваться
 

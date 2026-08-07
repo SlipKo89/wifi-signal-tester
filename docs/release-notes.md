@@ -1,39 +1,50 @@
-# Wi-Fi Signal Tester 0.3.0
+# Wi-Fi Signal Tester 0.3.1
 
-- Separate MikroTik LTE diagnostics over REST, the binary API or read-only SSH,
-  with RSRP, RSRQ, SINR, optional RSSI/CQI, serving-cell facts and practical
-  weak-signal/interference advice.
-- Guided antenna alignment records stable checkpoints, shows separate live
-  RSRP/RSRQ/SINR charts, proposes relative movements and guides the operator
-  back to the best measured position for a finer pass.
-- Wi-Fi connection diagnosis can now be started manually or automatically
-  after a configurable post-roam settling delay.
-- LTE verdict colours and wording now consistently distinguish usable weak
-  coverage from genuinely critical radio conditions.
-- Long access-point names remain inside their cards on narrow phone screens.
+- Persistent named LTE measurement sessions with scalable 1×…20× charts, raw
+  CSV export and an A/B comparison of two antenna positions or visits.
+- A shared LTE Quality Score from 0 to 100 combines RSRP, RSRQ, SINR, optional
+  CQI and stability. It is used consistently by live monitoring, antenna
+  alignment and saved history, while keeping every raw radio metric available.
+- Initial macOS application for RouterOS connection, Wi-Fi/system audits and
+  LTE diagnostics/alignment. Android-only local RSSI remains unavailable on Mac
+  until the planned native CoreWLAN implementation.
+- GitHub Actions now builds Android and Apple-silicon macOS together and adds
+  both files to the same versioned Release.
 
-Download `wifi-signal-tester-0.3.0.apk` below and install it on your Android
-device (allow installs from unknown sources when prompted).
+Assets:
+
+- `wifi-signal-tester-0.3.1.apk` — Android;
+- `wifi-signal-tester-0.3.1-macos-arm64.zip` — unpack to get
+  `Wi-Fi Signal Tester.app` for an Apple-silicon Mac.
+
+The Mac build is currently intended for testing and is not yet Developer ID
+signed or notarized, so Gatekeeper can show a warning.
 
 See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 ---
 
-# Wi-Fi Signal Tester 0.3.0
+# Wi-Fi Signal Tester 0.3.1
 
-- Отдельная LTE-диагностика MikroTik через REST, бинарный API или SSH только на
-  чтение: RSRP, RSRQ, SINR, RSSI/CQI при наличии, сведения о соте и понятные
-  советы по слабому сигналу и помехам.
-- Мастер юстировки фиксирует устойчивые контрольные точки, отдельно показывает
-  RSRP/RSRQ/SINR, предлагает относительные движения и ведёт оператора обратно к
-  лучшей позиции для точного прохода.
-- Анализ Wi-Fi-соединения теперь запускается вручную либо автоматически после
-  настраиваемой паузы при роуминге.
-- Цвет и текст LTE-вердикта согласованы: рабочий слабый сигнал больше не
-  выглядит критической ошибкой.
-- Длинные названия точек не вылезают из карточек на узких экранах телефона.
+- Постоянная история LTE с именованными сессиями, масштабируемыми графиками
+  1×…20×, выгрузкой исходных данных в CSV и сравнением двух положений антенны
+  или выездов A/B.
+- Единая оценка LTE от 0 до 100 объединяет RSRP, RSRQ, SINR, CQI при наличии и
+  стабильность. Одна формула используется в живом режиме, мастере юстировки и
+  истории, а исходные радиометрики всегда остаются доступными.
+- Первое приложение для macOS: подключение к RouterOS, Wi-Fi/системные аудиты и
+  LTE-диагностика с юстировкой. Локальный RSSI самого Mac появится позже через
+  запланированную нативную реализацию CoreWLAN.
+- GitHub Actions теперь одновременно собирает Android и macOS под Apple Silicon
+  и добавляет оба файла в единый релиз версии.
 
-Скачай `wifi-signal-tester-0.3.0.apk` ниже и установи на Android-устройство
-(разреши установку из неизвестных источников, когда телефон спросит).
+Файлы:
+
+- `wifi-signal-tester-0.3.1.apk` — Android;
+- `wifi-signal-tester-0.3.1-macos-arm64.zip` — распакуй, внутри будет
+  `Wi-Fi Signal Tester.app` для Mac на Apple Silicon.
+
+Сборка для Mac пока предназначена для тестирования и не подписана Developer ID
+с notarization, поэтому Gatekeeper может показать предупреждение.
 
 Полная история изменений — в [CHANGELOG.md](../blob/main/CHANGELOG.md).

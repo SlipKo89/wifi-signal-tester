@@ -1,8 +1,9 @@
-name: Build APK
+name: Build Android and macOS
 
-# Every push/merge to main builds an APK and publishes a GitHub Release for the
-# version in /VERSION. The workflow creates the v* tag itself; manual tags are
-# neither needed nor used as a trigger. Pull requests only build/test.
+# Every push/merge to main builds an APK and a zipped macOS .app, then publishes
+# one GitHub Release for the version in /VERSION. The workflow creates the v*
+# tag itself; manual tags are neither needed nor used as a trigger. Pull
+# requests build both platforms but do not publish a release.
 on:
   push:
     branches:
@@ -14,7 +15,7 @@ on:
 
 jobs:
   build:
-    name: Analyze, test and build
+    name: Analyze, test and build Android
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,6 +35,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
@@ -83,12 +85,69 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  macos:
+    name: Build macOS (Apple silicon)
+    runs-on: macos-15
+    permissions:
+      contents: read
+    outputs:
+      zip: ${{ steps.package.outputs.zip }}
+      artifact: ${{ steps.package.outputs.artifact }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Verify macOS toolchain
+        run: |
+          xcodebuild -version
+          pod --version
+
+      - name: Fetch packages
+        run: flutter pub get
+
+      - name: Build release macOS app
+        run: flutter build macos --release
+
+      - name: Package macOS app
+        id: package
+        shell: bash
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          APP="build/macos/Build/Products/Release/Wi-Fi Signal Tester.app"
+          ZIP="wifi-signal-tester-$VERSION-macos-arm64.zip"
+          ARTIFACT="wifi-signal-tester-$VERSION-macos-arm64-build-${GITHUB_RUN_NUMBER}"
+
+          if [ ! -d "$APP" ]; then
+            echo "::error::Built app not found at $APP"
+            exit 1
+          fi
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact }}
+          path: ${{ steps.package.outputs.zip }}
+          if-no-files-found: error
+          retention-days: 14
+
   release:
     name: Publish version from main
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-    needs: build
+    needs:
+      - build
+      - macos
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,6 +161,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact }}
+          path: release-assets
+
+      - name: Download built macOS app
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.macos.outputs.artifact }}
+          path: release-assets
 
       - name: Verify version has not already been used for different code
         shell: bash
@@ -122,12 +188,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.build.outputs.tag }}
-          APK: ${{ needs.build.outputs.apk }}
+          APK: release-assets/${{ needs.build.outputs.apk }}
+          MACOS_ZIP: release-assets/${{ needs.macos.outputs.zip }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" "$APK" "$MACOS_ZIP" \
+              --clobber \
+              --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$APK" \
+            gh release create "$TAG" "$APK" "$MACOS_ZIP" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "$TAG" \

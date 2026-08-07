@@ -29,15 +29,21 @@ or SSH and does not depend on or mix with the Wi-Fi dashboard.
 
 ## Download
 
-Grab the latest APK from the [Releases page](../../releases/latest) — download
-`wifi-signal-tester-<version>.apk` under *Assets* and install it on your Android
-device.
+Grab the latest build from the [Releases page](../../releases/latest):
 
-Every push/merge to `main` builds the APK, creates the `v<version>` tag from
-`VERSION` and publishes a GitHub Release automatically. The same APK is also
-available from that workflow run under [Actions](../../actions/workflows/release.yml)
-→ *Artifacts*. Do not create release tags manually; bump the app version before
-the merge instead.
+- Android: `wifi-signal-tester-<version>.apk`;
+- Apple-silicon Mac: `wifi-signal-tester-<version>-macos-arm64.zip` — unpack it
+  to get `Wi-Fi Signal Tester.app`.
+
+Every push/merge to `main` builds both platforms, creates the `v<version>` tag
+from `VERSION` and publishes one GitHub Release automatically. Both files are
+also available from that workflow run under
+[Actions](../../actions/workflows/release.yml) → *Artifacts*. Do not create
+release tags manually; bump the app version before the merge instead.
+
+The Mac ZIP is currently an ad-hoc-signed test build, so Gatekeeper can warn
+when it is opened on another Mac. Developer ID signing and Apple notarization
+remain a separate distribution step.
 
 ## How to use it
 

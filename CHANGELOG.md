@@ -6,12 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-07
+
 ### Added
 - **Initial macOS target** with the proper Wi-Fi Signal Tester product name,
   app sandboxing and outgoing/local-network access needed to read explicitly
   configured MikroTik routers. RouterOS audits and LTE diagnostics share the
   existing read-only transports. Android-only RSSI and permission plugins are
   skipped cleanly; native Mac Wi-Fi RSSI remains a tracked follow-up.
+- **GitHub macOS build**: pushes and pull requests now build an Apple-silicon
+  `.app` on GitHub's macOS runner and retain it as a ZIP artifact. A successful
+  push/manual run for a new version publishes that ZIP beside the Android APK
+  in the same GitHub Release.
 - **Persistent LTE measurement history**: the LTE dashboard can record every
   poll into a local, named session. Sessions show RSRP/RSRQ/SINR/RSSI/CQI
   min/average/max/spread, radio/cell facts, can be renamed or exported as CSV,
@@ -389,7 +395,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.3...v0.2.4

@@ -9,6 +9,17 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.3.1', '2026-08-07', [
+    'Persistent named LTE history with scalable charts, CSV export and two-session A/B comparison',
+    'One LTE Quality Score from 0 to 100 combines power, quality and stability across live, alignment and history views',
+    'Initial macOS app for RouterOS audits and LTE tools, built automatically by GitHub Actions for Apple silicon',
+    'Android APK and zipped macOS app are published together in one GitHub Release',
+  ], [
+    'Постоянная история LTE: именованные сессии, масштабируемые графики, CSV и сравнение двух замеров A/B',
+    'Единая оценка LTE 0–100 объединяет мощность, качество и стабильность в живом режиме, юстировке и истории',
+    'Первое приложение для macOS с аудитами RouterOS и LTE-инструментами; сборка под Apple Silicon выполняется на GitHub',
+    'Android APK и ZIP с приложением macOS публикуются вместе в одном GitHub Release',
+  ]),
   Release('0.3.0', '2026-08-07', [
     'Separate MikroTik LTE diagnostics over REST, binary API or read-only SSH',
     'Guided antenna alignment with live RSRP/RSRQ/SINR charts, stable checkpoints and return-to-best directions',
