@@ -12,8 +12,10 @@ import '../lte/lte_signal.dart';
 import '../mikrotik/router_os_transport.dart';
 import '../settings/settings_controller.dart';
 import 'lte_alignment_screen.dart';
+import 'lte_history_screen.dart';
 import 'theme.dart';
 import 'widgets/metric_tile.dart';
+import 'widgets/zoomable_lte_chart.dart';
 
 class LteScreen extends StatefulWidget {
   const LteScreen({super.key});
@@ -113,6 +115,43 @@ class _LteScreenState extends State<LteScreen> {
     await _controller.disconnect();
   }
 
+  Future<void> _toggleRecording(L10n l) async {
+    if (_controller.recording) {
+      await _controller.stopRecording();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(l.t(
+          'LTE recording saved to history.',
+          'LTE-запись сохранена в истории.',
+        )),
+      ));
+      return;
+    }
+    final started = await _controller.startRecording(routerLabel: _host.text);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(started
+          ? l.t(
+              'LTE recording started. Every poll is stored locally.',
+              'Запись LTE начата. Каждый опрос сохраняется локально.',
+            )
+          : l.t(
+              'Could not start LTE recording.',
+              'Не удалось запустить запись LTE.',
+            )),
+    ));
+  }
+
+  Future<void> _openHistory() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => LteHistoryScreen(
+        store: _controller.recordings,
+        activeSessionId: _controller.recordingSessionId,
+        stopActiveRecording: _controller.stopRecording,
+      ),
+    ));
+  }
+
   Future<void> _forget(L10n l) async {
     await _controller.disconnect();
     _alignmentSession.reset();
@@ -147,7 +186,11 @@ class _LteScreenState extends State<LteScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l.t('LTE diagnostics', 'LTE-диагностика')),
+            Text(
+              l.t('LTE diagnostics', 'LTE-диагностика'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             Text(
               connected
                   ? '${_host.text} · ${_controller.interfaceName ?? 'LTE'} · ${_controller.transportKind ?? 'RouterOS'}'
@@ -164,9 +207,16 @@ class _LteScreenState extends State<LteScreen> {
         actions: [
           if (connected)
             IconButton(
-              tooltip: l.t('Refresh now', 'Обновить сейчас'),
-              icon: const Icon(Icons.refresh),
-              onPressed: _controller.refresh,
+              tooltip: _controller.recording
+                  ? l.t('Stop recording', 'Остановить запись')
+                  : l.t('Record LTE history', 'Записать LTE-историю'),
+              icon: Icon(
+                _controller.recording
+                    ? Icons.stop_circle
+                    : Icons.fiber_manual_record,
+                color: _controller.recording ? const Color(0xFFF85149) : null,
+              ),
+              onPressed: () => _toggleRecording(l),
             ),
           if (connected)
             IconButton(
@@ -184,6 +234,31 @@ class _LteScreenState extends State<LteScreen> {
               icon: const Icon(Icons.logout),
               onPressed: _disconnect,
             ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'refresh') _controller.refresh();
+              if (value == 'history') _openHistory();
+            },
+            itemBuilder: (_) => [
+              if (connected)
+                PopupMenuItem(
+                  value: 'refresh',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.refresh),
+                    title: Text(l.t('Refresh now', 'Обновить сейчас')),
+                  ),
+                ),
+              PopupMenuItem(
+                value: 'history',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.history),
+                  title: Text(l.t('LTE history', 'История LTE')),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(
@@ -470,6 +545,14 @@ class _LteDashboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (controller.recordingError != null) ...[
+          _RecordingErrorBanner(l: l),
+          const SizedBox(height: 12),
+        ],
+        if (controller.recording) ...[
+          _RecordingBanner(controller: controller, l: l),
+          const SizedBox(height: 12),
+        ],
         _VerdictCard(report: diagnosis, l: l),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -496,6 +579,70 @@ class _LteDashboard extends StatelessWidget {
       ],
     );
   }
+}
+
+class _RecordingErrorBanner extends StatelessWidget {
+  final L10n l;
+
+  const _RecordingErrorBanner({required this.l});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF85149).withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFF85149).withValues(alpha: 0.34),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.sd_storage_outlined, color: Color(0xFFF85149)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(l.t(
+                'LTE history could not be written. Recording was stopped; live monitoring continues.',
+                'Не удалось записать LTE-историю. Запись остановлена, живой мониторинг продолжается.',
+              )),
+            ),
+          ],
+        ),
+      );
+}
+
+class _RecordingBanner extends StatelessWidget {
+  final LteController controller;
+  final L10n l;
+
+  const _RecordingBanner({required this.controller, required this.l});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF85149).withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFF85149).withValues(alpha: 0.34),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.fiber_manual_record,
+                size: 18, color: Color(0xFFF85149)),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                '${l.t('LTE recording', 'Запись LTE')} · '
+                '${controller.recordedSampleCount} '
+                '${l.t('samples', 'замеров')}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _VerdictCard extends StatelessWidget {
@@ -755,6 +902,32 @@ class _StabilityCard extends StatelessWidget {
             _sectionTitle(
               Icons.timeline,
               '${l.t('Stability', 'Стабильность')} · ${controller.history.length}',
+            ),
+            const SizedBox(height: 12),
+            ZoomableLteChart(
+              datasets: [
+                LteChartDataset(
+                  name: l.t('Live', 'Сейчас'),
+                  color: const Color(0xFF3FB950),
+                  points: controller.history
+                      .map((sample) => LteChartPoint(
+                            sampledAt: sample.sampledAt,
+                            rsrp: sample.rsrp,
+                            rsrq: sample.rsrq,
+                            sinr: sample.sinr,
+                            rssi: sample.rssi,
+                            cqi: sample.cqi,
+                          ))
+                      .toList(growable: false),
+                ),
+              ],
+              autoFollow: true,
+              zoomHint: l.t(
+                '1× — complete live history · pinch with two fingers or use the slider',
+                '1× — вся живая история · масштабируй двумя пальцами или ползунком',
+              ),
+              zoomInTooltip: l.t('Zoom in', 'Увеличить'),
+              zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
             ),
             const SizedBox(height: 12),
             for (final row in rows)

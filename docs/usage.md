@@ -327,9 +327,22 @@ A band or serving-cell handoff is marked because a score change may then come
 from the handoff rather than antenna movement alone.
 
 The checkpoints remain available if you leave and reopen the assistant, but
-the current in-memory session is cleared when you disconnect from the LTE
-router. Use the restart icon to discard it and take a new baseline. Persistent
-named sessions and export are planned separately.
+the current alignment grid is cleared when you disconnect from the LTE router.
+Use the restart icon to discard it and take a new baseline.
+
+### LTE recording history
+
+Tap the red record icon on the LTE dashboard to start a persistent session.
+Every successful LTE poll is then stored locally; tap Stop or disconnect to
+finish it. Open *LTE history* from the dashboard menu to rename, inspect,
+export or delete a session. Select exactly two sessions to compare their
+RSRP/RSRQ/SINR/RSSI/CQI averages, spreads, bands and serving cells.
+
+At 1× each live or saved chart fits its whole series into the available width.
+Use −/+, the 1×…20× slider or a two-finger pinch to expand it, then pan
+horizontally. This does not discard points; it only changes their display scale.
+Saved history contains only app-created radio measurements and can be deleted
+from the history screen.
 
 RouterOS often includes IMEI, IMSI and ICCID in the monitor response. The app
 does not model, display, log or persist those identifiers; they are discarded

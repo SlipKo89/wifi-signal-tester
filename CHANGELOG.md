@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Persistent LTE measurement history**: the LTE dashboard can record every
+  poll into a local, named session. Sessions show RSRP/RSRQ/SINR/RSSI/CQI
+  min/average/max/spread, radio/cell facts, can be renamed or exported as CSV,
+  and two recordings can be selected for an A/B comparison. IMEI, IMSI and
+  ICCID remain outside the data model and are never stored.
+- **Scalable LTE charts** on the dashboard, in the antenna-alignment assistant
+  and in saved sessions. At 1× the full series fits; use −/+, the 1×…20× slider
+  or a two-finger pinch to zoom, then pan horizontally through individual
+  measurements.
+
 ## [0.3.0] - 2026-08-07
 
 ### Added

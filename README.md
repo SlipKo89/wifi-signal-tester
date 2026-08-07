@@ -74,6 +74,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
   dish in repeatable steps. The assistant combines signal power, quality and
   stability, proposes the next move and tells you how to return to the best
   measured position before a finer pass.
+- **Persistent LTE history and A/B comparison**: record named sessions locally,
+  inspect scalable 1×…20× radio charts and min/average/max/spread, compare two
+  visits or antenna positions, and export the raw samples as CSV.
 
 ## Requirements (build machine — macOS)
 

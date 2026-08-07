@@ -86,6 +86,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       relative step-by-step grid search, return-to-best directions and a fine
       pass. Band/cell handoffs are marked so they are not mistaken for a pure
       antenna-angle improvement
+- [x] Persistent named LTE measurement sessions: local SQLite history,
+      min/average/max/spread, scalable charts, CSV export and two-session A/B
+      comparison by radio metric, band and cell
 - [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
 
 ## Docs & discoverability
@@ -124,9 +127,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Named measurement spots ("kitchen") with min/max/avg over a dwell window,
       compare spots
 - [x] Ping / latency probe to the gateway alongside signal (correlate signal↔lag)
-- [ ] LTE named/persistent alignment sessions with CSV export and optional GPS
-      points (the current alignment session is kept only until disconnect)
-- [ ] LTE band/cell A/B comparison (same location, min/avg/max and verdict diff)
+- [x] LTE named/persistent measurement sessions with CSV export; optional GPS
+      points remain a separate task
+- [x] LTE band/cell A/B comparison (same location, min/avg/max/spread and diff)
 
 ### C. Bigger directions
 - [ ] A/B before/after snapshots (channel / power / AP placement change) with diff

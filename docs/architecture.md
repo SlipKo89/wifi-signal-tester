@@ -65,6 +65,20 @@ operator-relative integer grid; coordinates are physical steps, never claimed
 degrees or compass headings. The in-memory session survives leaving and
 reopening the assistant, and is cleared when the LTE router disconnects.
 
+Longer measurements are separate persistent sessions:
+
+```
+LteController record toggle → LteHistoryStore → lte_history.db
+                                      │
+                                      ├─ session metadata + radio samples
+                                      └─ detail / CSV / two-session comparison
+```
+
+Only the sanitised `LteSignal` fields cross into the LTE history database.
+Zoomable charts keep up to 600 current samples in memory, while the live
+diagnosis intentionally evaluates only the latest 60 so old movement does not
+contaminate the current verdict.
+
 ## Why three transports
 
 `RouterOsTransport` exposes `read(menuPath, {filters})` plus `command()` for

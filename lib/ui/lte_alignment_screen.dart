@@ -8,8 +8,8 @@ import '../l10n/l10n.dart';
 import '../lte/lte_alignment.dart';
 import '../lte/lte_alignment_controller.dart';
 import '../lte/lte_controller.dart';
-import '../lte/lte_signal.dart';
 import '../settings/settings_controller.dart';
+import 'widgets/zoomable_lte_chart.dart';
 
 const _green = Color(0xFF3FB950);
 const _amber = Color(0xFFD29922);
@@ -45,6 +45,28 @@ class _LteAlignmentScreenState extends State<LteAlignmentScreen> {
 
   void _changed() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleRecording(L10n l) async {
+    if (widget.monitor.recording) {
+      await widget.monitor.stopRecording();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(l.t(
+          'LTE recording saved to history.',
+          'LTE-запись сохранена в истории.',
+        )),
+      ));
+      return;
+    }
+    final started = await widget.monitor.startRecording();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(started
+          ? l.t('LTE recording started.', 'Запись LTE начата.')
+          : l.t('Could not start LTE recording.',
+              'Не удалось запустить запись LTE.')),
+    ));
   }
 
   Future<void> _restart(L10n l) async {
@@ -98,6 +120,19 @@ class _LteAlignmentScreenState extends State<LteAlignmentScreen> {
           ],
         ),
         actions: [
+          if (widget.monitor.state == LteMonitorState.connected)
+            IconButton(
+              tooltip: widget.monitor.recording
+                  ? l.t('Stop recording', 'Остановить запись')
+                  : l.t('Record LTE history', 'Записать LTE-историю'),
+              onPressed: () => _toggleRecording(l),
+              icon: Icon(
+                widget.monitor.recording
+                    ? Icons.stop_circle
+                    : Icons.fiber_manual_record,
+                color: widget.monitor.recording ? _red : null,
+              ),
+            ),
           if (_controller.hasSession)
             IconButton(
               tooltip: l.t('Start over', 'Начать заново'),
@@ -173,9 +208,6 @@ class _LiveHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final history = controller.liveHistory.length <= 30
-        ? controller.liveHistory
-        : controller.liveHistory.sublist(controller.liveHistory.length - 30);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(15),
@@ -185,124 +217,34 @@ class _LiveHistoryCard extends StatelessWidget {
             _title(
                 Icons.show_chart, l.t('Live radio history', 'История эфира')),
             const SizedBox(height: 12),
-            _MetricChart(
-              label: 'RSRP',
-              unit: 'dBm',
-              color: _green,
-              samples: history,
-              value: (sample) => sample.rsrp,
-            ),
-            const SizedBox(height: 10),
-            _MetricChart(
-              label: 'RSRQ',
-              unit: 'dB',
-              color: _blue,
-              samples: history,
-              value: (sample) => sample.rsrq,
-            ),
-            const SizedBox(height: 10),
-            _MetricChart(
-              label: 'SINR',
-              unit: 'dB',
-              color: _amber,
-              samples: history,
-              value: (sample) => sample.sinr,
+            ZoomableLteChart(
+              datasets: [
+                LteChartDataset(
+                  name: l.t('Live', 'Сейчас'),
+                  color: _green,
+                  points: controller.liveHistory
+                      .map((sample) => LteChartPoint(
+                            sampledAt: sample.sampledAt,
+                            rsrp: sample.rsrp,
+                            rsrq: sample.rsrq,
+                            sinr: sample.sinr,
+                            rssi: sample.rssi,
+                            cqi: sample.cqi,
+                          ))
+                      .toList(growable: false),
+                ),
+              ],
+              autoFollow: true,
+              zoomHint: l.t(
+                '1× — complete live history · pinch with two fingers or use the slider',
+                '1× — вся живая история · масштабируй двумя пальцами или ползунком',
+              ),
+              zoomInTooltip: l.t('Zoom in', 'Увеличить'),
+              zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _MetricChart extends StatelessWidget {
-  final String label;
-  final String unit;
-  final Color color;
-  final List<LteSignal> samples;
-  final double? Function(LteSignal sample) value;
-
-  const _MetricChart({
-    required this.label,
-    required this.unit,
-    required this.color,
-    required this.samples,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final values = samples.map(value).whereType<double>().toList();
-    final latest = values.isEmpty ? null : values.last;
-    if (values.length < 2) {
-      return SizedBox(
-        height: 50,
-        child: Row(
-          children: [
-            SizedBox(
-              width: 52,
-              child: Text(label,
-                  style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-            ),
-            Text(latest == null ? '—' : '${_n(latest)} $unit'),
-          ],
-        ),
-      );
-    }
-    final low = values.reduce(math.min);
-    final high = values.reduce(math.max);
-    final padding = math.max(1.5, (high - low) * 0.18);
-    final spots = [
-      for (var index = 0; index < values.length; index++)
-        FlSpot(index.toDouble(), values[index]),
-    ];
-    return Column(
-      children: [
-        Row(
-          children: [
-            Text(label,
-                style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            Text('${_n(latest!)} $unit',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 8),
-            Text('${_n(low)}…${_n(high)}',
-                style: const TextStyle(fontSize: 10, color: _muted)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: 58,
-          child: LineChart(
-            LineChartData(
-              minX: 0,
-              maxX: (values.length - 1).toDouble(),
-              minY: low - padding,
-              maxY: high + padding,
-              clipData: const FlClipData.all(),
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              titlesData: const FlTitlesData(show: false),
-              lineTouchData: const LineTouchData(enabled: false),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: 0.22,
-                  color: color,
-                  barWidth: 2,
-                  dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    color: color.withValues(alpha: 0.10),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
