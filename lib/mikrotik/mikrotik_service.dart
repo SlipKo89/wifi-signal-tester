@@ -5,6 +5,8 @@ import 'rest_transport.dart';
 import 'router_os_transport.dart';
 import 'ssh_transport.dart';
 
+export 'router_os_transport.dart' show TransportPreference;
+
 /// Connection settings for a router.
 class RouterConnection {
   final String host;
@@ -49,8 +51,6 @@ class RouterConnection {
         port: (j['port'] as num?)?.toInt(),
       );
 }
-
-enum TransportPreference { auto, rest, binary, ssh }
 
 /// High-level, read-only orchestration over a [RouterOsTransport]:
 /// picks a transport, detects the wireless stack, and returns the signal for

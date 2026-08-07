@@ -10,8 +10,8 @@ CAPsMAN or plain Wi-Fi) **read-only**, for **your device's MAC only**, and puts
 it next to your phone's own readings.
 
 The app also contains a **separate LTE diagnostics tool** for MikroTik LTE
-routers. It reads modem radio quality over SSH and does not depend on or mix
-with the Wi-Fi dashboard.
+routers. It reads modem radio quality over REST, the binary API or SSH and does
+not depend on or mix with the Wi-Fi dashboard.
 
 <table>
 <tr>
@@ -66,9 +66,10 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 - **Support report**: creates a ZIP only when you ask, with current diagnostics
   and a bounded event log. Network identifiers are masked by default;
   credentials and raw router responses are never included or uploaded.
-- **Separate LTE diagnostics**: read-only SSH polling of RSRP, RSRQ, SINR,
-  optional RSSI/CQI, band and serving-cell facts, stability and practical
-  antenna/interference advice. No Wi-Fi connection is required for this mode.
+- **Separate LTE diagnostics**: read-only REST / binary API / SSH polling of
+  RSRP, RSRQ, SINR, optional RSSI/CQI, band and serving-cell facts, stability
+  and practical antenna/interference advice. Auto tries REST → API → SSH; no
+  Wi-Fi connection is required for this mode.
 
 ## Requirements (build machine — macOS)
 
@@ -132,11 +133,11 @@ that MAC → show both sides side by side.
 
 ## Security — read-only on **both** sides
 
-- **Router:** no write path exists in the code; the transport interface has only
-  `read()`. Pair it with a read-only RouterOS user so writes are impossible even
-  in principle. The SSH transport is a console, so it enforces the same rule in
-  code: it builds every command itself and accepts only `print` and
-  `monitor once`, refusing console metacharacters and any other verb.
+- **Router:** no write path exists in the code; the transport interface exposes
+  menu reads plus a fixed whitelist of wireless/Wi-Fi/LTE `monitor once`
+  commands. REST, API and SSH all pass through that gate. Pair it with a
+  read-only RouterOS user so writes are impossible even in principle. SSH also
+  rejects console metacharacters and every verb except `print`/`monitor once`.
 - **Device:** the app only reads the Wi-Fi chip (RSSI, SSID, frequency). It never
   changes, connects, disconnects or forgets any network. The manifest explicitly
   rejects `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` and `WRITE_SETTINGS`; it

@@ -123,8 +123,8 @@ class SshTransport implements RouterOsTransport {
   }
 
   Future<SSHClient> _login(String user) async {
-    final socket = await SSHSocket.connect(host, port, timeout: timeout)
-        .timeout(timeout);
+    final socket =
+        await SSHSocket.connect(host, port, timeout: timeout).timeout(timeout);
     final client = SSHClient(
       socket,
       username: user,
@@ -215,6 +215,7 @@ class SshTransport implements RouterOsTransport {
     String path,
     Map<String, String> params,
   ) async {
+    validateReadOnlyCommand(path, params);
     final menu = _consoleMenu(path);
     // `{'.id': 'wlan1', 'once': ''}` → `/interface wireless monitor wlan1 once`
     final args = <String>[];
@@ -336,10 +337,31 @@ class SshTransport implements RouterOsTransport {
     }
     // Nothing after the verb may look like another verb.
     const banned = {
-      'set', 'add', 'remove', 'reset', 'reset-configuration', 'enable',
-      'disable', 'unset', 'move', 'edit', 'import', 'export', 'reboot',
-      'shutdown', 'upgrade', 'downgrade', 'install', 'scan', 'sniff',
-      'reset-counters', 'clear', 'password', 'renew', 'release', 'kill',
+      'set',
+      'add',
+      'remove',
+      'reset',
+      'reset-configuration',
+      'enable',
+      'disable',
+      'unset',
+      'move',
+      'edit',
+      'import',
+      'export',
+      'reboot',
+      'shutdown',
+      'upgrade',
+      'downgrade',
+      'install',
+      'scan',
+      'sniff',
+      'reset-counters',
+      'clear',
+      'password',
+      'renew',
+      'release',
+      'kill',
     };
     for (final w in words) {
       if (banned.contains(w)) {
@@ -406,7 +428,8 @@ class SshTransport implements RouterOsTransport {
       }
 
       // Everything before the first field is flag letters (` HC `, ` X `).
-      final head = line.length <= firstField ? line : line.substring(0, firstField);
+      final head =
+          line.length <= firstField ? line : line.substring(0, firstField);
       for (final letter in head.replaceAll(RegExp(r'[^A-Z]'), '').split('')) {
         final field = _flagFields[letter];
         if (field != null) row[field] = 'true';
@@ -430,7 +453,8 @@ class SshTransport implements RouterOsTransport {
       final key = keys[i].group(1)!;
       // Offsets are against ' $line', so shift by one back onto `line`.
       final valueStart = keys[i].end - 1;
-      final valueEnd = i + 1 < keys.length ? keys[i + 1].start - 1 : line.length;
+      final valueEnd =
+          i + 1 < keys.length ? keys[i + 1].start - 1 : line.length;
       var value = line.substring(valueStart, valueEnd).trim();
       if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
         value = value.substring(1, value.length - 1);
@@ -476,8 +500,9 @@ class SshTransport implements RouterOsTransport {
       final line = raw.trim();
       if (line.isEmpty || line.startsWith(';;;')) continue;
       // Several labels can share a line: `status: running-ap  channel: 2412`.
-      for (final m in RegExp(r'([a-z0-9\-]+):\s*([^\s].*?)(?=\s{2,}[a-z0-9\-]+:|$)')
-          .allMatches(line)) {
+      for (final m
+          in RegExp(r'([a-z0-9\-]+):\s*([^\s].*?)(?=\s{2,}[a-z0-9\-]+:|$)')
+              .allMatches(line)) {
         row[m.group(1)!] = _normalizeBool(m.group(2)!.trim());
       }
     }

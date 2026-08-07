@@ -75,7 +75,8 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       classic wireless and WifiWave2 access lists
 - [x] In-app changelog + "what's new on update"
 - [x] Open-source licenses page + "built with AI" note + easter egg
-- [x] Separate LTE diagnostics over read-only SSH: auto-select LTE interface,
+- [x] Separate LTE diagnostics over REST / binary API / read-only SSH:
+      auto-select transport and LTE interface,
       live RSRP/RSRQ/SINR plus RSSI/CQI where supported, band/cell facts,
       rolling stability and plain-language antenna/interference advice. Tested
       against both R11e-LTE and FG621-EA monitor formats; modem/SIM identifiers

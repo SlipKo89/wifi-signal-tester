@@ -2,8 +2,8 @@
 /// implementations sit behind this contract, so the rest of the app never
 /// cares which one is in use.
 ///
-/// By contract, implementations MUST only ever issue read (`print` / GET)
-/// operations. There is deliberately no write method on this interface.
+/// Implementations issue menu reads and a small whitelist of `monitor once`
+/// commands. There is deliberately no write method on this interface.
 abstract class RouterOsTransport {
   /// Opens the connection and authenticates. Throws on failure.
   Future<void> connect();
@@ -28,6 +28,38 @@ abstract class RouterOsTransport {
 
   /// Human-readable transport name for the UI ("REST" / "API").
   String get kind;
+}
+
+/// User preference for choosing one of the read-only RouterOS transports.
+enum TransportPreference { auto, rest, binary, ssh }
+
+const _readOnlyMonitorPaths = {
+  '/interface/wireless/monitor',
+  '/interface/wifi/monitor',
+  '/interface/lte/monitor',
+};
+
+/// Shared safety gate for commands that are not plain menu reads.
+///
+/// REST and the binary API can technically execute writes, so relying on a
+/// comment or on call-site discipline is not enough. Every transport calls this
+/// validator and only these three `monitor <interface> once` reads pass.
+void validateReadOnlyCommand(String path, Map<String, String> params) {
+  if (!_readOnlyMonitorPaths.contains(path)) {
+    throw RouterOsException('Command is not on the read-only whitelist: $path');
+  }
+  const allowedKeys = {'.id', 'numbers', 'once'};
+  if (params.keys.any((key) => !allowedKeys.contains(key)) ||
+      !params.containsKey('once') ||
+      params['once']!.isNotEmpty) {
+    throw RouterOsException('Only monitor once is allowed');
+  }
+  final id = params['.id'] ?? params['numbers'];
+  if (id == null ||
+      id.isEmpty ||
+      (params.containsKey('.id') && params.containsKey('numbers'))) {
+    throw RouterOsException('A single interface identifier is required');
+  }
 }
 
 /// Controlled transport telemetry for the in-memory support log. Callers must

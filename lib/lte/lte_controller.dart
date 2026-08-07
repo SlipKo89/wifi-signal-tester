@@ -24,6 +24,7 @@ class LteController extends ChangeNotifier {
   DateTime? lastUpdated;
 
   String? get interfaceName => _service.interfaceName;
+  String? get transportKind => _service.transportKind;
   bool get isLive => _timer != null;
   LteDiagnosticReport get diagnosis =>
       LteDiagnostics.evaluate(signal, history: history);

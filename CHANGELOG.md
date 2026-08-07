@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the AP name and completion time. A pending or active run can be started
   immediately, repeated or cancelled.
 - **Separate LTE signal diagnostics** from ⋮ → LTE diagnostics. It connects to
-  a MikroTik over the read-only SSH transport, auto-selects an enabled LTE
-  interface and polls `monitor once` for RSRP, RSRQ, SINR and optional RSSI/CQI.
+  a MikroTik over REST, the binary API or the read-only SSH transport; Auto
+  tries them in that order. It auto-selects an enabled LTE interface and polls
+  `monitor once` for RSRP, RSRQ, SINR and optional RSSI/CQI.
   The screen shows the operator/modem, LTE band, bandwidth, EARFCN, PCI/cell,
   recent min/average/max stability, and a plain-language diagnosis that
   distinguishes weak-but-clean coverage from interference/sector load.
@@ -22,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deliberately discarded immediately and are never stored or displayed.
 
 ### Changed
+- The LTE connection form now has the same transport, TLS and custom-port
+  controls as Wi-Fi monitoring and shows the transport actually selected.
+  Existing SSH-only LTE profiles migrate as SSH profiles, so saved port 22/2222
+  settings are not reinterpreted as REST or API settings.
 - Automatic connection diagnosis no longer samples the unstable handoff
   itself. After connecting or roaming it waits for the radio link to settle;
   automatic runs can be disabled and the delay can be set from 0 to 30 seconds

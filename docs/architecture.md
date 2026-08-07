@@ -33,17 +33,19 @@
 LTE deliberately does not enter `MonitorController` or the Wi-Fi IP→MAC path:
 
 ```
-LteScreen → LteController → LteService → SshTransport
+LteScreen → LteController → LteService → RouterOsTransport (REST / API / SSH)
                                       ├─ /interface/lte print
                                       ├─ /interface/lte/monitor … once
                                       └─ /system/resource print
 ```
 
-`LteService` selects an enabled/running LTE interface and immediately reduces
-the monitor response to `LteSignal`. RouterOS returns IMEI/IMSI/ICCID alongside
-radio data on many modems; `LteSignal` has no such fields, so those identifiers
-do not cross the service boundary. `LteDiagnostics` evaluates RSRP/RSRQ/SINR,
-optional RSSI/CQI and recent stability independently of all Wi-Fi state.
+`LteService` uses the same `TransportPreference` semantics as Wi-Fi monitoring
+(Auto = REST → API → SSH), selects an enabled/running LTE interface and
+immediately reduces the monitor response to `LteSignal`. RouterOS returns
+IMEI/IMSI/ICCID alongside radio data on many modems; `LteSignal` has no such
+fields, so those identifiers do not cross the service boundary. `LteDiagnostics`
+evaluates RSRP/RSRQ/SINR, optional RSSI/CQI and recent stability independently
+of all Wi-Fi state.
 
 ## Why three transports
 
@@ -99,8 +101,9 @@ default-deny chain.
 
 ### Read-only on a channel that could write
 
-REST and the API are read-only because only `print`/`GET` is ever issued. A
-console could do anything, so `SshTransport` enforces the rule in code: commands
+REST and the API are read-only because callers can only print menus or execute
+the fixed `monitor once` reads exposed by the transport contract. A console
+could do anything, so `SshTransport` enforces the rule in code: commands
 are composed from a menu path plus a fixed verb, only `print` and `monitor once`
 pass the whitelist, console metacharacters are refused, and `monitor` without
 `once` is rejected. See `mikrotik-readonly-user.md`.

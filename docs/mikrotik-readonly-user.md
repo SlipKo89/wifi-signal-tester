@@ -45,9 +45,10 @@ Lock the services down to your test subnet if you can:
 
 ## The SSH transport, specifically
 
-REST and the binary API are read-only because the app only ever issues
-`print`/`GET`. SSH is different: a console session *could* write, so the app
-enforces read-only itself.
+REST and the binary API are kept read-only by a shared command gate: menu reads
+plus three explicitly allowed `monitor <interface> once` paths. SSH is
+different because a console session *could* write, so it has an additional
+console-specific whitelist.
 
 - Commands are **built** by the app from a menu path plus a fixed verb — the UI
   never passes free text to the router.
@@ -69,8 +70,9 @@ than a promise — use one.
 - The group policy above grants `read` + API access but **not** `write`,
   `policy`, `reboot`, `password`, or `sensitive`. Even a bug in the app cannot
   change router configuration.
-- The app only issues `print` (API) and `GET` (REST) requests, and only ever
-  reads `/ip/arp`, DHCP leases and the registration table for **your** MAC.
+- The transport contract has no write method. Its only non-`print` operation is
+  checked against the fixed wireless/Wi-Fi/LTE `monitor once` whitelist before
+  REST, API or SSH sends anything.
 
 ## Menus the app reads
 
@@ -82,5 +84,6 @@ than a promise — use one.
 | CAPsMAN (legacy)   | `/caps-man/registration-table`                  |
 | Classic wireless   | `/interface/wireless/registration-table`        |
 | Noise floor        | `/interface/wireless/monitor once` (and `/interface/wifi/…`) |
+| LTE diagnostics    | `/interface/lte`, `/interface/lte/monitor once`, `/system/resource` |
 | Audit (Wi-Fi)      | `/caps-man/…`, `/interface/wifi/…`, `/interface/wireless` |
 | Audit (system)     | `/system/resource`, `/system/ntp/client`, `/system/package/update`, `/ip/service`, `/user`, `/ip/pool`, `/ip/firewall/filter` |

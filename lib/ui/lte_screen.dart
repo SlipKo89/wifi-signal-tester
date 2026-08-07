@@ -8,6 +8,7 @@ import '../lte/lte_credentials_store.dart';
 import '../lte/lte_diagnostics.dart';
 import '../lte/lte_service.dart';
 import '../lte/lte_signal.dart';
+import '../mikrotik/router_os_transport.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
 import 'widgets/metric_tile.dart';
@@ -25,8 +26,10 @@ class _LteScreenState extends State<LteScreen> {
   final _host = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
-  final _port = TextEditingController(text: '22');
+  final _port = TextEditingController();
   final _interface = TextEditingController();
+  TransportPreference _transport = TransportPreference.auto;
+  bool _useTls = true;
   bool _obscurePassword = true;
 
   @override
@@ -43,7 +46,9 @@ class _LteScreenState extends State<LteScreen> {
       _host.text = saved.host;
       _username.text = saved.username;
       _password.text = saved.password;
-      _port.text = saved.port.toString();
+      _transport = saved.transport;
+      _useTls = saved.useTls;
+      _port.text = saved.port?.toString() ?? '';
       _interface.text = saved.interfaceName ?? '';
     });
   }
@@ -68,13 +73,17 @@ class _LteScreenState extends State<LteScreen> {
     final host = _host.text.trim();
     final username = _username.text.trim();
     final password = _password.text;
-    final port = int.tryParse(_port.text.trim());
-    if (host.isEmpty || username.isEmpty || password.isEmpty || port == null) {
+    final rawPort = _port.text.trim();
+    final port = rawPort.isEmpty ? null : int.tryParse(rawPort);
+    if (host.isEmpty ||
+        username.isEmpty ||
+        password.isEmpty ||
+        (rawPort.isNotEmpty && port == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l.t(
-            'Enter host, username, password and a valid SSH port.',
-            'Укажи адрес, логин, пароль и корректный SSH-порт.',
+            'Enter host, username, password and a valid port.',
+            'Укажи адрес, логин, пароль и корректный порт.',
           )),
         ),
       );
@@ -84,6 +93,8 @@ class _LteScreenState extends State<LteScreen> {
       host: host,
       username: username,
       password: password,
+      transport: _transport,
+      useTls: _useTls,
       port: port,
       interfaceName:
           _interface.text.trim().isEmpty ? null : _interface.text.trim(),
@@ -101,7 +112,9 @@ class _LteScreenState extends State<LteScreen> {
       _host.clear();
       _username.clear();
       _password.clear();
-      _port.text = '22';
+      _transport = TransportPreference.auto;
+      _useTls = true;
+      _port.clear();
       _interface.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -127,7 +140,7 @@ class _LteScreenState extends State<LteScreen> {
             Text(l.t('LTE diagnostics', 'LTE-диагностика')),
             Text(
               connected
-                  ? '${_host.text} · ${_controller.interfaceName ?? 'LTE'} · SSH'
+                  ? '${_host.text} · ${_controller.interfaceName ?? 'LTE'} · ${_controller.transportKind ?? 'RouterOS'}'
                   : l.t('Separate from Wi-Fi monitoring',
                       'Отдельно от мониторинга Wi-Fi'),
               style: const TextStyle(
@@ -197,7 +210,8 @@ class _LteScreenState extends State<LteScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    l.t('LTE MikroTik over SSH', 'LTE MikroTik по SSH'),
+                    l.t('LTE MikroTik connection',
+                        'Подключение к LTE MikroTik'),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -258,43 +272,111 @@ class _LteScreenState extends State<LteScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<TransportPreference>(
+              key: ValueKey(_transport),
+              initialValue: _transport,
+              decoration:
+                  InputDecoration(labelText: l.t('Transport', 'Транспорт')),
+              items: [
+                DropdownMenuItem(
+                  value: TransportPreference.auto,
+                  child: Text(l.t(
+                      'Auto (REST → API → SSH)', 'Авто (REST → API → SSH)')),
+                ),
+                DropdownMenuItem(
+                  value: TransportPreference.rest,
+                  child: Text(l.t('REST only', 'Только REST')),
+                ),
+                DropdownMenuItem(
+                  value: TransportPreference.binary,
+                  child: Text(l.t('Binary API only', 'Только бинарный API')),
+                ),
+                DropdownMenuItem(
+                  value: TransportPreference.ssh,
+                  child: Text(
+                      l.t('SSH (RouterOS console)', 'SSH (консоль RouterOS)')),
+                ),
+              ],
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      final next = value ?? TransportPreference.auto;
+                      if (next == _transport) return;
+                      setState(() {
+                        _transport = next;
+                        _port.clear();
+                      });
+                    },
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _port,
-                    enabled: !busy,
+                    enabled: !busy && _transport != TransportPreference.auto,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: l.t('SSH port', 'Порт SSH'),
+                      labelText: l.t('Port', 'Порт'),
                       prefixIcon: const Icon(Icons.numbers),
-                      hintText: '22',
+                      hintText: _portHint(l),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _interface,
-                    enabled: !busy,
-                    decoration: InputDecoration(
-                      labelText: l.t('LTE interface', 'LTE-интерфейс'),
-                      hintText: l.t('auto', 'авто'),
-                    ),
+                if (_transport != TransportPreference.ssh) ...[
+                  const SizedBox(width: 12),
+                  Column(
+                    children: [
+                      const Text(
+                        'TLS',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF7D8590),
+                        ),
+                      ),
+                      Switch(
+                        value: _useTls,
+                        onChanged: busy
+                            ? null
+                            : (value) => setState(() => _useTls = value),
+                      ),
+                    ],
                   ),
-                ),
+                ],
               ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _interface,
+              enabled: !busy,
+              decoration: InputDecoration(
+                labelText: l.t('LTE interface', 'LTE-интерфейс'),
+                hintText: l.t('auto-select', 'выбрать автоматически'),
+                prefixIcon: const Icon(Icons.settings_input_antenna),
+              ),
             ),
             const SizedBox(height: 10),
             Text(
               l.t(
-                'The interface may be left empty. The app selects a running '
-                    'LTE interface automatically. Credentials are stored in the device Keystore.',
-                'Интерфейс можно не указывать: приложение само выберет работающий '
-                    'LTE-интерфейс. Данные входа хранятся в Keystore устройства.',
+                'Auto tries REST, then the binary API, then SSH. A custom port '
+                    'is used only with an explicitly selected transport. The '
+                    'LTE interface may be left empty. Credentials are stored in the device Keystore.',
+                'Авто пробует REST, затем бинарный API и SSH. Нестандартный '
+                    'порт используется только при явном выборе транспорта. '
+                    'LTE-интерфейс можно не указывать. Данные входа хранятся в Keystore устройства.',
               ),
               style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
             ),
+            if (_transport == TransportPreference.ssh) ...[
+              const SizedBox(height: 8),
+              Text(
+                l.t(
+                  'SSH runs only `print` and `monitor once`; the RouterOS user needs the `ssh` policy.',
+                  'По SSH выполняются только `print` и `monitor once`; пользователю RouterOS нужна политика `ssh`.',
+                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
+              ),
+            ],
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: busy ? null : () => _connect(l),
@@ -331,6 +413,14 @@ class _LteScreenState extends State<LteScreen> {
       ),
     );
   }
+
+  String _portHint(L10n l) => switch (_transport) {
+        TransportPreference.auto =>
+          l.t('default per transport', 'по умолчанию для транспорта'),
+        TransportPreference.rest => _useTls ? '443' : '80',
+        TransportPreference.binary => _useTls ? '8729' : '8728',
+        TransportPreference.ssh => '22',
+      };
 }
 
 class _LteDashboard extends StatelessWidget {

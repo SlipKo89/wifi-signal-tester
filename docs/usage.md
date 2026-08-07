@@ -270,11 +270,14 @@ refresh more slowly than the poll interval.
 ⋮ → *LTE diagnostics* opens a completely separate tool for a MikroTik with an
 LTE modem. It does not use the phone's Wi-Fi measurements and does not require
 the phone to be associated with the MikroTik's Wi-Fi. The router only needs to
-be reachable over SSH.
+be reachable over one supported management transport.
 
-Enter the host, SSH port, read-only username and password. Leave *LTE interface*
-empty to auto-select a running interface, or enter a name such as `lte1`. The
-profile is stored in the device Keystore separately from Wi-Fi router profiles.
+Enter the host, read-only username and password. *Auto* tries REST → binary API
+→ SSH, or you can pin one transport, its TLS mode and a custom port. Leave *LTE
+interface* empty to auto-select a running interface, or enter a name such as
+`lte1`. The profile is stored in the device Keystore separately from Wi-Fi
+router profiles. Existing profiles created by the SSH-only version remain SSH
+profiles after the update.
 
 The app runs only these read-only commands:
 
@@ -333,7 +336,7 @@ sharing. *Copy readable report* is available when a ZIP is inconvenient.
 | Router unreachable | Wrong host, or you're not on its network. Check the gateway shown in the summary. |
 | Values refresh slowly | Android Wi-Fi scan throttling — see the Reference entry, or raise the poll interval. |
 | SNR marked as estimate | The registration table doesn't report SNR (typical for CAPsMAN); it is derived from the radio's measured noise floor. |
-| Nothing at all over SSH | The user's group needs the `ssh` policy; check `/ip service` allows your subnet. |
+| Nothing at all over SSH | The user's group needs the `ssh` policy; check `/ip service` allows your subnet. LTE can also use REST or the binary API. |
 | LTE says no interface was found | Check that `/interface lte print` contains an enabled interface, or clear/correct the optional interface name in the LTE form. |
 | LTE is registered but metrics are empty | Wait for the modem to finish registering; some modem/RouterOS combinations need a current modem firmware before they expose radio metrics. |
 | Audit says "Report incomplete" | Those menus couldn't be read — usually a session dropped while the app was in the background (it reconnects, so just re-run), or a user without rights to them. |

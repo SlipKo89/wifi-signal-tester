@@ -158,8 +158,10 @@ class BinaryApiTransport implements RouterOsTransport {
   Future<List<Map<String, String>>> command(
     String path,
     Map<String, String> params,
-  ) =>
-      _serialized(() => _withReconnect(() => _commandOnce(path, params)));
+  ) {
+    validateReadOnlyCommand(path, params);
+    return _serialized(() => _withReconnect(() => _commandOnce(path, params)));
+  }
 
   Future<List<Map<String, String>>> _commandOnce(
     String path,

@@ -42,14 +42,12 @@ class RestTransport implements RouterOsTransport {
     io.badCertificateCallback = (_, __, ___) => true;
     io.connectionTimeout = timeout;
     _client = IOClient(io);
-    _authHeader =
-        'Basic ${base64Encode(utf8.encode('$username:$password'))}';
+    _authHeader = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
 
     // A cheap authenticated probe to fail fast on wrong credentials / no REST.
     final uri = Uri.parse('$_scheme://$host:$port/rest/system/identity');
     final resp = await _client
-        .get(uri, headers: {'Authorization': _authHeader})
-        .timeout(timeout);
+        .get(uri, headers: {'Authorization': _authHeader}).timeout(timeout);
     if (resp.statusCode == 401) {
       throw RouterOsException('Authentication failed (401)');
     }
@@ -68,8 +66,7 @@ class RestTransport implements RouterOsTransport {
       uri = uri.replace(queryParameters: filters);
     }
     final resp = await _client
-        .get(uri, headers: {'Authorization': _authHeader})
-        .timeout(timeout);
+        .get(uri, headers: {'Authorization': _authHeader}).timeout(timeout);
 
     if (resp.statusCode == 401) {
       throw RouterOsException('Authentication failed (401)');
@@ -93,6 +90,7 @@ class RestTransport implements RouterOsTransport {
     String path,
     Map<String, String> params,
   ) async {
+    validateReadOnlyCommand(path, params);
     final uri = Uri.parse('$_scheme://$host:$port/rest$path');
     final resp = await _client
         .post(uri,
