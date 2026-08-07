@@ -31,7 +31,7 @@ API или SSH и никак не смешивается с Wi-Fi-дашборд
 Свежие сборки лежат на [странице релизов](../../releases/latest):
 
 - Android: `wifi-signal-tester-<версия>.apk`;
-- Mac на Apple Silicon: `wifi-signal-tester-<версия>-macos-arm64.zip` — после
+- Mac на Apple Silicon (**Alpha**): `wifi-signal-tester-<версия>-macos-arm64.zip` — после
   распаковки внутри будет `Wi-Fi Signal Tester.app`.
 
 Каждый push/merge в `main` собирает обе платформы, сам создаёт тег `v<версия>`
@@ -40,7 +40,8 @@ API или SSH и никак не смешивается с Wi-Fi-дашборд
 [Actions](../../actions/workflows/release.yml). Релизный тег вручную создавать
 не нужно — перед merge поднимается версия.
 
-Сейчас ZIP для Mac подписывается временной ad-hoc подписью для тестирования,
+В верхней панели и окне «О программе» версия для Mac явно помечена как
+**Alpha**. Сейчас ZIP подписывается временной ad-hoc подписью для тестирования,
 поэтому Gatekeeper на другом Mac может показать предупреждение. Developer ID и
 Apple notarization подключаются отдельно.
 
@@ -139,7 +140,7 @@ flutter build macos --release # → build/macos/Build/Products/Release/
 
 Готовый `.apk` копируем на телефон и ставим.
 
-Первый вариант под Mac уже умеет подключаться к RouterOS, запускать аудиты и
+**Alpha-версия macOS** умеет подключаться к RouterOS, запускать аудиты и
 LTE-инструменты. Android-плагин `wifi_iot` пока не умеет отдавать локальные RSSI
 и частоту самого Mac — нативная реализация через CoreWLAN записана в TODO. На
 Mac приложение также не запускает системный `ping` внутри sandbox, поэтому

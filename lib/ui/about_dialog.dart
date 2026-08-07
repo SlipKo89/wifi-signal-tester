@@ -6,6 +6,7 @@ import '../app_info.dart';
 import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
+import 'widgets/platform_badge.dart';
 
 /// Opens the About dialog.
 void showAboutSheet(BuildContext context) {
@@ -59,6 +60,7 @@ class _AboutDialogState extends State<_AboutDialog> {
   @override
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
     return Dialog(
       backgroundColor: AppTheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -68,139 +70,187 @@ class _AboutDialogState extends State<_AboutDialog> {
         // phone in landscape.
         child: SingleChildScrollView(
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.wifi_find,
+                        color: AppTheme.accent, size: 26),
                   ),
-                  child: const Icon(Icons.wifi_find,
-                      color: AppTheme.accent, size: 26),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(kAppName,
+                            style: TextStyle(
+                                fontSize: 17, fontWeight: FontWeight.w700)),
+                        Row(
+                          children: [
+                            // Tap 7× for an easter egg.
+                            GestureDetector(
+                              onTap: _tapVersion,
+                              behavior: HitTestBehavior.opaque,
+                              child: const Text('v$kAppVersion',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Color(0xFF7D8590))),
+                            ),
+                            if (isMacOS) ...[
+                              const SizedBox(width: 8),
+                              const MacOsAlphaBadge(),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                l.t(kAppTagline, 'Двусторонний тестер Wi-Fi для MikroTik'),
+                style: const TextStyle(fontSize: 13, color: Color(0xFFAAB2BD)),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                l.t(
+                    'See how the access point hears your device, not just how '
+                        'your device hears the access point. Read-only, for your '
+                        'MAC only.',
+                    'Видно, как точка слышит твоё устройство, а не только как '
+                        'устройство слышит точку. Только чтение, только по твоему '
+                        'MAC.'),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
+              ),
+              if (isMacOS) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.apAccent.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.apAccent.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(kAppName,
-                          style: TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.w700)),
-                      // Tap 7× for an easter egg.
-                      GestureDetector(
-                        onTap: _tapVersion,
-                        behavior: HitTestBehavior.opaque,
-                        child: const Text('v$kAppVersion',
-                            style: TextStyle(
-                                fontSize: 12, color: Color(0xFF7D8590))),
+                      const Icon(Icons.science_outlined,
+                          size: 18, color: AppTheme.apAccent),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          l.t(
+                            'This is an early macOS Alpha. RouterOS, audits and '
+                                'LTE tools are available, while local Mac RSSI, '
+                                'gateway ping, signing and some desktop polish '
+                                'are still incomplete.',
+                            'Это ранняя Alpha-версия для macOS. Подключение к '
+                                'RouterOS, аудиты и LTE-инструменты доступны, но '
+                                'локальный RSSI Mac, ping до шлюза, подпись и '
+                                'часть десктопного интерфейса ещё не готовы.',
+                          ),
+                          style: const TextStyle(
+                            height: 1.35,
+                            fontSize: 11,
+                            color: Color(0xFFC9D1D9),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 14),
-            Text(
-              l.t(kAppTagline, 'Двусторонний тестер Wi-Fi для MikroTik'),
-              style: const TextStyle(fontSize: 13, color: Color(0xFFAAB2BD)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              l.t(
-                  'See how the access point hears your device, not just how '
-                      'your device hears the access point. Read-only, for your '
-                      'MAC only.',
-                  'Видно, как точка слышит твоё устройство, а не только как '
-                      'устройство слышит точку. Только чтение, только по твоему '
-                      'MAC.'),
-              style: const TextStyle(fontSize: 12, color: Color(0xFF7D8590)),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.smart_toy_outlined,
-                    size: 13, color: Color(0xFF7D8590)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    l.t('Built with Claude (AI): code, docs and design.',
-                        'Собрано с Claude (ИИ): код, документация и дизайн.'),
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF7D8590)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.smart_toy_outlined,
+                      size: 13, color: Color(0xFF7D8590)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      l.t('Built with Claude (AI): code, docs and design.',
+                          'Собрано с Claude (ИИ): код, документация и дизайн.'),
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFF7D8590)),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const Divider(height: 28, color: Color(0xFF232B36)),
-            Text(l.t('PROJECT', 'ПРОЕКТ'),
-                style: const TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 1.1,
-                    color: Color(0xFF7D8590),
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            const _LinkRow(
-              icon: Icons.code,
-              label: 'github.com/SlipKo89/wifi-signal-tester',
-              url: kRepoUrl,
-            ),
-            _LinkRow(
-              icon: Icons.menu_book_outlined,
-              label: l.t('How to use the app', 'Как пользоваться приложением'),
-              url: usageUrl(ru: l.ru),
-            ),
-            _LinkRow(
-              icon: Icons.download_outlined,
-              label: l.t('Latest release (APK)', 'Свежий релиз (APK)'),
-              url: kReleasesUrl,
-            ),
-            const Divider(height: 28, color: Color(0xFF232B36)),
-            Text(l.t('AUTHOR', 'АВТОР'),
-                style: const TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 1.1,
-                    color: Color(0xFF7D8590),
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            const Text(kAuthor,
-                style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            const _ContactRow(
-              icon: Icons.mail_outline,
-              label: kAuthorEmail,
-              copyText: kAuthorEmail,
-            ),
-            const SizedBox(height: 8),
-            const _ContactRow(
-              icon: Icons.send,
-              label: 'Telegram $kAuthorTelegram',
-              copyText: kAuthorTelegram,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: () => showLicensePage(
-                    context: context,
-                    applicationName: kAppName,
-                    applicationVersion: 'v$kAppVersion',
-                    applicationLegalese: '© 2026 SlipKo · MIT',
+                ],
+              ),
+              const Divider(height: 28, color: Color(0xFF232B36)),
+              Text(l.t('PROJECT', 'ПРОЕКТ'),
+                  style: const TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 1.1,
+                      color: Color(0xFF7D8590),
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              const _LinkRow(
+                icon: Icons.code,
+                label: 'github.com/SlipKo89/wifi-signal-tester',
+                url: kRepoUrl,
+              ),
+              _LinkRow(
+                icon: Icons.menu_book_outlined,
+                label:
+                    l.t('How to use the app', 'Как пользоваться приложением'),
+                url: usageUrl(ru: l.ru),
+              ),
+              _LinkRow(
+                icon: Icons.download_outlined,
+                label: l.t('Latest release (APK)', 'Свежий релиз (APK)'),
+                url: kReleasesUrl,
+              ),
+              const Divider(height: 28, color: Color(0xFF232B36)),
+              Text(l.t('AUTHOR', 'АВТОР'),
+                  style: const TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 1.1,
+                      color: Color(0xFF7D8590),
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              const Text(kAuthor,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              const _ContactRow(
+                icon: Icons.mail_outline,
+                label: kAuthorEmail,
+                copyText: kAuthorEmail,
+              ),
+              const SizedBox(height: 8),
+              const _ContactRow(
+                icon: Icons.send,
+                label: 'Telegram $kAuthorTelegram',
+                copyText: kAuthorTelegram,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => showLicensePage(
+                      context: context,
+                      applicationName: kAppName,
+                      applicationVersion: 'v$kAppVersion',
+                      applicationLegalese: '© 2026 SlipKo · MIT',
+                    ),
+                    child: Text(l.t('Licenses', 'Лицензии')),
                   ),
-                  child: Text(l.t('Licenses', 'Лицензии')),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(l.t('Close', 'Закрыть')),
-                ),
-              ],
-            ),
-          ],
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(l.t('Close', 'Закрыть')),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -283,8 +333,7 @@ class _ContactRow extends StatelessWidget {
             Icon(icon, size: 16, color: AppTheme.accent),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(label,
-                  style: const TextStyle(fontSize: 13)),
+              child: Text(label, style: const TextStyle(fontSize: 13)),
             ),
             const Icon(Icons.copy, size: 14, color: Color(0xFF7D8590)),
           ],

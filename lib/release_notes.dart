@@ -10,10 +10,12 @@ class Release {
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
   Release('0.3.2', '2026-08-08', [
+    'The title bar and About dialog now clearly mark the desktop build as macOS Alpha and explain its current preview limitations',
     'macOS adapter discovery can no longer freeze monitoring: every platform call has a hard timeout and the gateway lookup avoids the blocking plugin path',
     'The Mac build no longer starts system ping subprocesses, preventing orphaned high-CPU processes after exit',
     'The desktop dashboard now explains that local Mac RSSI is unavailable while Router-side signal, audits and LTE tools continue to work',
   ], [
+    'Верхняя панель и окно «О программе» теперь явно помечают десктопную сборку как macOS Alpha и объясняют текущие ограничения',
     'Опрос адаптера macOS больше не может повесить мониторинг: у каждого платформенного вызова есть жёсткий таймаут, а поиск шлюза не использует зависающий путь плагина',
     'Сборка для Mac больше не запускает системные ping-процессы, поэтому после выхода не остаются сиротские процессы с высокой загрузкой CPU',
     'Десктопный дашборд честно объясняет отсутствие локального RSSI Mac; сигнал со стороны роутера, аудиты и LTE продолжают работать',

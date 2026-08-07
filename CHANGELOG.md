@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.2] - 2026-08-08
 
+### Changed
+- macOS builds now show a persistent `macOS ALPHA` badge in the title bar and
+  About dialog, with a concise explanation of the desktop preview limitations.
+
 ### Fixed
 - macOS Wi-Fi discovery calls are now time-bounded and avoid the plugin's
   synchronous gateway lookup, so a stalled local-adapter query cannot freeze

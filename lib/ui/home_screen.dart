@@ -24,6 +24,7 @@ import 'whats_new.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/failure_banner.dart';
 import 'widgets/metric_tile.dart';
+import 'widgets/platform_badge.dart';
 import 'widgets/roam_transition.dart';
 import 'widgets/signal_card.dart';
 
@@ -291,6 +292,7 @@ class _TitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ctrl = context.watch<MonitorController>();
     final l = context.watch<SettingsController>().l;
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
     final parts = <String>[
       if (ctrl.transportKind != null) ctrl.transportKind!,
       if (ctrl.stackLabel != null) ctrl.stackLabel!,
@@ -303,8 +305,22 @@ class _TitleBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Wi-Fi Signal Tester',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        Row(
+          children: [
+            const Flexible(
+              child: Text(
+                'Wi-Fi Signal Tester',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (isMacOS) ...[
+              const SizedBox(width: 8),
+              const MacOsAlphaBadge(),
+            ],
+          ],
+        ),
         Text(sub,
             style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590))),
       ],

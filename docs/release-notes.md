@@ -1,5 +1,8 @@
 # Wi-Fi Signal Tester 0.3.2
 
+- The macOS app now carries a visible `macOS ALPHA` badge in its title bar and
+  About dialog. The dialog also explains which desktop-preview features are
+  still incomplete; the Android interface is unchanged.
 - Fixed a macOS startup freeze while reading the local Wi-Fi adapter. Every
   platform query now has a hard timeout, independent facts are read in parallel
   and the potentially blocking gateway lookup is skipped on Mac.
@@ -27,6 +30,9 @@ See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 # Wi-Fi Signal Tester 0.3.2
 
+- В верхней панели и окне «О программе» сборка теперь явно помечена бейджем
+  `macOS ALPHA`. Там же перечислены ещё не готовые части десктопной версии;
+  интерфейс Android не изменился.
 - Исправлено зависание macOS при чтении локального Wi-Fi-адаптера. У каждого
   платформенного вызова теперь есть жёсткий таймаут, независимые сведения
   читаются параллельно, а потенциально зависающий поиск шлюза на Mac пропущен.

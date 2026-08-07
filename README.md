@@ -32,7 +32,7 @@ or SSH and does not depend on or mix with the Wi-Fi dashboard.
 Grab the latest build from the [Releases page](../../releases/latest):
 
 - Android: `wifi-signal-tester-<version>.apk`;
-- Apple-silicon Mac: `wifi-signal-tester-<version>-macos-arm64.zip` — unpack it
+- Apple-silicon Mac (**Alpha**): `wifi-signal-tester-<version>-macos-arm64.zip` — unpack it
   to get `Wi-Fi Signal Tester.app`.
 
 Every push/merge to `main` builds both platforms, creates the `v<version>` tag
@@ -41,7 +41,8 @@ also available from that workflow run under
 [Actions](../../actions/workflows/release.yml) → *Artifacts*. Do not create
 release tags manually; bump the app version before the merge instead.
 
-The Mac ZIP is currently an ad-hoc-signed test build, so Gatekeeper can warn
+The Mac app is explicitly marked **Alpha** in its title bar and About dialog.
+The ZIP is currently an ad-hoc-signed test build, so Gatekeeper can warn
 when it is opened on another Mac. Developer ID signing and Apple notarization
 remain a separate distribution step.
 
@@ -138,7 +139,7 @@ flutter build macos --release # → build/macos/Build/Products/Release/
 
 Copy that `.apk` to your Android device to install it.
 
-The initial Mac target supports RouterOS connection, audits and LTE tools. The
+The macOS **Alpha** supports RouterOS connection, audits and LTE tools. The
 current Android-only `wifi_iot` plugin cannot provide the Mac's local RSSI and
 frequency yet; a native CoreWLAN implementation is tracked in TODO. The Mac
 build also avoids spawning a sandboxed system `ping`, so gateway latency is
