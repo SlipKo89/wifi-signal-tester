@@ -34,8 +34,18 @@ void main() {
         sample(rsrp: -88, rsrq: -17, sinr: 2, cqi: 5),
       );
       expect(report.quality, LteQuality.fair);
-      expect(report.titleEn, contains('quality is poor'));
+      expect(report.titleEn, contains('needs attention'));
       expect(report.factsEn, isNotEmpty);
+    });
+
+    test('grades the S24 screenshot values as usable but weak', () {
+      final report = LteDiagnostics.evaluate(
+        sample(rsrp: -108, rsrq: -10.5, sinr: 7),
+      );
+      expect(report.quality, LteQuality.fair);
+      expect(report.titleEn, 'LTE works, but the signal is weak');
+      expect(report.titleRu, 'LTE работает, но сигнал слабый');
+      expect(report.summaryRu, contains('RSRP -108 dBm'));
     });
 
     test('reports weak and noisy link', () {
@@ -56,6 +66,23 @@ void main() {
       final report = LteDiagnostics.evaluate(history.last, history: history);
       expect(report.quality, LteQuality.fair);
       expect(report.titleEn, contains('unstable'));
+    });
+
+    test('never calls a poor stable result healthy', () {
+      final report = LteDiagnostics.evaluate(
+        sample(rsrp: -95, rsrq: -12, sinr: 7, cqi: 3),
+      );
+      expect(report.quality, LteQuality.poor);
+      expect(report.titleEn, 'LTE radio link is poor');
+      expect(report.titleRu, 'Радиоканал LTE плохой');
+    });
+
+    test('uses the healthy title only for a genuinely good link', () {
+      final report = LteDiagnostics.evaluate(
+        sample(rsrp: -85, rsrq: -9, sinr: 18, cqi: 11),
+      );
+      expect(report.quality, LteQuality.good);
+      expect(report.titleEn, 'LTE radio link looks healthy');
     });
 
     test('explains a modem without registration', () {

@@ -24,6 +24,7 @@ import 'whats_new.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/failure_banner.dart';
 import 'widgets/metric_tile.dart';
+import 'widgets/roam_transition.dart';
 import 'widgets/signal_card.dart';
 
 /// Formats a kbps value as Kbps/Mbps.
@@ -582,12 +583,16 @@ class _RouterHealthCard extends StatelessWidget {
                 MetricTile(
                     label: l.t('Roams', 'Роуминги'),
                     value: ctrl.roamCount.toString()),
-                if (ctrl.lastRoam != null)
-                  MetricTile(
-                      label: l.t('Last roam', 'Последний'),
-                      value: ctrl.lastRoam!),
               ],
             ),
+            if (ctrl.lastRoamFrom != null && ctrl.lastRoamTo != null) ...[
+              const SizedBox(height: 14),
+              RoamTransition(
+                label: l.t('Last roam', 'Последний переход'),
+                from: ctrl.lastRoamFrom!,
+                to: ctrl.lastRoamTo!,
+              ),
+            ],
           ],
         ),
       ),

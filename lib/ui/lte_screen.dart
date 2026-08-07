@@ -124,7 +124,7 @@ class _LteScreenState extends State<LteScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l.t('LTE signal diagnostics', 'Диагностика LTE-сигнала')),
+            Text(l.t('LTE diagnostics', 'LTE-диагностика')),
             Text(
               connected
                   ? '${_host.text} · ${_controller.interfaceName ?? 'LTE'} · SSH'
@@ -397,6 +397,24 @@ class _VerdictCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _qualityLabel(l, report.quality).toUpperCase(),
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 9.5,
+                      letterSpacing: 0.8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 7),
                 Text(
                   l.t(report.titleEn, report.titleRu),
                   style: TextStyle(
@@ -815,4 +833,12 @@ IconData _qualityIcon(LteQuality quality) => switch (quality) {
       LteQuality.fair => Icons.info_outline,
       LteQuality.poor => Icons.error_outline,
       LteQuality.unknown => Icons.hourglass_empty,
+    };
+
+String _qualityLabel(L10n l, LteQuality quality) => switch (quality) {
+      LteQuality.excellent => l.t('Excellent', 'Отлично'),
+      LteQuality.good => l.t('Good', 'Хорошо'),
+      LteQuality.fair => l.t('Attention', 'Внимание'),
+      LteQuality.poor => l.t('Poor', 'Плохо'),
+      LteQuality.unknown => l.t('No data', 'Нет данных'),
     };

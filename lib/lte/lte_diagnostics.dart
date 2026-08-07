@@ -117,6 +117,8 @@ class LteDiagnostics {
     final veryWeak = signal.rsrp != null && signal.rsrp! < -110;
     final noisy = (signal.sinr != null && signal.sinr! < 5) ||
         (signal.rsrq != null && signal.rsrq! < -15);
+    final criticalNoise = (signal.sinr != null && signal.sinr! < 0) ||
+        (signal.rsrq != null && signal.rsrq! < -20);
     final clean = (signal.sinr == null || signal.sinr! >= 10) &&
         (signal.rsrq == null || signal.rsrq! >= -15);
     final strongEnough = signal.rsrp != null && signal.rsrp! >= -95;
@@ -170,13 +172,19 @@ class LteDiagnostics {
 
     if (strongEnough && noisy) {
       return LteDiagnosticReport(
-        quality: LteQuality.fair,
-        titleEn: 'Signal is strong enough, radio quality is poor',
-        titleRu: 'Мощности хватает, но качество радиоканала плохое',
-        summaryEn:
-            'More antenna gain alone may not help: interference or sector load is more likely.',
-        summaryRu:
-            'Одно усиление антенны может не помочь: вероятнее помехи или загрузка сектора.',
+        quality: criticalNoise ? LteQuality.poor : LteQuality.fair,
+        titleEn: criticalNoise
+            ? 'LTE radio quality is poor'
+            : 'Signal is strong enough, radio quality needs attention',
+        titleRu: criticalNoise
+            ? 'Качество радиоканала LTE плохое'
+            : 'Мощности хватает, но качество эфира требует внимания',
+        summaryEn: criticalNoise
+            ? 'Interference/noise is stronger than the useful margin; more antenna gain alone is unlikely to help.'
+            : 'Interference or sector load is more likely than insufficient signal power.',
+        summaryRu: criticalNoise
+            ? 'Помехи/шум съедают полезный запас; одно усиление антенны вряд ли поможет.'
+            : 'Вероятнее помехи или загрузка сектора, а не недостаток мощности сигнала.',
         factsEn: factsEn,
         factsRu: factsRu,
         adviceEn: [
@@ -214,6 +222,65 @@ class LteDiagnostics {
       );
     }
 
+    // The common middle ground: power is poor, but SINR/RSRQ are neither clean
+    // enough for the "weak but clean" diagnosis nor bad enough to call the
+    // link noisy. This was previously allowed to fall through to a generic
+    // "healthy" title while retaining a red quality from RSRP.
+    if (weak) {
+      final value = _format(signal.rsrp);
+      return LteDiagnosticReport(
+        quality: veryWeak ? LteQuality.poor : LteQuality.fair,
+        titleEn: veryWeak
+            ? 'LTE signal is very weak'
+            : 'LTE works, but the signal is weak',
+        titleRu: veryWeak
+            ? 'LTE-сигнал очень слабый'
+            : 'LTE работает, но сигнал слабый',
+        summaryEn:
+            'RSRP $value dBm is the main limitation; radio quality is still usable.',
+        summaryRu:
+            'RSRP $value dBm ограничивает запас; качество эфира пока рабочее.',
+        factsEn: factsEn,
+        factsRu: factsRu,
+        adviceEn: [
+          'Adjust antenna direction and height while watching whether SINR stays stable.',
+          'Check cable, adapters and connectors before changing RouterOS settings.',
+          'Compare another band/cell and keep the position with the best balance, not merely the strongest RSSI.',
+        ],
+        adviceRu: [
+          'Подстрой направление и высоту антенны, наблюдая, остаётся ли SINR стабильным.',
+          'Проверь кабель, переходники и разъёмы до изменения настроек RouterOS.',
+          'Сравни другой диапазон/соту и выбирай лучший баланс, а не просто самый сильный RSSI.',
+        ],
+      );
+    }
+
+    if (noisy) {
+      return LteDiagnosticReport(
+        quality: criticalNoise ? LteQuality.poor : LteQuality.fair,
+        titleEn: criticalNoise
+            ? 'LTE radio quality is poor'
+            : 'LTE radio quality needs attention',
+        titleRu: criticalNoise
+            ? 'Качество радиоканала LTE плохое'
+            : 'Качество радиоканала LTE требует внимания',
+        summaryEn:
+            'RSRQ/SINR indicate interference, sector load or reflected signal.',
+        summaryRu:
+            'RSRQ/SINR указывают на помехи, загрузку сектора или отражённый сигнал.',
+        factsEn: factsEn,
+        factsRu: factsRu,
+        adviceEn: [
+          'Optimise the antenna position by SINR/RSRQ rather than RSRP alone.',
+          'Compare another band/cell and repeat the measurement outside busy hours.',
+        ],
+        adviceRu: [
+          'Настраивай положение антенны по SINR/RSRQ, а не только по RSRP.',
+          'Сравни другой диапазон/соту и повтори замер вне часов пик.',
+        ],
+      );
+    }
+
     final grades = [
       rsrpQuality(signal.rsrp),
       rsrqQuality(signal.rsrq),
@@ -224,19 +291,60 @@ class LteDiagnostics {
         ? LteQuality.unknown
         : grades.reduce((a, b) => a.index > b.index ? a : b);
 
+    final effectiveQuality = unstable ? LteQuality.fair : quality;
+    final titleEn = unstable
+        ? 'LTE signal is unstable'
+        : switch (effectiveQuality) {
+            LteQuality.excellent ||
+            LteQuality.good =>
+              'LTE radio link looks healthy',
+            LteQuality.fair => 'LTE works with limitations',
+            LteQuality.poor => 'LTE radio link is poor',
+            LteQuality.unknown => 'Not enough LTE data',
+          };
+    final titleRu = unstable
+        ? 'LTE-сигнал нестабилен'
+        : switch (effectiveQuality) {
+            LteQuality.excellent ||
+            LteQuality.good =>
+              'Радиоканал LTE выглядит нормально',
+            LteQuality.fair => 'LTE работает с ограничениями',
+            LteQuality.poor => 'Радиоканал LTE плохой',
+            LteQuality.unknown => 'Недостаточно данных LTE',
+          };
+    final summaryEn = unstable
+        ? 'Average levels are usable, but recent samples fluctuate.'
+        : switch (effectiveQuality) {
+            LteQuality.excellent ||
+            LteQuality.good =>
+              'Received power and radio quality are in a good range.',
+            LteQuality.fair =>
+              'The connection is usable, but at least one core metric needs attention.',
+            LteQuality.poor =>
+              'At least one core metric severely limits the connection.',
+            LteQuality.unknown =>
+              'The modem did not return enough core radio metrics.',
+          };
+    final summaryRu = unstable
+        ? 'Средние уровни рабочие, но последние измерения скачут.'
+        : switch (effectiveQuality) {
+            LteQuality.excellent ||
+            LteQuality.good =>
+              'Мощность и качество радиоканала находятся в хорошем диапазоне.',
+            LteQuality.fair =>
+              'Связь рабочая, но хотя бы одна основная метрика требует внимания.',
+            LteQuality.poor =>
+              'Хотя бы одна основная метрика серьёзно ограничивает связь.',
+            LteQuality.unknown =>
+              'Модем не вернул достаточно основных радиометрик.',
+          };
+
     return LteDiagnosticReport(
-      quality: unstable ? LteQuality.fair : quality,
-      titleEn:
-          unstable ? 'LTE signal is unstable' : 'LTE radio link looks healthy',
-      titleRu: unstable
-          ? 'LTE-сигнал нестабилен'
-          : 'Радиоканал LTE выглядит нормально',
-      summaryEn: unstable
-          ? 'Average levels are usable, but recent samples fluctuate.'
-          : 'Received power and radio quality are in a usable range.',
-      summaryRu: unstable
-          ? 'Средние уровни рабочие, но последние измерения скачут.'
-          : 'Мощность и качество радиоканала находятся в рабочем диапазоне.',
+      quality: effectiveQuality,
+      titleEn: titleEn,
+      titleRu: titleRu,
+      summaryEn: summaryEn,
+      summaryRu: summaryRu,
       factsEn: factsEn,
       factsRu: factsRu,
       adviceEn: unstable
@@ -264,5 +372,12 @@ class LteDiagnostics {
     if (values.length < 4) return 0;
     values.sort();
     return values.last - values.first;
+  }
+
+  static String _format(double? value) {
+    if (value == null) return '—';
+    return value == value.roundToDouble()
+        ? value.toInt().toString()
+        : value.toStringAsFixed(1);
   }
 }

@@ -67,7 +67,11 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   /// Roaming: which AP the client sits on, and how many times it has switched.
   String? _lastApName;
   int roamCount = 0;
-  String? lastRoam;
+  String? lastRoamFrom;
+  String? lastRoamTo;
+  String? get lastRoam => lastRoamFrom == null || lastRoamTo == null
+      ? null
+      : '$lastRoamFrom → $lastRoamTo';
 
   /// Latency to the gateway (last RTT, plus a rolling window for avg / loss).
   final PingService _ping = PingService();
@@ -396,7 +400,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       final apNow = stationSignal?.interfaceName ?? connectedApName;
       if (apNow != null && _lastApName != null && apNow != _lastApName) {
         roamCount++;
-        lastRoam = '$_lastApName → $apNow';
+        lastRoamFrom = _lastApName;
+        lastRoamTo = apNow;
         diagnosticLog.record(
           'WIFI-ROAM',
           'Serving access point changed',
@@ -663,7 +668,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     routerResource = null;
     _lastApName = null;
     roamCount = 0;
-    lastRoam = null;
+    lastRoamFrom = null;
+    lastRoamTo = null;
     pingMs = null;
     _pingWindow.clear();
     _pingHost = null;

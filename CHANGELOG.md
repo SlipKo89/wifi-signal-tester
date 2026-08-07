@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   R11e-LTE and FG621-EA output formats are covered. IMEI, IMSI and ICCID are
   deliberately discarded immediately and are never stored or displayed.
 
+### Fixed
+- Long access-point names in the latest-roam display are now width-bounded and
+  rendered as a dedicated responsive transition instead of overflowing the
+  router-health card.
+- LTE verdict text and colour now come from the same complete classification:
+  a weak-but-usable `−108 dBm / 7 dB SINR` link is amber and explicitly says
+  that LTE works with weak power, while red is reserved for genuinely critical
+  radio conditions. The verdict includes an explicit Good/Attention/Poor badge.
+
 ## [0.2.5] - 2026-08-06
 
 ### Added
