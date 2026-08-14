@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - LTE connection profiles now keep several routers in secure platform storage.
   The connection screen lets the operator select or forget one router, and
   transparently migrates the previous single-profile format.
+- **Read-only LTE configuration audit** with role-aware advice for a primary,
+  backup, passthrough or monitoring-only link. It checks the selected
+  interface, referenced APN profiles, registration, network-vs-manual APN,
+  PAP/CHAP mode, route distance, peer DNS, IPv4/IPv6 PDN type, IPv6 firewall
+  presence, MTU, roaming, driver/network mode and native band/operator locks.
+  Passed checks, compatibility notes, MikroTik documentation links and a
+  dedicated PDF export are included.
+
+### Security
+- LTE audit menu reads use explicit field projections. SIM PIN, APN username
+  and password, `modem-init`, IMEI, IMSI and ICCID are never requested. The
+  audit does not run `at-chat`, scan, cell-monitor or any write-capable command.
 
 ### Fixed
 - An initial zero-filled `monitor once` response, seen on some SSH/modem
@@ -17,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows a bilingual loading/status card and keeps polling until plausible radio
   metrics arrive; an explicit not-registered/searching modem state is still
   reported immediately.
+- PDF titles now match Wi-Fi, system, phone and LTE audit types; long location
+  labels in shared audit cards are width-bounded on narrow screens.
 
 ## [0.3.2] - 2026-08-08
 

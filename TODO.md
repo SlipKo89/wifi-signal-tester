@@ -90,6 +90,12 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Multiple secure LTE router profiles with automatic migration from the
       original single profile; first SSH zero placeholders are ignored and the
       UI explains that valid modem data is still loading
+- [x] Separate read-only LTE configuration audit: selected interface and APN
+      references, registration, manual/network APN compatibility, auth mode,
+      role-aware default-route advice, passthrough, PDN/IPv6 firewall presence,
+      MTU, roaming, driver/network mode and native band/operator locks; passed
+      checks, official links and PDF export included. Secret fields and active
+      modem commands are excluded by construction
 - [x] Guided LTE antenna alignment: live RSRP/RSRQ/SINR charts, stable
       six-sample checkpoints, multi-metric score with an instability penalty,
       relative step-by-step grid search, return-to-best directions and a fine

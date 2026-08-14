@@ -84,6 +84,10 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
   and practical antenna/interference advice. Auto tries REST → API → SSH; no
   Wi-Fi connection is required for this mode. Several LTE routers can be saved
   in secure platform storage and selected from the connection screen.
+- **LTE configuration audit**: checks interface/APN consistency, registration,
+  manual-vs-network APN compatibility, route role, passthrough, IPv4/IPv6, MTU,
+  roaming and radio restrictions, with passed checks, official MikroTik links
+  and PDF export. It never reads SIM/APN secrets or runs active modem commands.
 - **Guided LTE antenna alignment**: record stable checkpoints while moving the
   dish in repeatable steps. The assistant combines signal power, quality and
   stability, proposes the next move and tells you how to return to the best

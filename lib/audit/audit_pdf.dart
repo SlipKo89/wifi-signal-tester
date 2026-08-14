@@ -12,6 +12,7 @@ Future<Uint8List> buildAuditPdf(
   List<Finding> findings, {
   required L10n l,
   required String subtitle,
+  String? title,
 }) async {
   final reg =
       pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
@@ -103,7 +104,7 @@ Future<Uint8List> buildAuditPdf(
     pageFormat: PdfPageFormat.a4,
     margin: const pw.EdgeInsets.all(32),
     build: (context) => [
-      pw.Text(l.t('Wi-Fi configuration audit', 'Аудит настроек Wi-Fi'),
+      pw.Text(title ?? l.t('Wi-Fi configuration audit', 'Аудит настроек Wi-Fi'),
           style: pw.TextStyle(font: bold, fontSize: 20)),
       pw.SizedBox(height: 3),
       pw.Text(subtitle,

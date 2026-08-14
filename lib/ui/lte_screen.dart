@@ -13,6 +13,7 @@ import '../lte/lte_signal.dart';
 import '../mikrotik/router_os_transport.dart';
 import '../settings/settings_controller.dart';
 import 'lte_alignment_screen.dart';
+import 'lte_audit_screen.dart';
 import 'lte_history_screen.dart';
 import 'metric_help.dart';
 import 'theme.dart';
@@ -176,6 +177,17 @@ class _LteScreenState extends State<LteScreen> {
     ));
   }
 
+  Future<void> _openAudit() async {
+    final resume = _controller.isLive;
+    if (resume) _controller.stopLive();
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => LteAuditScreen(controller: _controller),
+    ));
+    if (mounted && resume && _controller.state == LteMonitorState.connected) {
+      _controller.startLive();
+    }
+  }
+
   Future<void> _forget(LteConnection profile, L10n l) async {
     final clearsEditor = _sameHost(_host.text, profile.host);
     await _store.removeHost(profile.host);
@@ -257,6 +269,7 @@ class _LteScreenState extends State<LteScreen> {
             onSelected: (value) {
               if (value == 'refresh') _controller.refresh();
               if (value == 'history') _openHistory();
+              if (value == 'audit') _openAudit();
             },
             itemBuilder: (_) => [
               if (connected)
@@ -266,6 +279,16 @@ class _LteScreenState extends State<LteScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.refresh),
                     title: Text(l.t('Refresh now', 'Обновить сейчас')),
+                  ),
+                ),
+              if (connected)
+                PopupMenuItem(
+                  value: 'audit',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.fact_check_outlined),
+                    title: Text(
+                        l.t('LTE configuration audit', 'Аудит настроек LTE')),
                   ),
                 ),
               PopupMenuItem(

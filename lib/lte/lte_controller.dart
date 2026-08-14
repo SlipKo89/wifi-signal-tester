@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../diagnostics/app_failure.dart';
+import '../audit/audit.dart';
+import 'lte_audit.dart';
 import 'lte_diagnostics.dart';
 import 'lte_history_store.dart';
 import 'lte_service.dart';
@@ -49,6 +51,9 @@ class LteController extends ChangeNotifier {
       waitingForFirstSample && firstSampleAttempts >= 3;
   LteDiagnosticReport get diagnosis =>
       LteDiagnostics.evaluate(signal, history: _recentHistory);
+
+  Future<List<Finding>> runAudit(LteAuditRole role) =>
+      LteAuditEngine().run(_service, role: role, signal: signal);
 
   List<LteSignal> get _recentHistory {
     if (history.length <= diagnosticHistoryLimit) return history;

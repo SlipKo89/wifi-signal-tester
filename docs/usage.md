@@ -305,8 +305,30 @@ The app runs only these read-only commands:
 ```
 /interface lte print
 /interface lte monitor <interface> once
+/interface lte apn print
+/interface lte settings print          # RouterOS 7
+/ipv6 firewall filter print            # presence only, when APN requests IPv6
 /system resource print
 ```
+
+### LTE configuration audit
+
+Open ⋮ → *LTE configuration audit* after connecting. Select how the link is
+used: general/unspecified, primary Internet, backup, passthrough or monitoring
+and alignment only. The role changes only route and passthrough advice; it does
+not change RouterOS.
+
+The audit checks the selected interface and applied APN profiles, registration,
+manual APN together with `use-network-apn`, PAP/CHAP mode, default-route and
+distance, operator DNS, PDN IP type, IPv6 firewall presence, MTU, passthrough
+target/MAC, roaming, driver/network mode and native band/operator restrictions.
+It shows passed checks as well as warnings, links each applicable finding to
+MikroTik documentation, and exports a separate `lte-audit.pdf`.
+
+This is a static, read-only audit. It never reads SIM PIN, APN username or
+password, `modem-init`, IMEI, IMSI or ICCID. It does not run `at-chat`, scan,
+cell-monitor or firmware upgrade. Arbitrary AT locks and the complete routing
+or firewall policy are therefore deliberately not inferred.
 
 The dashboard refreshes every three seconds and shows:
 

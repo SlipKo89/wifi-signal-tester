@@ -84,6 +84,6 @@ than a promise — use one.
 | CAPsMAN (legacy)   | `/caps-man/registration-table`                  |
 | Classic wireless   | `/interface/wireless/registration-table`        |
 | Noise floor        | `/interface/wireless/monitor once` (and `/interface/wifi/…`) |
-| LTE diagnostics    | `/interface/lte`, `/interface/lte/monitor once`, `/system/resource` |
+| LTE diagnostics/audit | `/interface/lte`, `/interface/lte/monitor once`, `/interface/lte/apn`, `/interface/lte/settings` (v7), `/system/resource`; `/ipv6/firewall/filter` presence only when IPv6 is requested |
 | Audit (Wi-Fi)      | `/caps-man/…`, `/interface/wifi/…`, `/interface/wireless` |
 | Audit (system)     | `/system/resource`, `/system/ntp/client`, `/system/package/update`, `/ip/service`, `/user`, `/ip/pool`, `/ip/firewall/filter` |

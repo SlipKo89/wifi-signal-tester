@@ -65,14 +65,26 @@ typedef LteTransportCandidates = List<RouterOsTransport> Function(
 /// Only these commands can be reached:
 /// - `/interface lte print`
 /// - `/interface lte monitor <name> once`
+/// - projected `/interface lte apn print`
+/// - projected `/interface lte settings print`
+/// - projected `/ipv6 firewall filter print` (presence only)
 /// - `/system resource print`
 ///
 /// The monitor response contains SIM/modem identifiers on many devices. It is
 /// immediately reduced to [LteSignal], which deliberately has no IMEI/IMSI/
 /// ICCID fields and is never persisted.
 class LteService {
+  static const _auditReadMenus = {
+    '/system/resource',
+    '/interface/lte',
+    '/interface/lte/apn',
+    '/interface/lte/settings',
+    '/ipv6/firewall/filter',
+  };
+
   final LteTransportCandidates _transportCandidates;
   RouterOsTransport? _transport;
+  String? host;
   String? interfaceName;
 
   LteService({LteTransportCandidates? transportCandidates})
@@ -82,6 +94,7 @@ class LteService {
 
   Future<void> connect(LteConnection connection) async {
     await close();
+    host = connection.host;
     Object? lastError;
     for (final transport in _transportCandidates(connection)) {
       try {
@@ -96,6 +109,7 @@ class LteService {
         await transport.close();
       }
     }
+    host = null;
     throw RouterOsException(
       'Could not connect to the LTE router: ${lastError ?? 'unknown error'}',
     );
@@ -121,16 +135,40 @@ class LteService {
     final transport = _transport;
     if (transport == null) return null;
     try {
-      final rows = await transport.read('/system/resource');
+      final rows = await transport.read(
+        '/system/resource',
+        fields: const ['board-name', 'version', 'cpu-load', 'uptime'],
+      );
       return rows.isEmpty ? null : rows.first;
     } catch (_) {
       return null;
     }
   }
 
+  /// Reads a configuration menu through the already selected LTE transport.
+  /// Audit callers always pass an explicit field projection so secrets such as
+  /// SIM PIN and APN password never enter the app process.
+  Future<List<Map<String, String>>> readMenu(
+    String path, {
+    required List<String> fields,
+  }) async {
+    final transport = _transport;
+    if (transport == null) {
+      throw RouterOsException('LTE router is not connected');
+    }
+    if (!_auditReadMenus.contains(path)) {
+      throw RouterOsException('LTE audit menu is not allowed: $path');
+    }
+    if (fields.isEmpty) {
+      throw RouterOsException('LTE audit reads require projected fields');
+    }
+    return transport.read(path, fields: fields);
+  }
+
   Future<void> close() async {
     await _transport?.close();
     _transport = null;
+    host = null;
     interfaceName = null;
   }
 
@@ -176,7 +214,10 @@ class LteService {
     RouterOsTransport transport,
     String? requestedInterface,
   ) async {
-    final interfaces = await transport.read('/interface/lte');
+    final interfaces = await transport.read(
+      '/interface/lte',
+      fields: const ['name', 'default-name', 'disabled', 'running'],
+    );
     final usable = interfaces
         .where((row) => row['disabled'] != 'true')
         .toList(growable: false);
