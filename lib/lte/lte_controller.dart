@@ -14,8 +14,8 @@ class LteController extends ChangeNotifier {
   static const liveHistoryLimit = 600;
   static const diagnosticHistoryLimit = 60;
 
-  final LteService _service = LteService();
-  final LteHistoryStore recordings = LteHistoryStore();
+  final LteService _service;
+  final LteHistoryStore recordings;
   Timer? _timer;
   bool _refreshing = false;
   int _generation = 0;
@@ -31,12 +31,22 @@ class LteController extends ChangeNotifier {
   Duration pollInterval = const Duration(seconds: 3);
   int recordedSampleCount = 0;
   String? recordingError;
+  bool waitingForFirstSample = false;
+  int firstSampleAttempts = 0;
+
+  LteController({
+    LteService? service,
+    LteHistoryStore? historyStore,
+  })  : _service = service ?? LteService(),
+        recordings = historyStore ?? LteHistoryStore();
 
   String? get interfaceName => _service.interfaceName;
   String? get transportKind => _service.transportKind;
   bool get isLive => _timer != null;
   bool get recording => _recordingSessionId != null;
   int? get recordingSessionId => _recordingSessionId;
+  bool get firstSampleTakingLong =>
+      waitingForFirstSample && firstSampleAttempts >= 3;
   LteDiagnosticReport get diagnosis =>
       LteDiagnostics.evaluate(signal, history: _recentHistory);
 
@@ -63,8 +73,11 @@ class LteController extends ChangeNotifier {
     signal = null;
     routerResource = null;
     history.clear();
+    lastUpdated = null;
     recordedSampleCount = 0;
     recordingError = null;
+    waitingForFirstSample = false;
+    firstSampleAttempts = 0;
     _lastConnection = connection;
     notifyListeners();
 
@@ -74,14 +87,10 @@ class LteController extends ChangeNotifier {
       routerResource = await _service.readResource();
       if (generation != _generation) return false;
       state = LteMonitorState.connected;
-      await refresh();
-      if (signal == null) {
-        state = LteMonitorState.error;
-        notifyListeners();
-        await _service.close();
-        return false;
-      }
+      waitingForFirstSample = true;
+      notifyListeners();
       startLive();
+      await refresh();
       return true;
     } catch (e) {
       if (generation != _generation) return false;
@@ -107,10 +116,19 @@ class LteController extends ChangeNotifier {
     if (_refreshing || state != LteMonitorState.connected) return;
     _refreshing = true;
     final generation = _generation;
+    if (waitingForFirstSample) firstSampleAttempts++;
     try {
       final next = await _service.readSignal();
       if (generation != _generation) return;
+      if (!next.hasUsableRadioMetrics && !next.hasDefinitiveRegistrationState) {
+        // Keep polling: some RouterOS SSH sessions initially return a complete
+        // looking row whose radio values are all zero. Do not grade or persist
+        // that placeholder as a real measurement.
+        failure = null;
+        return;
+      }
       signal = next;
+      waitingForFirstSample = false;
       lastUpdated = next.sampledAt;
       failure = null;
       history.add(next);
@@ -230,7 +248,10 @@ class LteController extends ChangeNotifier {
     signal = null;
     routerResource = null;
     history.clear();
+    lastUpdated = null;
     recordedSampleCount = 0;
+    waitingForFirstSample = false;
+    firstSampleAttempts = 0;
     notifyListeners();
   }
 

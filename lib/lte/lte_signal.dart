@@ -65,7 +65,7 @@ class LteSignal {
     final status = _first(row, const ['registration-status', 'status']);
     final statusText = status?.toLowerCase() ?? '';
     final operator = _clean(row['current-operator']);
-    final rsrp = _number(row['rsrp']);
+    final rsrp = _boundedNumber(row['rsrp'], -160, -20);
 
     // Some modem drivers say `registered`, while newer MBIM modems only say
     // `running`. A populated operator/RSRP is stronger evidence than either
@@ -98,9 +98,9 @@ class LteSignal {
       technology: _first(row, const ['access-technology', 'data-class']),
       sessionUptime: _clean(row['session-uptime']),
       rsrp: rsrp,
-      rsrq: _number(row['rsrq']),
+      rsrq: _boundedNumber(row['rsrq'], -40, -1),
       sinr: _number(row['sinr']),
-      rssi: _number(row['rssi']),
+      rssi: _boundedNumber(row['rssi'], -150, -20),
       cqi: _integer(row['cqi']),
       band: band,
       carrierAggregation: caBand,
@@ -115,6 +115,33 @@ class LteSignal {
 
   bool get hasRadioMetrics =>
       rsrp != null || rsrq != null || sinr != null || rssi != null;
+
+  /// RouterOS/SSH can briefly return zero-filled monitor output while the
+  /// modem is still preparing its first sample. Zero dBm RSRP/RSSI and zero dB
+  /// RSRQ are not plausible LTE measurements, so they must not drive the UI,
+  /// history or antenna advice. SINR=0 is valid, but is not sufficient by
+  /// itself to prove that the whole snapshot is ready.
+  bool get hasUsableRadioMetrics =>
+      _inRange(rsrp, -160, -20) ||
+      _inRange(rsrq, -40, -1) ||
+      _inRange(rssi, -150, -20);
+
+  /// A negative registration state is useful even without radio metrics and
+  /// should be shown immediately instead of being mistaken for loading.
+  bool get hasDefinitiveRegistrationState {
+    final value = status?.toLowerCase() ?? '';
+    return value.contains('not-registered') ||
+        value.contains('not registered') ||
+        value.contains('denied') ||
+        value.contains('searching') ||
+        value.contains('sim-not-inserted') ||
+        value.contains('sim not inserted') ||
+        value.contains('sim-locked') ||
+        value.contains('sim locked');
+  }
+
+  static bool _inRange(double? value, double minimum, double maximum) =>
+      value != null && value >= minimum && value <= maximum;
 
   static String? _first(Map<String, String> row, List<String> keys) {
     for (final key in keys) {
@@ -139,6 +166,15 @@ class LteSignal {
     return match == null
         ? null
         : double.tryParse(match.group(0)!.replaceAll(',', '.'));
+  }
+
+  static double? _boundedNumber(
+    String? raw,
+    double minimum,
+    double maximum,
+  ) {
+    final value = _number(raw);
+    return value != null && value >= minimum && value <= maximum ? value : null;
   }
 
   static int? _integer(String? raw) {

@@ -68,5 +68,22 @@ void main() {
       expect(signal.registered, isFalse);
       expect(signal.hasRadioMetrics, isFalse);
     });
+
+    test('rejects zero-filled power values as modem placeholders', () {
+      final signal = LteSignal.fromMonitor({
+        'status': 'running',
+        'rsrp': '0dBm',
+        'rsrq': '0dB',
+        'sinr': '0dB',
+        'rssi': '0dBm',
+      }, interfaceName: 'lte1');
+
+      expect(signal.registered, isTrue);
+      expect(signal.rsrp, isNull);
+      expect(signal.rsrq, isNull);
+      expect(signal.rssi, isNull);
+      expect(signal.sinr, 0);
+      expect(signal.hasUsableRadioMetrics, isFalse);
+    });
   });
 }

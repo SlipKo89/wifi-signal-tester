@@ -38,26 +38,46 @@ class _LteScreenState extends State<LteScreen> {
   TransportPreference _transport = TransportPreference.auto;
   bool _useTls = true;
   bool _obscurePassword = true;
+  List<LteConnection> _savedProfiles = const [];
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_changed);
-    _loadProfile();
+    _loadProfiles();
   }
 
-  Future<void> _loadProfile() async {
-    final saved = await _store.load();
-    if (!mounted || saved == null) return;
+  Future<void> _loadProfiles() async {
+    final saved = await _store.loadAll();
+    if (!mounted) return;
     setState(() {
-      _host.text = saved.host;
-      _username.text = saved.username;
-      _password.text = saved.password;
-      _transport = saved.transport;
-      _useTls = saved.useTls;
-      _port.text = saved.port?.toString() ?? '';
-      _interface.text = saved.interfaceName ?? '';
+      _savedProfiles = saved;
+      if (saved.isNotEmpty) _applyProfile(saved.first);
     });
+  }
+
+  void _applyProfile(LteConnection saved) {
+    _host.text = saved.host;
+    _username.text = saved.username;
+    _password.text = saved.password;
+    _transport = saved.transport;
+    _useTls = saved.useTls;
+    _port.text = saved.port?.toString() ?? '';
+    _interface.text = saved.interfaceName ?? '';
+  }
+
+  void _newProfile() {
+    setState(_clearEditor);
+  }
+
+  void _clearEditor() {
+    _host.clear();
+    _username.clear();
+    _password.clear();
+    _transport = TransportPreference.auto;
+    _useTls = true;
+    _port.clear();
+    _interface.clear();
   }
 
   void _changed() {
@@ -109,6 +129,8 @@ class _LteScreenState extends State<LteScreen> {
     if (await _controller.connect(connection)) {
       _alignmentSession.reset();
       await _store.save(connection);
+      final profiles = await _store.loadAll();
+      if (mounted) setState(() => _savedProfiles = profiles);
     }
   }
 
@@ -154,25 +176,20 @@ class _LteScreenState extends State<LteScreen> {
     ));
   }
 
-  Future<void> _forget(L10n l) async {
-    await _controller.disconnect();
-    _alignmentSession.reset();
-    await _store.clear();
+  Future<void> _forget(LteConnection profile, L10n l) async {
+    final clearsEditor = _sameHost(_host.text, profile.host);
+    await _store.removeHost(profile.host);
+    final profiles = await _store.loadAll();
     if (!mounted) return;
     setState(() {
-      _host.clear();
-      _username.clear();
-      _password.clear();
-      _transport = TransportPreference.auto;
-      _useTls = true;
-      _port.clear();
-      _interface.clear();
+      _savedProfiles = profiles;
+      if (clearsEditor) _clearEditor();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(l.t(
-          'Saved LTE profile removed from this device.',
-          'Сохранённый LTE-профиль удалён с устройства.',
+          'Saved LTE router removed from this device.',
+          'Сохранённый LTE-роутер удалён с устройства.',
         )),
       ),
     );
@@ -332,10 +349,33 @@ class _LteScreenState extends State<LteScreen> {
                 height: 1.4,
               ),
             ),
+            if (_savedProfiles.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l.t('Saved LTE routers', 'Сохранённые LTE-роутеры'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: busy ? null : _newProfile,
+                    icon: const Icon(Icons.add, size: 17),
+                    label: Text(l.t('New', 'Новый')),
+                  ),
+                ],
+              ),
+              ..._savedProfiles.map((profile) => _savedProfileTile(profile, l)),
+            ],
             const SizedBox(height: 16),
             TextField(
               controller: _host,
               enabled: !busy,
+              onChanged: (_) => setState(() {}),
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
                 labelText: 'Host / IP',
@@ -373,6 +413,7 @@ class _LteScreenState extends State<LteScreen> {
             DropdownButtonFormField<TransportPreference>(
               key: ValueKey(_transport),
               initialValue: _transport,
+              isExpanded: true,
               decoration:
                   InputDecoration(labelText: l.t('Transport', 'Транспорт')),
               items: [
@@ -461,7 +502,7 @@ class _LteScreenState extends State<LteScreen> {
                     'LTE interface may be left empty. Credentials are stored in the device Keystore.',
                 'Авто пробует REST, затем бинарный API и SSH. Нестандартный '
                     'порт используется только при явном выборе транспорта. '
-                    'LTE-интерфейс можно не указывать. Данные входа хранятся в Keystore устройства.',
+                    'LTE-интерфейс можно не указывать. Несколько профилей и их данные входа хранятся в Keystore устройства.',
               ),
               style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
             ),
@@ -490,12 +531,6 @@ class _LteScreenState extends State<LteScreen> {
                   : l.t('Connect and analyze LTE',
                       'Подключиться и анализировать LTE')),
             ),
-            TextButton.icon(
-              onPressed: busy ? null : () => _forget(l),
-              icon: const Icon(Icons.delete_outline, size: 18),
-              label: Text(l.t('Forget saved LTE profile',
-                  'Забыть сохранённый LTE-профиль')),
-            ),
             const SizedBox(height: 4),
             Text(
               l.t(
@@ -519,6 +554,78 @@ class _LteScreenState extends State<LteScreen> {
         TransportPreference.binary => _useTls ? '8729' : '8728',
         TransportPreference.ssh => '22',
       };
+
+  Widget _savedProfileTile(LteConnection profile, L10n l) {
+    final selected = _sameHost(_host.text, profile.host);
+    final transport = profile.transport == TransportPreference.binary
+        ? 'API'
+        : profile.transport.name.toUpperCase();
+    final details = <String>[
+      profile.username,
+      if (profile.interfaceName?.isNotEmpty ?? false) profile.interfaceName!,
+      profile.port == null ? transport : '$transport:${profile.port}',
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: selected
+            ? AppTheme.apAccent.withValues(alpha: 0.10)
+            : AppTheme.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: selected
+              ? AppTheme.apAccent.withValues(alpha: 0.55)
+              : Colors.transparent,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _applyProfile(profile)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              const Icon(Icons.router_outlined,
+                  size: 18, color: AppTheme.apAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.host,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      details.join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF7D8590),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: l.t('Forget router', 'Забыть роутер'),
+                onPressed: () => _forget(profile, l),
+                icon:
+                    const Icon(Icons.close, size: 17, color: Color(0xFF7D8590)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _sameHost(String left, String right) =>
+      left.trim().toLowerCase() == right.trim().toLowerCase();
 }
 
 class _LteDashboard extends StatelessWidget {
@@ -536,12 +643,7 @@ class _LteDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final signal = controller.signal;
     if (signal == null) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
+      return _FirstLteSampleCard(controller: controller, l: l);
     }
     final diagnosis = controller.diagnosis;
     return Column(
@@ -558,8 +660,9 @@ class _LteDashboard extends StatelessWidget {
         _VerdictCard(report: diagnosis, l: l),
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed:
-              signal.registered && signal.hasRadioMetrics ? onAlign : null,
+          onPressed: signal.registered && signal.hasUsableRadioMetrics
+              ? onAlign
+              : null,
           icon: const Icon(Icons.explore_outlined),
           label: Text(l.t(
             'Start antenna alignment assistant',
@@ -579,6 +682,83 @@ class _LteDashboard extends StatelessWidget {
         const SizedBox(height: 12),
         _AdviceCard(report: diagnosis, l: l),
       ],
+    );
+  }
+}
+
+class _FirstLteSampleCard extends StatelessWidget {
+  final LteController controller;
+  final L10n l;
+
+  const _FirstLteSampleCard({required this.controller, required this.l});
+
+  @override
+  Widget build(BuildContext context) {
+    final slow = controller.firstSampleTakingLong;
+    final color = slow ? const Color(0xFFD29922) : AppTheme.apAccent;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.38)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child:
+                    CircularProgressIndicator(strokeWidth: 2.4, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  slow
+                      ? l.t('LTE data is still loading',
+                          'Данные LTE ещё загружаются')
+                      : l.t('Getting the first LTE measurement…',
+                          'Получаем первый LTE-замер…'),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            slow
+                ? l.t(
+                    'The router is connected, but valid radio values have not arrived yet. Check that the LTE interface is running and the modem is registering; polling continues automatically.',
+                    'Соединение с роутером установлено, но корректные радиометрики пока не пришли. Проверь, что LTE-интерфейс запущен и модем регистрируется; автоматический опрос продолжается.',
+                  )
+                : l.t(
+                    'The router is connected. SSH and some modems may need several `monitor once` polls before RSRP, RSRQ and SINR appear. Placeholder zeros are not treated as a measurement.',
+                    'Соединение с роутером установлено. По SSH и на некоторых модемах RSRP, RSRQ и SINR появляются после нескольких опросов `monitor once`. Нулевые заглушки не считаются замером.',
+                  ),
+            style: const TextStyle(fontSize: 12.5, height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${l.t('Poll attempts', 'Попыток опроса')}: '
+            '${controller.firstSampleAttempts} · '
+            '${controller.transportKind ?? 'RouterOS'}',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: controller.refresh,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(l.t('Poll now', 'Опросить сейчас')),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -768,6 +948,32 @@ class _MetricsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!signal.hasUsableRadioMetrics) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(Icons.signal_cellular_alt,
+                  l.t('Radio quality', 'Качество радиоканала')),
+              const SizedBox(height: 12),
+              Text(
+                l.t(
+                  'No valid radio measurements are available yet. Zero-filled modem placeholders are hidden.',
+                  'Корректных радиометрик пока нет. Нулевые заглушки модема скрыты.',
+                ),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF7D8590),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final metrics = <Widget>[
       MetricTile(
         label: 'RSRP',

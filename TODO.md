@@ -87,6 +87,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       rolling stability and plain-language antenna/interference advice. Tested
       against both R11e-LTE and FG621-EA monitor formats; modem/SIM identifiers
       are discarded and never persisted
+- [x] Multiple secure LTE router profiles with automatic migration from the
+      original single profile; first SSH zero placeholders are ignored and the
+      UI explains that valid modem data is still loading
 - [x] Guided LTE antenna alignment: live RSRP/RSRQ/SINR charts, stable
       six-sample checkpoints, multi-metric score with an instability penalty,
       relative step-by-step grid search, return-to-best directions and a fine

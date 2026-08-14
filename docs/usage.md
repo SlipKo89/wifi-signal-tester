@@ -288,9 +288,17 @@ be reachable over one supported management transport.
 Enter the host, read-only username and password. *Auto* tries REST → binary API
 → SSH, or you can pin one transport, its TLS mode and a custom port. Leave *LTE
 interface* empty to auto-select a running interface, or enter a name such as
-`lte1`. The profile is stored in the device Keystore separately from Wi-Fi
-router profiles. Existing profiles created by the SSH-only version remain SSH
-profiles after the update.
+`lte1`. Every successfully connected router is added to the **Saved LTE
+routers** list; tap one to refill all fields or × to forget only that router.
+Profiles and passwords are stored in the device Keystore separately from Wi-Fi
+router profiles. Existing profiles created by the single-profile SSH-only
+version are migrated automatically and remain SSH profiles after the update.
+
+The first valid modem sample may take several polls over SSH. While waiting,
+the dashboard explicitly says that the router is connected and continues
+polling; zero-filled modem placeholders are hidden rather than diagnosed as a
+real signal. A genuine `searching`, `denied` or `not-registered` status is shown
+immediately.
 
 The app runs only these read-only commands:
 
@@ -408,7 +416,8 @@ sharing. *Copy readable report* is available when a ZIP is inconvenient.
 | SNR marked as estimate | The registration table doesn't report SNR (typical for CAPsMAN); it is derived from the radio's measured noise floor. |
 | Nothing at all over SSH | The user's group needs the `ssh` policy; check `/ip service` allows your subnet. LTE can also use REST or the binary API. |
 | LTE says no interface was found | Check that `/interface lte print` contains an enabled interface, or clear/correct the optional interface name in the LTE form. |
-| LTE is registered but metrics are empty | Wait for the modem to finish registering; some modem/RouterOS combinations need a current modem firmware before they expose radio metrics. |
+| LTE says that data is still loading | The router is connected, but valid modem metrics have not arrived. Let the automatic polling continue; if it persists, check that the LTE interface is running and the modem is registering. |
+| LTE is registered but metrics remain empty | Some modem/RouterOS combinations need a current modem firmware before they expose radio metrics. |
 | Audit says "Report incomplete" | Those menus couldn't be read — usually a session dropped while the app was in the background (it reconnects, so just re-run), or a user without rights to them. |
 
 ## 17. What the app never does

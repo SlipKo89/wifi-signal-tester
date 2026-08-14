@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- LTE connection profiles now keep several routers in secure platform storage.
+  The connection screen lets the operator select or forget one router, and
+  transparently migrates the previous single-profile format.
+
+### Fixed
+- An initial zero-filled `monitor once` response, seen on some SSH/modem
+  combinations, is no longer treated as a real LTE measurement. The dashboard
+  shows a bilingual loading/status card and keeps polling until plausible radio
+  metrics arrive; an explicit not-registered/searching modem state is still
+  reported immediately.
+
 ## [0.3.2] - 2026-08-08
 
 ### Added

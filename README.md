@@ -82,7 +82,8 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 - **Separate LTE diagnostics**: read-only REST / binary API / SSH polling of
   RSRP, RSRQ, SINR, optional RSSI/CQI, band and serving-cell facts, stability
   and practical antenna/interference advice. Auto tries REST → API → SSH; no
-  Wi-Fi connection is required for this mode.
+  Wi-Fi connection is required for this mode. Several LTE routers can be saved
+  in secure platform storage and selected from the connection screen.
 - **Guided LTE antenna alignment**: record stable checkpoints while moving the
   dish in repeatable steps. The assistant combines signal power, quality and
   stability, proposes the next move and tells you how to return to the best
