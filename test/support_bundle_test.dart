@@ -11,12 +11,13 @@ void main() {
         report: {
           'network': {
             'ssid': 'HomeWiFi',
-            'router_host': '192.168.175.1',
+            'router_host': '192.0.2.1',
             'backup_router_host': 'router.home',
             'client_mac': 'AA:BB:CC:DD:EE:FF',
           },
           'accidental': {
             'password': 'do-not-export',
+            'zabbix_api_token': 'zabbix-token-must-not-export',
             'message': 'Authorization: Bearer-secret token=also-secret',
           },
         },
@@ -24,7 +25,7 @@ void main() {
           DiagnosticEvent(
             timestamp: DateTime.utc(2026, 8, 6, 12, 34, 50),
             code: 'NET-03',
-            message: 'Read timed out from router.home at 192.168.175.1',
+            message: 'Read timed out from router.home at 192.0.2.1',
             details: const {'bssid': 'AA:BB:CC:DD:EE:FF'},
           ),
         ],
@@ -40,12 +41,13 @@ void main() {
 
     expect(text, isNot(contains('HomeWiFi')));
     expect(text, contains('Hom***'));
-    expect(text, isNot(contains('192.168.175.1')));
+    expect(text, isNot(contains('192.0.2.1')));
     expect(text, isNot(contains('router.home')));
-    expect(text, contains('192.168.x.x'));
+    expect(text, contains('192.0.x.x'));
     expect(text, isNot(contains('AA:BB:CC:DD:EE:FF')));
     expect(text, contains('AA:BB:CC:XX:XX:XX'));
     expect(text, isNot(contains('do-not-export')));
+    expect(text, isNot(contains('zabbix-token-must-not-export')));
     expect(text, isNot(contains('Bearer-secret')));
     expect(text, isNot(contains('also-secret')));
   });
@@ -57,10 +59,11 @@ void main() {
     ).renderText();
 
     expect(text, contains('HomeWiFi'));
-    expect(text, contains('192.168.175.1'));
+    expect(text, contains('192.0.2.1'));
     expect(text, contains('router.home'));
     expect(text, contains('AA:BB:CC:DD:EE:FF'));
     expect(text, isNot(contains('do-not-export')));
+    expect(text, isNot(contains('zabbix-token-must-not-export')));
     expect(text, isNot(contains('Bearer-secret')));
     expect(text, isNot(contains('also-secret')));
   });

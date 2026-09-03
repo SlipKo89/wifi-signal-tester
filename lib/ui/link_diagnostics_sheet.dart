@@ -5,6 +5,7 @@ import '../diagnostics/link_diagnostics.dart';
 import '../l10n/l10n.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
+import 'widgets/app_safe_area.dart';
 
 const _green = Color(0xFF3FB950);
 const _amber = Color(0xFFD29922);
@@ -226,7 +227,7 @@ class _LinkDiagnosticsSheet extends StatelessWidget {
       }
     }
 
-    return SafeArea(
+    return AppSafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.86,

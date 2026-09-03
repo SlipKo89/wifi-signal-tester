@@ -8,6 +8,7 @@ import '../l10n/l10n.dart';
 import '../lte/lte_audit.dart';
 import '../lte/lte_controller.dart';
 import '../settings/settings_controller.dart';
+import 'widgets/app_safe_area.dart';
 import 'widgets/audit_widgets.dart';
 
 class LteAuditScreen extends StatefulWidget {
@@ -71,62 +72,64 @@ class _LteAuditScreenState extends State<LteAuditScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Finding>>(
-        future: _future,
-        builder: (context, snapshot) {
-          final content = <Widget>[
-            _RoleCard(
-              l: l,
-              role: _role,
-              onChanged: (value) {
-                if (value == null || value == _role) return;
-                _role = value;
-                _run();
-              },
-            ),
-            const SizedBox(height: 12),
-          ];
-          if (snapshot.hasError) {
-            content.add(_ErrorCard(l: l, onRetry: _run));
-          } else if (!snapshot.hasData) {
-            content.add(const Padding(
-              padding: EdgeInsets.all(36),
-              child: Center(child: CircularProgressIndicator()),
-            ));
-          } else {
-            final findings = snapshot.data!;
-            final issues = findings
-                .where((finding) =>
-                    finding.sev == AuditSeverity.critical ||
-                    finding.sev == AuditSeverity.warn)
-                .length;
-            content.addAll([
-              AuditSummaryCard(
+      body: AppSafeArea(
+        child: FutureBuilder<List<Finding>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final content = <Widget>[
+              _RoleCard(
                 l: l,
-                issues: issues,
-                total: findings.length,
+                role: _role,
+                onChanged: (value) {
+                  if (value == null || value == _role) return;
+                  _role = value;
+                  _run();
+                },
               ),
               const SizedBox(height: 12),
-              ...findings.map(
-                (finding) => AuditFindingCard(l: l, finding: finding),
+            ];
+            if (snapshot.hasError) {
+              content.add(_ErrorCard(l: l, onRetry: _run));
+            } else if (!snapshot.hasData) {
+              content.add(const Padding(
+                padding: EdgeInsets.all(36),
+                child: Center(child: CircularProgressIndicator()),
+              ));
+            } else {
+              final findings = snapshot.data!;
+              final issues = findings
+                  .where((finding) =>
+                      finding.sev == AuditSeverity.critical ||
+                      finding.sev == AuditSeverity.warn)
+                  .length;
+              content.addAll([
+                AuditSummaryCard(
+                  l: l,
+                  issues: issues,
+                  total: findings.length,
+                ),
+                const SizedBox(height: 12),
+                ...findings.map(
+                  (finding) => AuditFindingCard(l: l, finding: finding),
+                ),
+              ]);
+            }
+            content.addAll([
+              const SizedBox(height: 8),
+              Text(
+                l.t(
+                  'Read-only static audit. It does not run AT commands, scan cells, inspect APN credentials or change the router.',
+                  'Статический аудит только для чтения. Он не запускает AT-команды, не сканирует соты, не читает учётные данные APN и не меняет роутер.',
+                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
               ),
             ]);
-          }
-          content.addAll([
-            const SizedBox(height: 8),
-            Text(
-              l.t(
-                'Read-only static audit. It does not run AT commands, scan cells, inspect APN credentials or change the router.',
-                'Статический аудит только для чтения. Он не запускает AT-команды, не сканирует соты, не читает учётные данные APN и не меняет роутер.',
-              ),
-              style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
-            ),
-          ]);
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: content,
-          );
-        },
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: content,
+            );
+          },
+        ),
       ),
     );
   }

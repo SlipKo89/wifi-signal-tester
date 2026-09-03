@@ -3,6 +3,45 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/l10n.dart';
 
+enum PollingProfile { fast, normal, economical, custom }
+
+/// Independent read cadences used by the Wi-Fi monitor.
+///
+/// The registration table remains fast enough for walk tests, while router
+/// health and IP-to-MAC discovery are intentionally read less often.
+class PollingIntervals {
+  final int signalSeconds;
+  final int healthSeconds;
+  final int identitySeconds;
+
+  const PollingIntervals({
+    required this.signalSeconds,
+    required this.healthSeconds,
+    required this.identitySeconds,
+  });
+}
+
+extension PollingProfileDefaults on PollingProfile {
+  PollingIntervals? get intervals => switch (this) {
+        PollingProfile.fast => const PollingIntervals(
+            signalSeconds: 1,
+            healthSeconds: 10,
+            identitySeconds: 15,
+          ),
+        PollingProfile.normal => const PollingIntervals(
+            signalSeconds: 2,
+            healthSeconds: 15,
+            identitySeconds: 30,
+          ),
+        PollingProfile.economical => const PollingIntervals(
+            signalSeconds: 5,
+            healthSeconds: 30,
+            identitySeconds: 60,
+          ),
+        PollingProfile.custom => null,
+      };
+}
+
 /// App-wide preferences, persisted with SharedPreferences (non-secret).
 class SettingsController extends ChangeNotifier {
   SharedPreferences? _prefs;
@@ -10,7 +49,10 @@ class SettingsController extends ChangeNotifier {
   // 'system' | 'en' | 'ru'
   String _lang = 'system';
   ThemeMode _themeMode = ThemeMode.dark;
+  PollingProfile _pollingProfile = PollingProfile.normal;
   int _pollSeconds = 2;
+  int _healthPollSeconds = 15;
+  int _identityPollSeconds = 30;
   int _historyLength = 60;
   bool _alertsEnabled = false;
   int _alertThresholdDb = 12;
@@ -22,7 +64,10 @@ class SettingsController extends ChangeNotifier {
 
   String get lang => _lang;
   ThemeMode get themeMode => _themeMode;
+  PollingProfile get pollingProfile => _pollingProfile;
   int get pollSeconds => _pollSeconds;
+  int get healthPollSeconds => _healthPollSeconds;
+  int get identityPollSeconds => _identityPollSeconds;
   int get historyLength => _historyLength;
   bool get alertsEnabled => _alertsEnabled;
   int get alertThresholdDb => _alertThresholdDb;
@@ -56,7 +101,24 @@ class SettingsController extends ChangeNotifier {
       (m) => m.name == p.getString('themeMode'),
       orElse: () => ThemeMode.dark,
     );
-    _pollSeconds = p.getInt('pollSeconds') ?? 2;
+    final legacyPollSeconds = (p.getInt('pollSeconds') ?? 2).clamp(1, 30);
+    final savedProfile = p.getString('pollingProfile');
+    _pollingProfile = PollingProfile.values.firstWhere(
+      (profile) => profile.name == savedProfile,
+      // Preserve a non-standard interval selected in older app versions.
+      orElse: () => switch (legacyPollSeconds) {
+        1 => PollingProfile.fast,
+        2 => PollingProfile.normal,
+        5 => PollingProfile.economical,
+        _ => PollingProfile.custom,
+      },
+    );
+    final preset = _pollingProfile.intervals;
+    _pollSeconds = preset?.signalSeconds ?? legacyPollSeconds;
+    _healthPollSeconds = preset?.healthSeconds ??
+        (p.getInt('healthPollSeconds') ?? 15).clamp(5, 300);
+    _identityPollSeconds = preset?.identitySeconds ??
+        (p.getInt('identityPollSeconds') ?? 30).clamp(10, 600);
     _historyLength = p.getInt('historyLength') ?? 60;
     _alertsEnabled = p.getBool('alertsEnabled') ?? false;
     _alertThresholdDb = p.getInt('alertThresholdDb') ?? 12;
@@ -123,10 +185,44 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setPollSeconds(int v) async {
-    _pollSeconds = v.clamp(1, 30);
-    await _prefs?.setInt('pollSeconds', _pollSeconds);
+  Future<void> setPollingProfile(PollingProfile profile) async {
+    _pollingProfile = profile;
+    final preset = profile.intervals;
+    if (preset != null) {
+      _pollSeconds = preset.signalSeconds;
+      _healthPollSeconds = preset.healthSeconds;
+      _identityPollSeconds = preset.identitySeconds;
+    }
+    await _persistPollingSettings();
     notifyListeners();
+  }
+
+  Future<void> setPollSeconds(int v) async {
+    _pollingProfile = PollingProfile.custom;
+    _pollSeconds = v.clamp(1, 30);
+    await _persistPollingSettings();
+    notifyListeners();
+  }
+
+  Future<void> setHealthPollSeconds(int v) async {
+    _pollingProfile = PollingProfile.custom;
+    _healthPollSeconds = v.clamp(5, 300);
+    await _persistPollingSettings();
+    notifyListeners();
+  }
+
+  Future<void> setIdentityPollSeconds(int v) async {
+    _pollingProfile = PollingProfile.custom;
+    _identityPollSeconds = v.clamp(10, 600);
+    await _persistPollingSettings();
+    notifyListeners();
+  }
+
+  Future<void> _persistPollingSettings() async {
+    await _prefs?.setString('pollingProfile', _pollingProfile.name);
+    await _prefs?.setInt('pollSeconds', _pollSeconds);
+    await _prefs?.setInt('healthPollSeconds', _healthPollSeconds);
+    await _prefs?.setInt('identityPollSeconds', _identityPollSeconds);
   }
 
   Future<void> setHistoryLength(int v) async {

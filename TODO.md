@@ -36,7 +36,12 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       the storage; left: dedicated walk UI + per-AP timeline)
 - [ ] Floor-map / heatmap capture (drop pins, record both-side signal)
 - [ ] Multi-AP view when CAPsMAN reports the client on several radios
-- [x] Configurable poll interval and history length in settings
+- [x] Polling profiles plus independent signal/ping, router-health and IP→MAC
+      intervals; cached identity, serving-router priority and background pause;
+      configurable history length
+- [x] Optional MikroTik port knocking for Wi-Fi and LTE profiles: 1–8 TCP/UDP
+      steps in secure storage, explicit transport only, bounded reconnect retry
+      and no RouterOS configuration writes
 - [ ] Dark/light theme toggle (needs theme-aware colors across widgets)
 - [x] Settings screen + language selection (RU/EN, lightweight i18n)
 - [x] Live throughput, CCQ, p-throughput, uptime metrics
@@ -95,7 +100,9 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       role-aware default-route advice, passthrough, PDN/IPv6 firewall presence,
       MTU, roaming, driver/network mode and native band/operator locks; passed
       checks, official links and PDF export included. Secret fields and active
-      modem commands are excluded by construction
+      modem commands are excluded by construction. SSH singleton menus have a
+      safe plain-print fallback, and optional LTE properties cannot hide the
+      already selected interface
 - [x] Guided LTE antenna alignment: live RSRP/RSRQ/SINR charts, stable
       six-sample checkpoints, multi-metric score with an instability penalty,
       relative step-by-step grid search, return-to-best directions and a fine
@@ -118,6 +125,33 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Short screen-recording / GIF of a walk-around survey for the README
 
 ## Later (v0.3+)
+- [x] Initial optional Zabbix history integration: user-supplied API token in
+      secure storage, read-only host/item discovery, raw 1h/24h history,
+      hourly 7d/30d trends, searchable metric picker and exact in-app role /
+      host-group permission guide; HTTPS/HTTP selection and custom port with a
+      cleartext-token warning
+- [~] Zabbix semantic integration: manual mapping with checked name/key
+      suggestions, reusable router→host bindings, timestamp-aligned Wi-Fi/LTE
+      session overlays, shared cursor, separate Y scales and combined CSV are
+      done. Left: field-tested presets for common MikroTik/LTE templates and
+      automatic diagnostic correlation (signal vs CPU, traffic, ping/loss and
+      client count)
+- [ ] Field-test Zabbix authentication and history retention variants on 5.4,
+      6.0, 6.4, 7.0 and 7.4; add explicit certificate pinning for private
+      self-signed deployments without a global TLS bypass
+- [x] Initial **Keenetic Alpha** Wi-Fi dashboard over HTTPS RCI: x-ndw2
+      challenge-response login, exact IP→MAC lookup, AP-side RSSI/rates and
+      association facts, plus model/version/CPU/uptime. Compatibility baseline:
+      Runner 4G (KN-2212), KeeneticOS 5.01.C.3.0-1; test hardware provided by
+      Netspay
+- [ ] Field-test Keenetic RCI on more models, dual-band/Wi-Fi 6/Mesh setups and
+      KeeneticOS releases; replace the exact Alpha matrix with capability-based
+      parsing only after those response variants are captured
+- [ ] Keenetic device inventory, configuration audit and event-log analysis;
+      keep hidden until their RCI schemas and semantics are field-tested
+- [ ] Evaluate local-address RCI and Telnet only as compatibility fallbacks for
+      Keenetic installations without usable HTTPS RCI; do not add a generic
+      write-capable command surface
 - [x] Initial macOS runner: correct app identity, sandboxed outbound/local
       network access, desktop-safe Android plugin fallbacks
 - [x] GitHub Actions macOS ARM64 build: package `.app` as ZIP and publish it
@@ -167,14 +201,37 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       verified identical to REST on a live router
 - [ ] Exportable survey report (PDF/CSV with spots + verdicts) for clients
 
+### D. RouterOS version intelligence
+- [ ] Warn after connection when the installed RouterOS predates an official
+      important security release. Read the installed version only, fetch the
+      generic MikroTik stable/long-term RSS over normal HTTPS at most daily,
+      cache it with an updated-at timestamp and keep a bundled offline fallback.
+      Never run `check-for-updates` or start an upgrade on the router.
+- [ ] Curate a rule-based advisory catalogue from official MikroTik Security
+      announcements and only precise changelog entries. Match affected/fixed
+      version ranges with actually used components, wireless stacks and LTE
+      modem models; distinguish confirmed applicability, vendor-recommended
+      security updates and merely relevant changes instead of inferring a
+      vulnerability from vague phrases such as "improve stability".
+- [ ] Show source links, advisory/catalogue freshness, channel-aware version
+      comparison and per-installed-version snooze. Keep ordinary update info,
+      security recommendations and known compatibility issues deduplicated in
+      the system audit; never claim that an unpublished issue affects a
+      particular configuration.
+
 ## Tech debt / risks
 - [x] Binary API dead-session recovery: serialised commands reconnect once,
       replay login and retry the same read-only command after a background socket
       closure. REST remains stateless; SSH has the equivalent one-shot recovery.
 - [ ] Binary-API reader uses `List<int>` with O(n) removes — fine for tiny
       registration tables, revisit if we ever stream large menus
-- [ ] Self-signed TLS is accepted by default (LAN assumption) — make it a
-      user-visible toggle with a warning
+- [x] MikroTik REST/API accepts self-signed TLS by design for private-LAN use;
+      this is documented as an explicit trust trade-off rather than presented
+      as normal PKI validation. Keenetic and Zabbix-over-HTTPS keep strict
+      checks; explicitly selected Zabbix HTTP is marked as unencrypted.
+- [x] SSH host-key TOFU: remember the first successfully authenticated key in
+      secure storage; stop and show old/new fingerprints if it changes; replace
+      it only after an explicit user action
 - [ ] wifi_iot RSSI availability varies by OEM ROM — needs field testing
 - [ ] Android toolchain compatibility pass: current AGP is 8.9.1 and Gradle is
       8.11.1; Flutter 3.44.8 warns that support will soon require AGP ≥8.11.1

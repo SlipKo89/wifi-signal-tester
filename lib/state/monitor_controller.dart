@@ -9,11 +9,13 @@ import '../diagnostics/diagnostic_log.dart';
 import '../diagnostics/link_diagnostics.dart';
 import '../diagnostics/support_bundle.dart';
 import '../history/history_store.dart';
+import '../keenetic/keenetic_service.dart';
 import '../mikrotik/mikrotik_service.dart';
 import '../mikrotik/router_os_transport.dart' show RouterOsException;
+import '../mikrotik/ssh_host_key_store.dart';
 import '../models/phone_signal.dart';
 import '../models/station_signal.dart';
-import '../models/wireless_stack.dart';
+import '../router/wifi_router_service.dart';
 import '../services/beeper.dart';
 import '../services/phone_wifi_service.dart';
 import '../services/ping_service.dart';
@@ -29,13 +31,24 @@ enum ThresholdBreach { phoneSignal, apSignal, phoneSnr, apSnr, asymmetry }
 /// resolve our MAC, find the AP side on whichever router currently serves the
 /// client, and keep a short history for the sparkline.
 class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
-  final List<MikrotikService> _routers = [];
+  static const _cleanupTimeout = Duration(seconds: 3);
+  static const _activeOperationShutdownTimeout = Duration(seconds: 12);
+
+  final List<WifiRouterService> _routers = [];
   final PhoneWifiService _phone = PhoneWifiService();
   final DeviceInfoService _deviceInfo = DeviceInfoService();
   final WifiLogService _wifiLogService = WifiLogService();
   final DateTime _startedAt = DateTime.now();
+  final Beeper _beeper;
+  final PingService _ping;
 
-  MonitorController() {
+  MonitorController({
+    HistoryStore? historyStore,
+    Beeper? beeper,
+    PingService? pingService,
+  })  : history = historyStore ?? HistoryStore(),
+        _beeper = beeper ?? Beeper(),
+        _ping = pingService ?? PingService() {
     WidgetsBinding.instance.addObserver(this);
     diagnosticLog.record('APP-START', 'Monitoring controller started');
   }
@@ -43,10 +56,15 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   MonitorState state = MonitorState.idle;
   AppFailure? failure;
   AppFailure? _connectionWarning;
+  SshHostKeyChangedException? _pendingSshHostKeyChange;
   final DiagnosticLog diagnosticLog = DiagnosticLog();
   List<RouterConnection> _lastConfigs = const [];
   int _stationMisses = 0;
   bool _refreshing = false;
+  Completer<void>? _refreshDone;
+  Completer<void>? _connectDone;
+  bool _shuttingDown = false;
+  Future<void>? _shutdownFuture;
   int _sessionGeneration = 0;
   DateTime? lastSuccessfulPoll;
   DateTime? lastFailedPoll;
@@ -55,7 +73,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   StationSignal? stationSignal;
 
   /// The router that currently has our client (for labelling).
-  MikrotikService? _serving;
+  WifiRouterService? _serving;
 
   /// AP name derived from the phone's BSSID (works even before the client shows
   /// up in a registration table, and lets us name a foreign AP too).
@@ -78,7 +96,6 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       : '$lastRoamFrom → $lastRoamTo';
 
   /// Latency to the gateway (last RTT, plus a rolling window for avg / loss).
-  final PingService _ping = PingService();
   int? pingMs;
   bool _pinging = false;
   final List<int?> _pingWindow = [];
@@ -131,8 +148,18 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     return (milliseconds / 1000).ceil();
   }
 
-  /// Our MAC as last resolved from ARP (re-resolved every poll).
+  /// Our MAC as last resolved from ARP/DHCP. The result is cached between
+  /// discovery polls and invalidated immediately when the Wi-Fi link changes.
   String? _ourMac;
+  List<String> _macCandidates = const [];
+  String? _identityIp;
+  String? _identitySsid;
+  String? _identityBssid;
+  DateTime? _identityResolvedAt;
+  bool _identityRetryScheduled = false;
+
+  DateTime? _resourceReadAt;
+  WifiRouterService? _resourceRouter;
 
   /// Last explicit, read-only RouterOS log analysis. Raw router logs are never
   /// retained here; the report contains normalized events for one selected MAC
@@ -144,7 +171,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     String? targetLabel,
     String? targetInterface,
   }) async {
-    if (_routers.isEmpty) {
+    final mikrotikRouters = routers;
+    if (mikrotikRouters.isEmpty) {
       throw RouterOsException('Connect to a MikroTik first');
     }
     final selectedMac = targetMac ?? _ourMac;
@@ -153,7 +181,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
           'Could not resolve the selected device MAC address');
     }
     final sources = await Future.wait(
-      _routers.map(_wifiLogService.readSource),
+      mikrotikRouters.map(_wifiLogService.readSource),
     );
     final report = WifiLogAnalyzer.analyze(
       targetMac: selectedMac,
@@ -192,7 +220,6 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   bool locationServiceOn = true;
 
   /// Audible alert when the AP−phone asymmetry exceeds [alertThresholdDb].
-  final Beeper _beeper = Beeper();
   bool alertsEnabled = false;
   int alertThresholdDb = 12;
   int minSignalDbm = -72;
@@ -215,22 +242,40 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   int? _lastTxBytes;
   int? _lastRxBytes;
   String? _lastBytesMac;
+  DateTime? _lastBytesAt;
 
   /// Persistent recording (our own app data only).
-  final HistoryStore history = HistoryStore();
+  final HistoryStore history;
   int? _recordingSessionId;
+  String? _recordingRouterHost;
   bool get recording => _recordingSessionId != null;
 
   Timer? _timer;
   Duration pollInterval = const Duration(seconds: 2);
+  Duration healthPollInterval = const Duration(seconds: 15);
+  Duration identityPollInterval = const Duration(seconds: 30);
+  bool _lifecyclePaused = false;
+  bool _resumeLiveAfterBackground = false;
   bool get isLive => _timer != null;
 
   int get routerCount => _routers.length;
-  List<MikrotikService> get routers => List.unmodifiable(_routers);
-  MikrotikService? get _primary =>
+  List<MikrotikService> get routers =>
+      List.unmodifiable(_routers.whereType<MikrotikService>());
+  bool get hasMikrotikRouters => routers.isNotEmpty;
+  bool get hasKeeneticRouters => _routers.any(
+        (router) => router.vendor == RouterVendor.keenetic,
+      );
+  WifiRouterService? get _primary =>
       _serving ?? (_routers.isEmpty ? null : _routers.first);
-  String? get stackLabel => _primary?.stack?.label;
+  String? get stackLabel => _primary?.stackLabel;
   String? get transportKind => _primary?.transportKind;
+  String? get platformLabel => _primary?.platformLabel;
+  bool get keeneticAlpha => _primary?.vendor == RouterVendor.keenetic;
+  String? get keeneticModel => keeneticAlpha ? _primary?.deviceModel : null;
+  String? get keeneticRelease =>
+      keeneticAlpha ? _primary?.softwareVersion : null;
+  bool get keeneticCompatibilityVerified =>
+      keeneticAlpha && (_primary?.compatibilityVerified ?? false);
 
   /// Host of the router currently serving the client — shown as "via …".
   String? get servingHost => _serving?.host;
@@ -271,12 +316,33 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Connects to every configured router (best-effort — at least one must
   /// succeed). SSID/BSSID need location access, so we ask first.
-  Future<void> connect(List<RouterConnection> cfgs) async {
+  Future<void> connect(List<RouterConnection> cfgs) {
+    if (_shuttingDown) return Future.value();
+    final done = Completer<void>();
+    _connectDone = done;
+    return _connectTracked(cfgs, done);
+  }
+
+  Future<void> _connectTracked(
+    List<RouterConnection> cfgs,
+    Completer<void> done,
+  ) async {
+    try {
+      await _connectInternal(cfgs);
+    } finally {
+      if (!done.isCompleted) done.complete();
+      if (identical(_connectDone, done)) _connectDone = null;
+    }
+  }
+
+  Future<void> _connectInternal(List<RouterConnection> cfgs) async {
     _sessionGeneration++;
+    final generation = _sessionGeneration;
     state = MonitorState.connecting;
     phoneOnly = false;
     failure = null;
     _connectionWarning = null;
+    _pendingSshHostKeyChange = null;
     lastWifiLogReport = null;
     _lastConfigs = List.unmodifiable(cfgs);
     diagnosticLog.record(
@@ -288,26 +354,44 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     final access = await _phone.ensureLocationAccess();
+    if (_shuttingDown || generation != _sessionGeneration) return;
     locationGranted = access.granted;
     locationServiceOn = access.serviceOn;
 
     await _closeRouters();
+    if (_shuttingDown || generation != _sessionGeneration) return;
     final failures = <({RouterConnection config, Object error})>[];
     for (final cfg in cfgs) {
-      final svc = MikrotikService(onEvent: _recordTransportEvent);
+      final WifiRouterService svc = switch (cfg.vendor) {
+        RouterVendor.mikrotik =>
+          MikrotikService(onEvent: _recordTransportEvent),
+        RouterVendor.keenetic => KeeneticService(),
+      };
       try {
         await svc.connect(cfg);
+        if (_shuttingDown || generation != _sessionGeneration) {
+          await _closeRouter(svc);
+          return;
+        }
         _routers.add(svc);
         diagnosticLog.record(
           'CONNECT-OK',
           'Router connected',
           details: {
             'host': cfg.host,
+            'vendor': svc.vendor.name,
             'transport': svc.transportKind,
-            'wireless_stack': svc.stack?.label,
+            'wireless_stack': svc.stackLabel,
           },
         );
       } catch (e) {
+        if (_shuttingDown || generation != _sessionGeneration) {
+          await _closeRouter(svc);
+          return;
+        }
+        if (e is SshHostKeyChangedException) {
+          _pendingSshHostKeyChange ??= e;
+        }
         failures.add((config: cfg, error: e));
         final classified = AppFailure.classify(e);
         diagnosticLog.record(
@@ -315,20 +399,25 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
           'Router connection failed',
           details: {
             'host': cfg.host,
+            'vendor': cfg.vendor.name,
             'transport_preference': cfg.transport.name,
             'failure_kind': classified.kind.name,
             'technical': classified.technical,
           },
         );
-        await svc.close();
+        await _closeRouter(svc);
       }
     }
+
+    if (_shuttingDown || generation != _sessionGeneration) return;
 
     if (_routers.isEmpty) {
       state = MonitorState.error;
       failure = failures.isEmpty
           ? AppFailure.classify('No router configuration supplied')
-          : AppFailure.classify(failures.last.error);
+          : AppFailure.classify(
+              _pendingSshHostKeyChange ?? failures.last.error,
+            );
       lastFailedPoll = DateTime.now();
       notifyListeners();
       return;
@@ -336,11 +425,13 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
     state = MonitorState.connected;
     _serving = null;
-    _ourMac = null;
+    _resetPollingCaches();
     lastWifiLogReport = null;
-    _connectionWarning = failures.isEmpty
-        ? null
-        : AppFailure.partial(failures.length, cfgs.length);
+    _connectionWarning = _pendingSshHostKeyChange != null
+        ? AppFailure.classify(_pendingSshHostKeyChange!)
+        : failures.isEmpty
+            ? null
+            : AppFailure.partial(failures.length, cfgs.length);
     failure = _connectionWarning;
     notifyListeners();
     await refresh();
@@ -349,18 +440,25 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Monitor only the phone's own Wi-Fi, no router connection.
   Future<void> startPhoneOnly() async {
+    if (_shuttingDown) return;
     _sessionGeneration++;
+    final generation = _sessionGeneration;
     lastWifiLogReport = null;
     final access = await _phone.ensureLocationAccess();
+    if (_shuttingDown || generation != _sessionGeneration) return;
     locationGranted = access.granted;
     locationServiceOn = access.serviceOn;
     await _closeRouters();
+    if (_shuttingDown || generation != _sessionGeneration) return;
     _resetDiagnostics();
+    _resetPollingCaches();
+    _serving = null;
     phoneOnly = true;
     _lastConfigs = const [];
     state = MonitorState.connected;
     failure = null;
     _connectionWarning = null;
+    _pendingSshHostKeyChange = null;
     diagnosticLog.record('PHONE-ONLY', 'Phone-only monitoring started');
     notifyListeners();
     await refresh();
@@ -368,6 +466,11 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void startLive() {
+    if (_shuttingDown) return;
+    if (_lifecyclePaused) {
+      _resumeLiveAfterBackground = true;
+      return;
+    }
     _timer?.cancel();
     _timer = Timer.periodic(pollInterval, (_) => refresh());
     if (autoLinkDiagnostics &&
@@ -379,6 +482,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void stopLive() {
+    _resumeLiveAfterBackground = false;
     _timer?.cancel();
     _timer = null;
     if (_diagnostics.phase == LinkDiagnosticPhase.waiting ||
@@ -390,8 +494,10 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// One measurement pass. Never throws — failures land in [failure].
   Future<void> refresh() async {
-    if (_refreshing) return;
+    if (_refreshing || _shuttingDown) return;
     _refreshing = true;
+    final done = Completer<void>();
+    _refreshDone = done;
     final generation = _sessionGeneration;
     try {
       final phone = await _phone.read();
@@ -402,7 +508,9 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       if (phone.ssid == null && phone.ipAddress == null) {
         offWifi = true;
         stationSignal = null;
+        _serving = null;
         connectedApName = null;
+        _resetPollingCaches();
         _resetDiagnostics();
         failure = AppFailure.offWifi();
         lastFailedPoll = DateTime.now();
@@ -416,26 +524,58 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       // Which AP does the phone say it's on? (BSSID → AP name across routers.)
       connectedApName = _apNameForBssid(phone.bssid);
 
-      // Re-resolve the MAC and search every router for the client — the phone
-      // roams between APs/routers and gets a new randomized MAC per SSID.
+      // A network/BSSID change makes the cached randomized MAC untrustworthy.
+      // In steady state, ARP/DHCP is intentionally read at a slower cadence
+      // than the registration table used for the live signal.
+      final networkChanged = _syncIdentityNetwork(phone);
+      final now = DateTime.now();
+      final orderedRouters = _orderedRouters(phone.bssid);
+      if (!phoneOnly &&
+          phone.ipAddress != null &&
+          _identityDiscoveryDue(now, force: networkChanged)) {
+        await _resolveOurMac(
+          phone.ipAddress!,
+          orderedRouters,
+          now,
+          generation,
+        );
+        if (generation != _sessionGeneration) return;
+      }
+
+      // Registration tables remain on the fast signal cadence. Start with the
+      // BSSID-owning / previously serving router to avoid querying every router
+      // after the serving AP is known.
       stationSignal = null;
       _serving = null;
-      _ourMac = null;
-      if (phone.ipAddress != null) {
-        for (final svc in _routers) {
-          final mac = await svc.resolveMacForIp(phone.ipAddress!);
-          if (generation != _sessionGeneration) return;
-          if (mac == null) continue;
-          final station = await svc.fetchStation(mac);
-          if (generation != _sessionGeneration) return;
-          if (station != null) {
-            stationSignal = station;
-            _serving = svc;
-            _ourMac = mac;
-            break;
+      if (!phoneOnly && _macCandidates.isNotEmpty) {
+        for (final candidateMac in List<String>.of(_macCandidates)) {
+          for (final svc in orderedRouters) {
+            final station = await svc.fetchStation(candidateMac);
+            if (generation != _sessionGeneration) return;
+            if (station != null) {
+              stationSignal = station;
+              _serving = svc;
+              _ourMac = candidateMac;
+              _macCandidates = [
+                candidateMac,
+                ..._macCandidates.where(
+                  (mac) => mac.toLowerCase() != candidateMac.toLowerCase(),
+                ),
+              ];
+              if (_identityRetryScheduled) {
+                _identityResolvedAt = now;
+                _identityRetryScheduled = false;
+              }
+              break;
+            }
           }
-          _ourMac ??= mac;
+          if (stationSignal != null) break;
         }
+      }
+      if (!phoneOnly && stationSignal == null && _ourMac != null) {
+        // A stale ARP entry or an Android randomized-MAC change should recover
+        // soon, but not by re-reading every router on every signal tick.
+        _scheduleIdentityRetry(now);
       }
       apUnmanaged =
           !phoneOnly && phone.ipAddress != null && stationSignal == null;
@@ -503,14 +643,15 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
         _scheduleLinkDiagnostic(linkKey);
       }
 
-      // Router health from whichever router serves the client.
-      routerResource = _serving == null ? null : await _serving!.readResource();
+      // Router health is useful context, but not part of the live RF graph.
+      // Keep the last sample and refresh it on its own slower cadence.
+      await _refreshRouterResource(_serving, now);
       if (generation != _sessionGeneration) return;
 
       // Latency to the gateway (non-blocking).
       _pingTarget(phone.gatewayIp ?? _serving?.host);
 
-      _computeThroughput();
+      _computeThroughput(DateTime.now());
       _push(phoneHistory, phone.rssiDbm);
       _push(apHistory, stationSignal?.signalDbm);
 
@@ -535,19 +676,25 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       );
     } finally {
       _refreshing = false;
+      if (!done.isCompleted) done.complete();
+      if (identical(_refreshDone, done)) _refreshDone = null;
     }
+    if (_shuttingDown || generation != _sessionGeneration) return;
     notifyListeners();
   }
 
   /// Live throughput from the AP's cumulative byte counters between polls.
-  void _computeThroughput() {
+  void _computeThroughput(DateTime sampledAt) {
     final s = stationSignal;
     if (s == null || s.apTxBytes == null || s.apRxBytes == null) {
       downKbps = upKbps = null;
       _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
+      _lastBytesAt = null;
       return;
     }
-    final secs = pollInterval.inMilliseconds / 1000.0;
+    final secs = _lastBytesAt == null
+        ? 0.0
+        : sampledAt.difference(_lastBytesAt!).inMilliseconds / 1000.0;
     if (_lastBytesMac == s.macAddress &&
         _lastTxBytes != null &&
         _lastRxBytes != null &&
@@ -563,11 +710,17 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     _lastTxBytes = s.apTxBytes;
     _lastRxBytes = s.apRxBytes;
     _lastBytesMac = s.macAddress;
+    _lastBytesAt = sampledAt;
   }
 
   Future<void> _recordIfNeeded() async {
     final id = _recordingSessionId;
     if (id == null) return;
+    final currentServingHost = servingHost;
+    if (_recordingRouterHost == null && currentServingHost != null) {
+      await history.setRouterHostIfEmpty(id, currentServingHost);
+      _recordingRouterHost = currentServingHost;
+    }
     final ph = phoneSignal;
     final ap = stationSignal;
     await history.addSample(
@@ -589,19 +742,26 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> startRecording() async {
-    _recordingSessionId =
-        await history.startSession(DateTime.now().millisecondsSinceEpoch);
+    _recordingRouterHost = servingHost ??
+        (_lastConfigs.length == 1 ? _lastConfigs.first.host : null);
+    _recordingSessionId = await history.startSession(
+      DateTime.now().millisecondsSinceEpoch,
+      routerHost: _recordingRouterHost,
+    );
     notifyListeners();
   }
 
   void stopRecording() {
     _recordingSessionId = null;
+    _recordingRouterHost = null;
     notifyListeners();
   }
 
   /// Applies changed settings (poll interval / history length / alerts) live.
   void applySettings({
     required int pollSeconds,
+    required int healthPollSeconds,
+    required int identityPollSeconds,
     required int historyLength,
     bool? alertsEnabled,
     int? alertThresholdDb,
@@ -631,7 +791,10 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     while (apHistory.length > historyLimit) {
       apHistory.removeAt(0);
     }
-    final next = Duration(seconds: pollSeconds);
+    final next = Duration(seconds: pollSeconds.clamp(1, 30));
+    healthPollInterval = Duration(seconds: healthPollSeconds.clamp(5, 300));
+    identityPollInterval =
+        Duration(seconds: identityPollSeconds.clamp(10, 600));
     if (next != pollInterval) {
       pollInterval = next;
       if (isLive) startLive();
@@ -833,9 +996,14 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _pingTarget(String? host) {
-    if (host == null || !_ping.isSupported) return;
+    if (_shuttingDown ||
+        _lifecyclePaused ||
+        host == null ||
+        !_ping.isSupported) {
+      return;
+    }
     if (_pingHost != host) {
-      _cancelPing();
+      unawaited(_cancelPing());
       _pingHost = host;
       pingMs = null;
       _pingWindow.clear();
@@ -863,14 +1031,14 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
-  void _cancelPing() {
+  Future<void> _cancelPing() async {
     _pingRequestId++;
     _pinging = false;
-    unawaited(_ping.cancel());
+    await _ping.cancel();
   }
 
   void _resetDiagnostics() {
-    _cancelPing();
+    unawaited(_cancelPing());
     _cancelDiagnosticTimer();
     _diagnostics.reset();
     _diagnosticLinkKey = null;
@@ -882,6 +1050,135 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     _pingGeneration++;
     pingMs = null;
     _pingWindow.clear();
+  }
+
+  bool _syncIdentityNetwork(PhoneSignal phone) {
+    final bssid = phone.bssid?.toLowerCase();
+    final previousBssid = _identityBssid?.toLowerCase();
+    final changed = phone.ipAddress != _identityIp ||
+        (phone.ssid != null && phone.ssid != _identitySsid) ||
+        (bssid != null && previousBssid != null && bssid != previousBssid) ||
+        (bssid != null && _identityIp == null);
+    if (changed) {
+      _ourMac = null;
+      _macCandidates = const [];
+      _identityResolvedAt = null;
+      _identityRetryScheduled = false;
+    }
+    _identityIp = phone.ipAddress;
+    if (phone.ssid != null) _identitySsid = phone.ssid;
+    if (phone.bssid != null) _identityBssid = phone.bssid;
+    return changed;
+  }
+
+  bool _identityDiscoveryDue(DateTime now, {required bool force}) {
+    if (force || _identityResolvedAt == null) return true;
+    return now.difference(_identityResolvedAt!) >= identityPollInterval;
+  }
+
+  Future<void> _resolveOurMac(
+    String ip,
+    List<WifiRouterService> routers,
+    DateTime now,
+    int generation,
+  ) async {
+    _identityResolvedAt = now;
+    _identityRetryScheduled = false;
+    final candidates = <String>[];
+    for (final router in routers) {
+      final resolved = await router.resolveMacForIp(ip);
+      if (generation != _sessionGeneration) return;
+      if (resolved != null &&
+          !candidates.any(
+            (candidate) => candidate.toLowerCase() == resolved.toLowerCase(),
+          )) {
+        candidates.add(resolved);
+      }
+    }
+    if (candidates.isNotEmpty) {
+      _macCandidates = candidates;
+      _ourMac = candidates.first;
+      return;
+    }
+    _scheduleIdentityRetry(now);
+  }
+
+  void _scheduleIdentityRetry(DateTime now) {
+    if (_identityRetryScheduled) return;
+    const retryAfter = Duration(seconds: 5);
+    _identityResolvedAt = now.subtract(identityPollInterval - retryAfter);
+    _identityRetryScheduled = true;
+  }
+
+  List<WifiRouterService> _orderedRouters(String? bssid) {
+    final result = <WifiRouterService>[];
+
+    void add(WifiRouterService router) {
+      if (!result.any((candidate) => identical(candidate, router))) {
+        result.add(router);
+      }
+    }
+
+    if (bssid != null) {
+      for (final router in _routers) {
+        if (router.apNameForBssid(bssid) != null) add(router);
+      }
+    }
+    final serving = _serving;
+    if (serving != null) add(serving);
+    for (final router in _routers) {
+      add(router);
+    }
+    return result;
+  }
+
+  Future<void> _refreshRouterResource(
+    WifiRouterService? serving,
+    DateTime now,
+  ) async {
+    if (serving == null) {
+      routerResource = null;
+      _resourceRouter = null;
+      _resourceReadAt = null;
+      return;
+    }
+    final routerChanged = !identical(serving, _resourceRouter);
+    if (routerChanged) {
+      _resourceRouter = serving;
+      _resourceReadAt = null;
+      routerResource = null;
+    }
+    final lastRead = _resourceReadAt;
+    if (lastRead != null && now.difference(lastRead) < healthPollInterval) {
+      return;
+    }
+    _resourceReadAt = now;
+    try {
+      final resource = await serving.readResource();
+      if (resource != null) routerResource = resource;
+    } catch (error) {
+      diagnosticLog.record(
+        'ROUTER-HEALTH-READ',
+        'Optional router health read failed',
+        details: {'host': serving.host, 'error': error.toString()},
+      );
+    }
+  }
+
+  void _resetPollingCaches() {
+    _ourMac = null;
+    _macCandidates = const [];
+    _identityIp = null;
+    _identitySsid = null;
+    _identityBssid = null;
+    _identityResolvedAt = null;
+    _identityRetryScheduled = false;
+    routerResource = null;
+    _resourceRouter = null;
+    _resourceReadAt = null;
+    downKbps = upKbps = null;
+    _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
+    _lastBytesAt = null;
   }
 
   String? _apNameForBssid(String? bssid) {
@@ -900,27 +1197,48 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _closeRouters() async {
-    for (final svc in _routers) {
-      await svc.close();
-    }
+    final services = List<WifiRouterService>.of(_routers);
     _routers.clear();
+    await Future.wait(services.map(_closeRouter));
+  }
+
+  Future<void> _closeRouter(WifiRouterService service) => _cleanupResource(
+        'router:${service.host ?? service.vendor.name}',
+        service.close,
+      );
+
+  Future<void> _cleanupResource(
+    String resource,
+    Future<void> Function() close,
+  ) async {
+    try {
+      await close().timeout(_cleanupTimeout);
+    } catch (error) {
+      diagnosticLog.record(
+        'CLEANUP-ERROR',
+        'Resource cleanup failed',
+        details: {'resource': resource, 'error': error.toString()},
+      );
+    }
   }
 
   Future<void> disconnect() async {
+    if (_shuttingDown) {
+      await shutdown();
+      return;
+    }
     _sessionGeneration++;
     stopLive();
     phoneOnly = false;
     _recordingSessionId = null;
+    _recordingRouterHost = null;
     await _closeRouters();
     phoneSignal = null;
     stationSignal = null;
     _serving = null;
     connectedApName = null;
-    _ourMac = null;
     lastWifiLogReport = null;
-    downKbps = upKbps = null;
-    _lastTxBytes = _lastRxBytes = _lastBytesMac = null;
-    routerResource = null;
+    _resetPollingCaches();
     _lastApName = null;
     roamCount = 0;
     lastRoamFrom = null;
@@ -937,18 +1255,38 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     _lastConfigs = const [];
     failure = null;
     _connectionWarning = null;
+    _pendingSshHostKeyChange = null;
     _stationMisses = 0;
     diagnosticLog.record('DISCONNECT', 'Monitoring disconnected');
     notifyListeners();
   }
 
   Future<void> retry() async {
+    if (_shuttingDown) return;
     diagnosticLog.record('RETRY', 'User requested a retry');
     if (state == MonitorState.error && _lastConfigs.isNotEmpty) {
       await connect(_lastConfigs);
     } else {
       await refresh();
     }
+  }
+
+  Future<void> trustNewSshHostKey() async {
+    if (_shuttingDown) return;
+    final change = _pendingSshHostKeyChange;
+    if (change == null) return;
+    await trustChangedSshHostKey(change);
+    diagnosticLog.record(
+      'SSH-KEY-TRUSTED',
+      'User explicitly trusted a changed SSH host key',
+      details: {
+        'host': change.presented.host,
+        'port': change.presented.port,
+        'fingerprint': change.presented.fingerprint,
+      },
+    );
+    _pendingSshHostKeyChange = null;
+    await connect(_lastConfigs);
   }
 
   void dismissFailure() {
@@ -986,6 +1324,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
           'phone_only': phoneOnly,
           'live_polling': isLive,
           'poll_interval_seconds': pollInterval.inSeconds,
+          'health_poll_interval_seconds': healthPollInterval.inSeconds,
+          'identity_poll_interval_seconds': identityPollInterval.inSeconds,
         },
         'device': device,
         'permissions': {
@@ -999,8 +1339,14 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
             for (final router in _routers)
               {
                 'host': router.host,
+                'vendor': router.vendor.name,
                 'transport': router.transportKind,
-                'wireless_stack': router.stack?.label,
+                'wireless_stack': router.stackLabel,
+                'platform': router.platformLabel,
+                'model': router.deviceModel,
+                'software_version': router.softwareVersion,
+                'alpha_integration': router.alphaIntegration,
+                'compatibility_verified': router.compatibilityVerified,
                 'serving': identical(router, _serving),
               },
           ],
@@ -1049,7 +1395,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
         },
         'router_health': {
           'board': routerBoard,
-          'routeros_version': routerVersion,
+          'platform': platformLabel,
+          'software_version': routerVersion,
           'uptime': routerUptime,
           'cpu_load_pct': cpuLoad,
         },
@@ -1137,17 +1484,102 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
       'Application lifecycle changed',
       details: {'state': state.name},
     );
-    if (state == AppLifecycleState.detached) _cancelPing();
+    switch (state) {
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        _pauseForLifecycle();
+      case AppLifecycleState.resumed:
+        _resumeFromLifecycle();
+      case AppLifecycleState.detached:
+        unawaited(_cancelPing());
+      case AppLifecycleState.inactive:
+        // Permission dialogs and the notification shade may report inactive;
+        // they should not interrupt a walk test.
+        break;
+    }
+  }
+
+  void _pauseForLifecycle() {
+    if (_lifecyclePaused || _shuttingDown) return;
+    _lifecyclePaused = true;
+    _resumeLiveAfterBackground = isLive;
+    _timer?.cancel();
+    _timer = null;
+    if (_diagnostics.phase == LinkDiagnosticPhase.waiting ||
+        _diagnostics.phase == LinkDiagnosticPhase.collecting) {
+      _cancelDiagnosticRun(logEvent: false);
+    }
+    unawaited(_cancelPing());
+    notifyListeners();
+  }
+
+  void _resumeFromLifecycle() {
+    if (!_lifecyclePaused || _shuttingDown) return;
+    _lifecyclePaused = false;
+    final shouldResume =
+        _resumeLiveAfterBackground && state == MonitorState.connected;
+    _resumeLiveAfterBackground = false;
+    if (shouldResume) {
+      startLive();
+      unawaited(refresh());
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// Terminal, idempotent cleanup that callers and tests may await.
+  ///
+  /// Flutter's [ChangeNotifier.dispose] is synchronous, so it starts this
+  /// Future in the background. Screens that own a controller directly can
+  /// await [shutdown] before discarding it when their lifecycle allows that.
+  Future<void> shutdown() {
+    final existing = _shutdownFuture;
+    if (existing != null) return existing;
+    _shuttingDown = true;
+    _resumeLiveAfterBackground = false;
+    _sessionGeneration++;
+    _timer?.cancel();
+    _timer = null;
+    _diagnosticDelayTimer?.cancel();
+    _diagnosticDelayTimer = null;
+    _recordingSessionId = null;
+    _recordingRouterHost = null;
+    _pingRequestId++;
+    _pinging = false;
+    final future = _shutdownResources();
+    _shutdownFuture = future;
+    return future;
+  }
+
+  Future<void> _shutdownResources() async {
+    final connect = _connectDone?.future;
+    final refresh = _refreshDone?.future;
+    if (connect != null || refresh != null) {
+      try {
+        await Future.wait([
+          if (connect != null) connect,
+          if (refresh != null) refresh,
+        ]).timeout(_activeOperationShutdownTimeout);
+      } catch (error) {
+        diagnosticLog.record(
+          'CLEANUP-TIMEOUT',
+          'Active operation did not finish before cleanup',
+          details: {'error': error.toString()},
+        );
+      }
+    }
+    await Future.wait([
+      _cleanupResource('ping', _ping.cancel),
+      _cleanupResource('beeper', _beeper.dispose),
+      _closeRouters(),
+      _cleanupResource('wifi-history', history.close),
+    ]);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
-    _diagnosticDelayTimer?.cancel();
-    _cancelPing();
-    _beeper.dispose();
-    _closeRouters();
+    unawaited(shutdown());
     super.dispose();
   }
 }

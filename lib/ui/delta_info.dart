@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/l10n.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
+import 'widgets/app_safe_area.dart';
 
 /// Opens the explanation + advice sheet for the AP−phone delta.
 void showDeltaInfo(
@@ -54,14 +55,15 @@ class _DeltaInfoSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = context.watch<SettingsController>().l;
     final advice = _buildAdvice(l);
-    return SafeArea(
+    return AppSafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l.t('Signal asymmetry (Δ AP−phone)', 'Асимметрия (Δ AP−phone)'),
+            Text(
+                l.t('Signal asymmetry (Δ AP−phone)', 'Асимметрия (Δ AP−phone)'),
                 style:
                     const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
             const SizedBox(height: 10),
@@ -131,8 +133,8 @@ class _DeltaInfoSheet extends StatelessWidget {
           Icon(a.icon, size: 17, color: a.color),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(a.text,
-                style: const TextStyle(fontSize: 13, height: 1.4)),
+            child:
+                Text(a.text, style: const TextStyle(fontSize: 13, height: 1.4)),
           ),
         ],
       ),
@@ -201,8 +203,7 @@ class _DeltaInfoSheet extends StatelessWidget {
       out.add(_Advice(
           Icons.trending_up,
           amber,
-          l.t(
-              'The AP hears you $abs dB stronger than you hear it — uncommon.',
+          l.t('The AP hears you $abs dB stronger than you hear it — uncommon.',
               'Точка слышит тебя на $abs dB сильнее, чем ты её — необычно.')));
       out.add(_Advice(
           Icons.settings_input_antenna,

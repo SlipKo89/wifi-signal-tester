@@ -9,7 +9,11 @@ import '../l10n/l10n.dart';
 import '../lte/lte_history_store.dart';
 import '../lte/lte_quality_score.dart';
 import '../settings/settings_controller.dart';
+import '../zabbix/zabbix_binding.dart';
 import 'metric_help.dart';
+import 'widgets/app_safe_area.dart';
+import 'widgets/synchronized_timeline.dart';
+import 'widgets/zabbix_session_context.dart';
 import 'widgets/zoomable_lte_chart.dart';
 
 const _green = Color(0xFF3FB950);
@@ -186,125 +190,127 @@ class _LteHistoryScreenState extends State<LteHistoryScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<LteSessionSummary>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final sessions = snapshot.data!;
-          if (sessions.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Text(
-                  l.t(
-                    'No LTE recordings yet. Connect to the LTE router and tap the record button.',
-                    'LTE-записей пока нет. Подключись к LTE-роутеру и нажми кнопку записи.',
-                  ),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: _muted),
-                ),
-              ),
-            );
-          }
-          return Column(
-            children: [
-              Material(
-                color: _blue.withValues(alpha: 0.08),
+      body: AppSafeArea(
+        child: FutureBuilder<List<LteSessionSummary>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final sessions = snapshot.data!;
+            if (sessions.isEmpty) {
+              return Center(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l.t(
-                            'Select two sessions for retrospective comparison.',
-                            'Отметь две сессии для ретроспективного сравнения.',
-                          ),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      FilledButton.icon(
-                        onPressed: _selected.length == 2
-                            ? () => _compare(sessions)
-                            : null,
-                        icon: const Icon(Icons.compare_arrows, size: 18),
-                        label: Text('${l.t('Compare', 'Сравнить')} '
-                            '${_selected.length}/2'),
-                      ),
-                    ],
+                  padding: const EdgeInsets.all(28),
+                  child: Text(
+                    l.t(
+                      'No LTE recordings yet. Connect to the LTE router and tap the record button.',
+                      'LTE-записей пока нет. Подключись к LTE-роутеру и нажми кнопку записи.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: _muted),
                   ),
                 ),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: sessions.length,
-                  separatorBuilder: (_, __) => const Divider(
-                    height: 1,
-                    color: Color(0xFF232B36),
-                  ),
-                  itemBuilder: (context, index) {
-                    final session = sessions[index];
-                    return ListTile(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => LteSessionScreen(
-                            store: widget.store,
-                            session: session,
+              );
+            }
+            return Column(
+              children: [
+                Material(
+                  color: _blue.withValues(alpha: 0.08),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l.t(
+                              'Select two sessions for retrospective comparison.',
+                              'Отметь две сессии для ретроспективного сравнения.',
+                            ),
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ),
-                      ),
-                      leading: Checkbox(
-                        value: _selected.contains(session.id),
-                        onChanged: (_) => _toggle(session, l),
-                      ),
-                      title: Text(
-                        session.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        '${_date(session.startedMs)} · '
-                        '${session.sampleCount} ${l.t('samples', 'замеров')}\n'
-                        '${_average(session)}',
-                        maxLines: 2,
-                      ),
-                      isThreeLine: true,
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          switch (value) {
-                            case 'rename':
-                              await _rename(session, l);
-                            case 'export':
-                              await _export(session, l);
-                            case 'delete':
-                              await _delete(session, l);
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: 'rename',
-                            child: Text(l.t('Rename', 'Переименовать')),
-                          ),
-                          PopupMenuItem(
-                            value: 'export',
-                            enabled: session.sampleCount > 0,
-                            child: const Text('CSV'),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Text(l.t('Delete', 'Удалить')),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                        FilledButton.icon(
+                          onPressed: _selected.length == 2
+                              ? () => _compare(sessions)
+                              : null,
+                          icon: const Icon(Icons.compare_arrows, size: 18),
+                          label: Text('${l.t('Compare', 'Сравнить')} '
+                              '${_selected.length}/2'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: sessions.length,
+                    separatorBuilder: (_, __) => const Divider(
+                      height: 1,
+                      color: Color(0xFF232B36),
+                    ),
+                    itemBuilder: (context, index) {
+                      final session = sessions[index];
+                      return ListTile(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => LteSessionScreen(
+                              store: widget.store,
+                              session: session,
+                            ),
+                          ),
+                        ),
+                        leading: Checkbox(
+                          value: _selected.contains(session.id),
+                          onChanged: (_) => _toggle(session, l),
+                        ),
+                        title: Text(
+                          session.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${_date(session.startedMs)} · '
+                          '${session.sampleCount} ${l.t('samples', 'замеров')}\n'
+                          '${_average(session)}',
+                          maxLines: 2,
+                        ),
+                        isThreeLine: true,
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) async {
+                            switch (value) {
+                              case 'rename':
+                                await _rename(session, l);
+                              case 'export':
+                                await _export(session, l);
+                              case 'delete':
+                                await _delete(session, l);
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'rename',
+                              child: Text(l.t('Rename', 'Переименовать')),
+                            ),
+                            PopupMenuItem(
+                              value: 'export',
+                              enabled: session.sampleCount > 0,
+                              child: const Text('CSV'),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text(l.t('Delete', 'Удалить')),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -334,55 +340,114 @@ class LteSessionScreen extends StatelessWidget {
     final l = context.watch<SettingsController>().l;
     return Scaffold(
       appBar: AppBar(title: Text(session.title)),
-      body: FutureBuilder<List<LteRecordedSample>>(
-        future: store.samplesFor(session.id),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final samples = snapshot.data!;
-          final analysis = LteSessionAnalysis.fromSamples(samples);
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _SessionFacts(session: session, analysis: analysis, l: l),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        l.t('Radio history', 'История радиосигнала'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      ZoomableLteChart(
-                        datasets: [_dataset(session.title, _green, samples)],
-                        showRssiAndCqi: true,
-                        showQuality: true,
-                        technicalInitiallyExpanded: false,
-                        ru: l.ru,
-                        onQualityHelp: () =>
-                            showMetricHelp(context, 'lte_quality'),
-                        zoomHint: _zoomHint(l),
-                        zoomInTooltip: l.t('Zoom in', 'Увеличить'),
-                        zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
-                      ),
-                    ],
+      body: AppSafeArea(
+        child: FutureBuilder<List<LteRecordedSample>>(
+          future: store.samplesFor(session.id),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final samples = snapshot.data!;
+            final analysis = LteSessionAnalysis.fromSamples(samples);
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _SessionFacts(session: session, analysis: analysis, l: l),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(15),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          l.t('Radio history', 'История радиосигнала'),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        ZoomableLteChart(
+                          datasets: [_dataset(session.title, _green, samples)],
+                          showRssiAndCqi: true,
+                          showQuality: true,
+                          technicalInitiallyExpanded: false,
+                          ru: l.ru,
+                          onQualityHelp: () =>
+                              showMetricHelp(context, 'lte_quality'),
+                          zoomHint: _zoomHint(l),
+                          zoomInTooltip: l.t('Zoom in', 'Увеличить'),
+                          zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _StatsCard(analysis: analysis, l: l),
-            ],
-          );
-        },
+                const SizedBox(height: 12),
+                _StatsCard(analysis: analysis, l: l),
+                const SizedBox(height: 12),
+                ZabbixSessionContext(
+                  scope: ZabbixBindingScope.lte,
+                  subjectKey: session.routerHost == null
+                      ? 'session:${session.id}'
+                      : 'router:${session.routerHost!.trim().toLowerCase()}',
+                  subjectLabel:
+                      session.routerHost ?? session.router ?? session.title,
+                  startedMs: session.startedMs,
+                  endedMs: session.endedMs,
+                  exportName: 'lte-session-${session.id}',
+                  localTracks: _lteTimelineTracks(samples, l.ru),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 }
+
+List<SessionTimelineTrack> _lteTimelineTracks(
+  List<LteRecordedSample> samples,
+  bool ru,
+) =>
+    [
+      _lteTrack('lte_rsrp', 'LTE RSRP', 'dBm', samples, (sample) => sample.rsrp,
+          const Color(0xFF3FB950), ru),
+      _lteTrack('lte_rsrq', 'LTE RSRQ', 'dB', samples, (sample) => sample.rsrq,
+          const Color(0xFF58A6FF), ru),
+      _lteTrack('lte_sinr', 'LTE SINR', 'dB', samples, (sample) => sample.sinr,
+          const Color(0xFFE3B341), ru),
+      _lteTrack('lte_rssi', 'LTE RSSI', 'dBm', samples, (sample) => sample.rssi,
+          const Color(0xFFD2A8FF), ru),
+      _lteTrack('lte_cqi', 'LTE CQI', '', samples,
+          (sample) => sample.cqi?.toDouble(), const Color(0xFFF778BA), ru),
+    ];
+
+SessionTimelineTrack _lteTrack(
+  String key,
+  String title,
+  String unit,
+  List<LteRecordedSample> samples,
+  double? Function(LteRecordedSample) select,
+  Color color,
+  bool ru,
+) =>
+    SessionTimelineTrack(
+      key: key,
+      title: title,
+      unit: unit,
+      series: [
+        SessionTimelineSeries(
+          label: ru ? 'Локально' : 'Local',
+          source: 'local',
+          color: color,
+          points: [
+            for (final sample in samples)
+              if (select(sample) != null)
+                SessionTimelinePoint(sample.tsMs, select(sample)!),
+          ],
+        ),
+      ],
+    );
 
 class LteComparisonScreen extends StatelessWidget {
   final LteHistoryStore store;
@@ -402,93 +467,97 @@ class LteComparisonScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
           title: Text(l.t('LTE session comparison', 'Сравнение LTE-сессий'))),
-      body: FutureBuilder<List<List<LteRecordedSample>>>(
-        future: Future.wait([
-          store.samplesFor(first.id),
-          store.samplesFor(second.id),
-        ]),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final a = snapshot.data![0];
-          final b = snapshot.data![1];
-          final aa = LteSessionAnalysis.fromSamples(a);
-          final bb = LteSessionAnalysis.fromSamples(b);
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _ComparisonLegend(first: first, second: second),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: ZoomableLteChart(
-                    datasets: [
-                      _dataset('A', _green, a),
-                      _dataset('B', _blue, b),
-                    ],
-                    showRssiAndCqi: true,
-                    showQuality: true,
-                    technicalInitiallyExpanded: false,
-                    ru: l.ru,
-                    onQualityHelp: () => showMetricHelp(context, 'lte_quality'),
-                    zoomHint: _zoomHint(l),
-                    zoomInTooltip: l.t('Zoom in', 'Увеличить'),
-                    zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
+      body: AppSafeArea(
+        child: FutureBuilder<List<List<LteRecordedSample>>>(
+          future: Future.wait([
+            store.samplesFor(first.id),
+            store.samplesFor(second.id),
+          ]),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final a = snapshot.data![0];
+            final b = snapshot.data![1];
+            final aa = LteSessionAnalysis.fromSamples(a);
+            final bb = LteSessionAnalysis.fromSamples(b);
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _ComparisonLegend(first: first, second: second),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(15),
+                    child: ZoomableLteChart(
+                      datasets: [
+                        _dataset('A', _green, a),
+                        _dataset('B', _blue, b),
+                      ],
+                      showRssiAndCqi: true,
+                      showQuality: true,
+                      technicalInitiallyExpanded: false,
+                      ru: l.ru,
+                      onQualityHelp: () =>
+                          showMetricHelp(context, 'lte_quality'),
+                      zoomHint: _zoomHint(l),
+                      zoomInTooltip: l.t('Zoom in', 'Увеличить'),
+                      zoomOutTooltip: l.t('Zoom out', 'Уменьшить'),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        l.t(
-                          'Averages and difference B − A',
-                          'Средние значения и разница B − A',
-                        ),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 12),
-                      _CompareRow(
-                        l.t('QUALITY', 'КАЧЕСТВО'),
-                        l.t('pts', 'п.'),
-                        aa.quality,
-                        bb.quality,
-                      ),
-                      if (aa.qualityP10 != null && bb.qualityP10 != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            'P10: A ${_number(aa.qualityP10!)} · '
-                            'B ${_number(bb.qualityP10!)}',
-                            style: const TextStyle(fontSize: 11, color: _muted),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(15),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          l.t(
+                            'Averages and difference B − A',
+                            'Средние значения и разница B − A',
                           ),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                      _CompareRow('RSRP', 'dBm', aa.rsrp, bb.rsrp),
-                      _CompareRow('RSRQ', 'dB', aa.rsrq, bb.rsrq),
-                      _CompareRow('SINR', 'dB', aa.sinr, bb.sinr),
-                      _CompareRow('RSSI', 'dBm', aa.rssi, bb.rssi),
-                      _CompareRow('CQI', '', aa.cqi, bb.cqi),
-                      const SizedBox(height: 8),
-                      Text(
-                        l.t(
-                          'A positive Δ means session B has a better average. Compare spread too: a smaller spread is more stable.',
-                          'Положительная Δ означает, что среднее в сессии B лучше. Смотри и на разброс: меньший разброс стабильнее.',
+                        const SizedBox(height: 12),
+                        _CompareRow(
+                          l.t('QUALITY', 'КАЧЕСТВО'),
+                          l.t('pts', 'п.'),
+                          aa.quality,
+                          bb.quality,
                         ),
-                        style: const TextStyle(fontSize: 11, color: _muted),
-                      ),
-                    ],
+                        if (aa.qualityP10 != null && bb.qualityP10 != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'P10: A ${_number(aa.qualityP10!)} · '
+                              'B ${_number(bb.qualityP10!)}',
+                              style:
+                                  const TextStyle(fontSize: 11, color: _muted),
+                            ),
+                          ),
+                        _CompareRow('RSRP', 'dBm', aa.rsrp, bb.rsrp),
+                        _CompareRow('RSRQ', 'dB', aa.rsrq, bb.rsrq),
+                        _CompareRow('SINR', 'dB', aa.sinr, bb.sinr),
+                        _CompareRow('RSSI', 'dBm', aa.rssi, bb.rssi),
+                        _CompareRow('CQI', '', aa.cqi, bb.cqi),
+                        const SizedBox(height: 8),
+                        Text(
+                          l.t(
+                            'A positive Δ means session B has a better average. Compare spread too: a smaller spread is more stable.',
+                            'Положительная Δ означает, что среднее в сессии B лучше. Смотри и на разброс: меньший разброс стабильнее.',
+                          ),
+                          style: const TextStyle(fontSize: 11, color: _muted),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

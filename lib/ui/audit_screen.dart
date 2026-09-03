@@ -7,6 +7,7 @@ import '../audit/audit_pdf.dart';
 import '../audit/phone_audit.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
+import 'widgets/app_safe_area.dart';
 import 'widgets/audit_widgets.dart';
 
 class AuditScreen extends StatefulWidget {
@@ -93,42 +94,45 @@ class _AuditScreenState extends State<AuditScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Finding>>(
-        future: _future,
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final findings = snap.data!;
-          final issues = findings
-              .where((f) =>
-                  f.sev == AuditSeverity.critical ||
-                  f.sev == AuditSeverity.warn)
-              .length;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              AuditSummaryCard(l: l, issues: issues, total: findings.length),
-              const SizedBox(height: 12),
-              ...findings.map((f) => AuditFindingCard(l: l, finding: f)),
-              const SizedBox(height: 8),
-              Text(
-                widget.phone
-                    ? l.t(
-                        'Read-only — based on what your phone reports about the '
-                            'connection.',
-                        'Только чтение — по данным, которые телефон сообщает о '
-                            'подключении.')
-                    : l.t(
-                        'Read-only — the app never changes your router. Apply '
-                            'fixes yourself in WinBox/WebFig.',
-                        'Только чтение — приложение ничего не меняет. Правки '
-                            'вноси сам в WinBox/WebFig.'),
-                style: const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
-              ),
-            ],
-          );
-        },
+      body: AppSafeArea(
+        child: FutureBuilder<List<Finding>>(
+          future: _future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final findings = snap.data!;
+            final issues = findings
+                .where((f) =>
+                    f.sev == AuditSeverity.critical ||
+                    f.sev == AuditSeverity.warn)
+                .length;
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                AuditSummaryCard(l: l, issues: issues, total: findings.length),
+                const SizedBox(height: 12),
+                ...findings.map((f) => AuditFindingCard(l: l, finding: f)),
+                const SizedBox(height: 8),
+                Text(
+                  widget.phone
+                      ? l.t(
+                          'Read-only — based on what your phone reports about the '
+                              'connection.',
+                          'Только чтение — по данным, которые телефон сообщает о '
+                              'подключении.')
+                      : l.t(
+                          'Read-only — the app never changes your router. Apply '
+                              'fixes yourself in WinBox/WebFig.',
+                          'Только чтение — приложение ничего не меняет. Правки '
+                              'вноси сам в WinBox/WebFig.'),
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFF7D8590)),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

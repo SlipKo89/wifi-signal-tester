@@ -194,6 +194,7 @@ class LteSessionSummary {
   final int endedMs;
   final String title;
   final String? router;
+  final String? routerHost;
   final String? interfaceName;
   final String? operatorName;
   final String? technology;
@@ -209,6 +210,7 @@ class LteSessionSummary {
     required this.title,
     required this.sampleCount,
     this.router,
+    this.routerHost,
     this.interfaceName,
     this.operatorName,
     this.technology,
@@ -227,6 +229,7 @@ class LteSessionSummary {
       endedMs: (row['effective_ended'] as num?)?.toInt() ?? started,
       title: row['title'] as String? ?? '',
       router: row['router'] as String?,
+      routerHost: row['router_host'] as String?,
       interfaceName: row['interface_name'] as String?,
       operatorName: row['operator_name'] as String?,
       technology: row['technology'] as String?,
@@ -254,7 +257,7 @@ class LteHistoryStore {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'lte_history.db'),
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE lte_sessions(
@@ -263,6 +266,7 @@ class LteHistoryStore {
             ended INTEGER,
             title TEXT NOT NULL,
             router TEXT,
+            router_host TEXT,
             interface_name TEXT,
             operator_name TEXT,
             technology TEXT
@@ -282,6 +286,13 @@ class LteHistoryStore {
           'ON lte_samples(session_id, ts)',
         );
       },
+      onUpgrade: (db, oldVersion, _) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            'ALTER TABLE lte_sessions ADD COLUMN router_host TEXT',
+          );
+        }
+      },
     );
     _db = db;
     _opening = null;
@@ -292,6 +303,7 @@ class LteHistoryStore {
     required int startedMs,
     required String title,
     String? router,
+    String? routerHost,
     String? interfaceName,
     String? operatorName,
     String? technology,
@@ -301,6 +313,7 @@ class LteHistoryStore {
       'started': startedMs,
       'title': title,
       'router': router,
+      'router_host': routerHost?.trim().isEmpty == true ? null : routerHost,
       'interface_name': interfaceName,
       'operator_name': operatorName,
       'technology': technology,

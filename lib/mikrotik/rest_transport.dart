@@ -18,8 +18,7 @@ class RestTransport implements RouterOsTransport {
   final bool useTls;
   final Duration timeout;
 
-  late final http.Client _client;
-  late final String _authHeader;
+  http.Client? _client;
 
   RestTransport({
     required this.host,
@@ -34,19 +33,27 @@ class RestTransport implements RouterOsTransport {
   String get kind => 'REST';
 
   String get _scheme => useTls ? 'https' : 'http';
+  String get _authHeader =>
+      'Basic ${base64Encode(utf8.encode('$username:$password'))}';
+
+  http.Client get _connectedClient {
+    final client = _client;
+    if (client == null) throw RouterOsException('Not connected');
+    return client;
+  }
 
   @override
   Future<void> connect() async {
+    await close();
     // Accept self-signed certs — routers on a LAN almost always use them.
     final io = HttpClient();
     io.badCertificateCallback = (_, __, ___) => true;
     io.connectionTimeout = timeout;
     _client = IOClient(io);
-    _authHeader = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
 
     // A cheap authenticated probe to fail fast on wrong credentials / no REST.
     final uri = Uri.parse('$_scheme://$host:$port/rest/system/identity');
-    final resp = await _client
+    final resp = await _connectedClient
         .get(uri, headers: {'Authorization': _authHeader}).timeout(timeout);
     if (resp.statusCode == 401) {
       throw RouterOsException('Authentication failed (401)');
@@ -71,7 +78,7 @@ class RestTransport implements RouterOsTransport {
     if (query.isNotEmpty) {
       uri = uri.replace(queryParameters: query);
     }
-    final resp = await _client
+    final resp = await _connectedClient
         .get(uri, headers: {'Authorization': _authHeader}).timeout(timeout);
 
     if (resp.statusCode == 401) {
@@ -104,7 +111,7 @@ class RestTransport implements RouterOsTransport {
   ) async {
     validateReadOnlyCommand(path, params);
     final uri = Uri.parse('$_scheme://$host:$port/rest$path');
-    final resp = await _client
+    final resp = await _connectedClient
         .post(uri,
             headers: {
               'Authorization': _authHeader,
@@ -125,6 +132,7 @@ class RestTransport implements RouterOsTransport {
 
   @override
   Future<void> close() async {
-    _client.close();
+    _client?.close();
+    _client = null;
   }
 }

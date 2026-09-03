@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../reference/metric_ref.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
+import 'widgets/app_safe_area.dart';
 
 /// Opens the help sheet for a metric (by key from [kMetricRefs]).
 void showMetricHelp(BuildContext context, String key) {
@@ -17,9 +18,11 @@ void showMetricHelp(BuildContext context, String key) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      child: MetricRefView(ref: ref),
+    builder: (_) => AppSafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: MetricRefView(ref: ref),
+      ),
     ),
   );
 }
@@ -44,8 +47,8 @@ class MetricRefView extends StatelessWidget {
                 fontSize: 13, color: Color(0xFFAAB2BD), height: 1.4)),
         if (ref.bands.isNotEmpty) ...[
           const SizedBox(height: 12),
-          ...ref.bands.map((b) => _bandRow(l.t(b.rangeEn, b.rangeRu),
-              l.t(b.descEn, b.descRu), b.color)),
+          ...ref.bands.map((b) => _bandRow(
+              l.t(b.rangeEn, b.rangeRu), l.t(b.descEn, b.descRu), b.color)),
         ],
         if (ref.tipEn != null) ...[
           const SizedBox(height: 10),
@@ -89,8 +92,8 @@ class MetricRefView extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(top: 1),
-              child:
-                  Text(desc, style: const TextStyle(fontSize: 12.5, height: 1.3)),
+              child: Text(desc,
+                  style: const TextStyle(fontSize: 12.5, height: 1.3)),
             ),
           ),
         ],

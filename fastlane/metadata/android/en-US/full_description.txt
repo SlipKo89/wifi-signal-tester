@@ -1,0 +1,21 @@
+<p><b>Wi-Fi Signal Tester</b> helps installers and administrators diagnose wireless networks from both ends of the connection.</p>
+
+<p>A regular phone analyzer shows only how the phone hears the access point. This app can also read how a MikroTik access point hears the selected client, then place both readings side by side. That makes asymmetric links, weak uplinks and roaming problems much easier to identify.</p>
+
+<p>Main features:</p>
+
+<ul>
+<li>phone and access-point RSSI, SNR, rates, CCQ and signal asymmetry;</li>
+<li>support for RouterOS WiFi, WifiWave2, CAPsMAN and classic wireless stacks;</li>
+<li>read-only MikroTik access over REST, binary API or SSH;</li>
+<li>Wi-Fi and system configuration audits with plain-language advice and PDF export;</li>
+<li>RouterOS wireless log analysis for roaming, authentication and radio events;</li>
+<li>persistent measurements, charts, threshold alerts and CSV export;</li>
+<li>a separate MikroTik LTE tool with RSRP, RSRQ, SINR, history and guided antenna alignment;</li>
+<li>optional read-only Zabbix history for comparing local and monitored metrics;</li>
+<li>experimental Keenetic support, clearly marked Alpha.</li>
+</ul>
+
+<p>The application is designed for diagnostics, not router administration. Router transports expose only a restricted set of read operations. It does not change Wi-Fi settings, create firewall rules, run bandwidth tests or modify connected Android networks. Credentials are kept in the platform secure storage, while measurements remain on the device unless you explicitly export them.</p>
+
+<p>For best results, create a dedicated read-only account on the router and grant access only from the management network.</p>

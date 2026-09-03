@@ -6,6 +6,7 @@ import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import '../wifi_logs/wifi_log_analysis.dart';
 import 'theme.dart';
+import 'widgets/app_safe_area.dart';
 
 class WifiLogScreen extends StatefulWidget {
   final String? targetMac;
@@ -55,32 +56,34 @@ class _WifiLogScreenState extends State<WifiLogScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<WifiLogReport>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 14),
-                  Text(
-                    l.t(
-                      'Reading the latest RouterOS log window…',
-                      'Читаем последние события RouterOS…',
+      body: AppSafeArea(
+        child: FutureBuilder<WifiLogReport>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 14),
+                    Text(
+                      l.t(
+                        'Reading the latest RouterOS log window…',
+                        'Читаем последние события RouterOS…',
+                      ),
+                      style: const TextStyle(color: Color(0xFF7D8590)),
                     ),
-                    style: const TextStyle(color: Color(0xFF7D8590)),
-                  ),
-                ],
-              ),
-            );
-          }
-          if (snapshot.hasError) {
-            return _ErrorState(l: l, error: snapshot.error, onRetry: _reload);
-          }
-          return _ReportView(report: snapshot.data!, l: l);
-        },
+                  ],
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return _ErrorState(l: l, error: snapshot.error, onRetry: _reload);
+            }
+            return _ReportView(report: snapshot.data!, l: l);
+          },
+        ),
       ),
     );
   }

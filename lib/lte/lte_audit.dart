@@ -21,12 +21,15 @@ class LteAuditEngine {
     'cpu-load',
     'uptime',
   ];
-  static const _interfaceFields = [
-    '.id',
+  static const _interfaceIdentityFields = [
     'name',
     'default-name',
     'disabled',
     'running',
+  ];
+  static const _interfaceDetailFields = [
+    'name',
+    'default-name',
     'apn-profiles',
     'allow-roaming',
     'band',
@@ -36,7 +39,6 @@ class LteAuditEngine {
     'mtu',
   ];
   static const _apnFields = [
-    '.id',
     'name',
     'apn',
     'authentication',
@@ -51,7 +53,7 @@ class LteAuditEngine {
     'use-peer-dns',
   ];
   static const _settingsFields = ['mode', 'sim-slot'];
-  static const _filterPresenceFields = ['.id', 'disabled'];
+  static const _filterPresenceFields = ['disabled'];
 
   Future<List<Finding>> run(
     LteService service, {
@@ -76,7 +78,26 @@ class LteAuditEngine {
     final resources = await read('/system/resource', _resourceFields);
     final resource = resources.isEmpty ? null : resources.first;
     final routerOsMajor = _routerOsMajor(resource?['version']);
-    final interfaces = await read('/interface/lte', _interfaceFields);
+    final interfaces = (await read(
+      '/interface/lte',
+      _interfaceIdentityFields,
+    ))
+        .map(Map<String, String>.of)
+        .toList();
+    var interfaceDetailsReadable = true;
+    if (interfaces.isNotEmpty) {
+      final details = await read(
+        '/interface/lte',
+        _interfaceDetailFields,
+        reportFailure: false,
+      );
+      if (details.isEmpty) {
+        interfaceDetailsReadable = false;
+        unreadable.add('/interface/lte (optional properties)');
+      } else {
+        _mergeInterfaceDetails(interfaces, details);
+      }
+    }
     final apns = await read('/interface/lte/apn', _apnFields);
     final settings = routerOsMajor != null && routerOsMajor < 7
         ? const <Map<String, String>>[]
@@ -87,30 +108,38 @@ class LteAuditEngine {
 
     final interface = _selectedInterface(interfaces, service.interfaceName);
     if (interface == null) {
+      final emptyResult =
+          !unreadable.contains('/interface/lte') && interfaces.isEmpty;
       out.add(Finding(
-        unreadable.contains('/interface/lte')
+        unreadable.contains('/interface/lte') || emptyResult
             ? AuditSeverity.warn
             : AuditSeverity.critical,
         titleEn: unreadable.contains('/interface/lte')
             ? 'LTE interface configuration could not be read'
-            : 'Selected LTE interface is unavailable',
+            : emptyResult
+                ? 'LTE interface configuration returned no rows'
+                : 'Selected LTE interface is unavailable',
         titleRu: unreadable.contains('/interface/lte')
             ? 'Не удалось прочитать настройки LTE-интерфейса'
-            : 'Выбранный LTE-интерфейс недоступен',
+            : emptyResult
+                ? 'Чтение настроек LTE-интерфейса вернуло пустой результат'
+                : 'Выбранный LTE-интерфейс недоступен',
         detailEn: unreadable.contains('/interface/lte')
             ? 'Interface-dependent checks were skipped.'
-            : interfaces.isEmpty
-                ? 'RouterOS returned no LTE interfaces.'
+            : emptyResult
+                ? 'The live session already selected ${service.interfaceName ?? 'an LTE interface'}, so this is a transport/configuration-read mismatch, not proof that the modem is absent.'
                 : 'The connected interface ${service.interfaceName ?? '—'} is no longer present.',
         detailRu: unreadable.contains('/interface/lte')
             ? 'Проверки, зависящие от интерфейса, пропущены.'
-            : interfaces.isEmpty
-                ? 'RouterOS не вернул ни одного LTE-интерфейса.'
+            : emptyResult
+                ? 'Рабочая сессия уже выбрала ${service.interfaceName ?? 'LTE-интерфейс'}, поэтому это несовместимость чтения настроек через транспорт, а не доказательство отсутствия модема.'
                 : 'Интерфейс ${service.interfaceName ?? '—'}, к которому подключилось приложение, больше не найден.',
-        fixEn:
-            'Check `/interface lte print`, modem detection and the selected interface name.',
-        fixRu:
-            'Проверь `/interface lte print`, обнаружение модема и выбранное имя интерфейса.',
+        fixEn: emptyResult
+            ? 'Retry the audit. If live LTE metrics remain available, check the transport compatibility rather than changing the modem configuration.'
+            : 'Check `/interface lte print`, modem detection and the selected interface name.',
+        fixRu: emptyResult
+            ? 'Повтори аудит. Если живые LTE-метрики доступны, проверяй совместимость транспорта, а не меняй настройки модема.'
+            : 'Проверь `/interface lte print`, обнаружение модема и выбранное имя интерфейса.',
         where: service.host,
         sourceUrl: documentationUrl,
       ));
@@ -121,7 +150,9 @@ class LteAuditEngine {
     final name = interface['name'] ?? interface['default-name'] ?? 'LTE';
     _interfaceState(interface, signal, name, out);
 
-    final profileNames = _csv(interface['apn-profiles'] ?? 'default');
+    final profileNames = interfaceDetailsReadable
+        ? _csv(interface['apn-profiles'] ?? 'default')
+        : const <String>[];
     final profilesByName = <String, Map<String, String>>{
       for (final profile in apns)
         if ((profile['name'] ?? '').isNotEmpty) profile['name']!: profile,
@@ -177,15 +208,17 @@ class LteAuditEngine {
         out: out,
       );
     }
-    _radioPolicyChecks(
-      interface,
-      settings,
-      signal,
-      routerOsMajor,
-      settingsReadable: !unreadable.contains('/interface/lte/settings'),
-      name: name,
-      out: out,
-    );
+    if (interfaceDetailsReadable) {
+      _radioPolicyChecks(
+        interface,
+        settings,
+        signal,
+        routerOsMajor,
+        settingsReadable: !unreadable.contains('/interface/lte/settings'),
+        name: name,
+        out: out,
+      );
+    }
     _dataGaps(service, unreadable, out);
     return _sorted(out);
   }
@@ -817,6 +850,26 @@ class LteAuditEngine {
       }
     }
     return interfaces.length == 1 ? interfaces.first : null;
+  }
+
+  void _mergeInterfaceDetails(
+    List<Map<String, String>> interfaces,
+    List<Map<String, String>> details,
+  ) {
+    for (final interface in interfaces) {
+      final name = interface['name'] ?? interface['default-name'];
+      Map<String, String>? match;
+      for (final detail in details) {
+        if (name != null &&
+            (detail['name'] == name || detail['default-name'] == name)) {
+          match = detail;
+          break;
+        }
+      }
+      match ??=
+          interfaces.length == 1 && details.length == 1 ? details.first : null;
+      if (match != null) interface.addAll(match);
+    }
   }
 
   int? _routerOsMajor(String? version) =>

@@ -11,6 +11,7 @@ import '../lte/lte_controller.dart';
 import '../lte/lte_quality_score.dart';
 import '../settings/settings_controller.dart';
 import 'metric_help.dart';
+import 'widgets/app_safe_area.dart';
 import 'widgets/zoomable_lte_chart.dart';
 
 const _green = Color(0xFF3FB950);
@@ -148,7 +149,7 @@ class _LteAlignmentScreenState extends State<LteAlignmentScreen> {
             ),
         ],
       ),
-      body: SafeArea(
+      body: AppSafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [

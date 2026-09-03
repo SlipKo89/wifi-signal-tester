@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../mikrotik/mikrotik_service.dart';
+import '../router/router_connection.dart';
 
 /// Persists the configured routers in platform-backed secure storage
 /// (Android Keystore / iOS Keychain). Passwords never touch plain prefs.

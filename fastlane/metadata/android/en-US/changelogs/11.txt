@@ -1,0 +1,1 @@
+Major diagnostics update: optional Zabbix history, Keenetic Wi-Fi Alpha, MikroTik port knocking, saved LTE router profiles and a read-only LTE configuration audit. Monitoring now uses configurable polling profiles and pauses in the background. SSH host keys are remembered and changes are blocked with a clear warning.

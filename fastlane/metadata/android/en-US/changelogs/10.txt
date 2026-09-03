@@ -1,0 +1,1 @@
+Added read-only analysis of RouterOS Wi-Fi events for the current phone or a selected associated device. It explains disconnects, authentication failures, weak-signal policies, DFS and CAPsMAN events, and estimates reconnect or roaming gaps. macOS Alpha stability was also improved.

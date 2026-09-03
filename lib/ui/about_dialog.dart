@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app_info.dart';
+import '../keenetic/keenetic_compatibility.dart';
 import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
@@ -115,7 +116,8 @@ class _AboutDialogState extends State<_AboutDialog> {
               ),
               const SizedBox(height: 14),
               Text(
-                l.t(kAppTagline, 'Двусторонний тестер Wi-Fi для MikroTik'),
+                l.t(kAppTagline,
+                    'Двусторонний тестер Wi-Fi для MikroTik и Keenetic Alpha'),
                 style: const TextStyle(fontSize: 13, color: Color(0xFFAAB2BD)),
               ),
               const SizedBox(height: 6),
@@ -169,6 +171,38 @@ class _AboutDialogState extends State<_AboutDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2F81F7).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF2F81F7).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.router_outlined,
+                        size: 17, color: Color(0xFF2F81F7)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l.t(
+                          'Keenetic support is Alpha, developed and verified on $kKeeneticAlphaModel with KeeneticOS $kKeeneticAlphaRelease. Thanks to Netspay for providing the test hardware.',
+                          'Поддержка Keenetic находится в стадии Альфа и разработана и проверена на $kKeeneticAlphaModel с KeeneticOS $kKeeneticAlphaRelease. Спасибо Netspay за предоставленное тестовое оборудование.',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFFC9D1D9),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [

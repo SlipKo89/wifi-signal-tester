@@ -9,6 +9,25 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.4.0', '2026-09-04', [
+    'Optional read-only Zabbix history can be mapped onto saved Wi-Fi and LTE sessions with synchronized timelines and combined CSV export',
+    'Keenetic Wi-Fi support starts as an explicit Alpha for Runner 4G and reads AP-side association data over a restricted HTTPS RCI client',
+    'MikroTik profiles can use an optional TCP/UDP port-knocking sequence before one explicitly selected transport',
+    'LTE router profiles are now saved securely, and a separate read-only audit checks APN, route, passthrough, MTU, roaming and radio restrictions',
+    'Fast, Normal, Economical and Custom polling profiles reduce router load; monitoring and ping pause while the app is in the background',
+    'SSH uses trust on first use and stops with old/new fingerprints when a known host key changes',
+    'Histories and controllers now close asynchronous resources reliably, and every long screen respects Android navigation safe areas',
+    'English and Russian F-Droid listing metadata, redacted screenshots and per-version release notes now live in the source repository',
+  ], [
+    'Необязательную read-only историю Zabbix можно привязать к сохранённым Wi-Fi/LTE-сессиям, совместить на одной шкале времени и выгрузить общим CSV',
+    'Поддержка Wi-Fi Keenetic начинается как явная Alpha для Runner 4G и читает данные клиента точки через ограниченный HTTPS RCI-клиент',
+    'Профиль MikroTik может выполнить необязательную TCP/UDP-последовательность port knocking перед одним явно выбранным транспортом',
+    'LTE-профили роутеров сохраняются безопасно, а отдельный read-only аудит проверяет APN, маршрут, passthrough, MTU, roaming и ограничения радио',
+    'Профили опроса «Быстрый», «Обычный», «Экономный» и «Свой» снижают нагрузку; мониторинг и ping останавливаются в фоне',
+    'SSH использует trust on first use и при смене известного ключа показывает старый и новый fingerprints и прекращает подключение',
+    'Истории и контроллеры надёжно закрывают асинхронные ресурсы, а длинные экраны учитывают нижнюю системную область Android',
+    'Двуязычные метаданные F-Droid, обезличенные скриншоты и заметки для каждой версии теперь хранятся рядом с исходным кодом',
+  ]),
   Release('0.3.2', '2026-08-08', [
     'Read-only RouterOS Wi-Fi event analysis explains disconnects, authentication failures, weak-signal policies, DFS and CAP/CAPsMAN failures for one selected device',
     'RouterOS timestamps now measure reconnect and roaming gaps; REST, binary API and SSH work through the same automatic transport flow',

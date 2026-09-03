@@ -1,8 +1,9 @@
 /// App identity shown in the About screen. Keep [kAppVersion] in sync with
 /// /VERSION, pubspec.yaml and CHANGELOG.md when releasing.
 const String kAppName = 'Wi-Fi Signal Tester';
-const String kAppTagline = 'Two-sided MikroTik Wi-Fi signal tester';
-const String kAppVersion = '0.3.2';
+const String kAppTagline =
+    'Two-sided Wi-Fi signal tester for MikroTik and Keenetic Alpha';
+const String kAppVersion = '0.4.0';
 
 const String kAuthor = 'SlipKo';
 const String kAuthorEmail = 'slipko89@gmail.com';
@@ -11,7 +12,6 @@ const String kAuthorTelegram = '@slipko';
 
 /// Project home — source, releases and documentation.
 const String kRepoUrl = 'https://github.com/SlipKo89/wifi-signal-tester';
-const String kIssuesUrl = '$kRepoUrl/issues';
 const String kReleasesUrl = '$kRepoUrl/releases/latest';
 
 /// Usage guide, per UI language.

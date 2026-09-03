@@ -1,11 +1,11 @@
 name: wifi_apk
 description: >-
-  MikroTik-assisted Wi-Fi signal tester — see how the access point hears your
-  device, not just how your device hears the access point. Read-only.
+  Read-only two-sided Wi-Fi signal tester for MikroTik and Keenetic Alpha —
+  see how the access point hears your device, not just the other way around.
 publish_to: 'none'
 
 # Semantic version + build number. Keep in sync with /VERSION and CHANGELOG.md.
-version: 0.3.2+10
+version: 0.4.0+11
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -16,9 +16,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  cupertino_icons: ^1.0.6
-
-  # MikroTik REST transport
+  # MikroTik REST and Keenetic HTTPS RCI transports
   http: ^1.2.0
 
   # MikroTik SSH transport (RouterOS CLI over SSH, read-only commands)

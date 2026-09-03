@@ -5,6 +5,7 @@ import '../app_info.dart';
 import '../release_notes.dart';
 import '../settings/settings_controller.dart';
 import 'theme.dart';
+import 'widgets/app_safe_area.dart';
 
 /// Shows the "What's new" popup for [release] once (e.g. after an update).
 void showWhatsNew(BuildContext context, Release release) {
@@ -26,7 +27,8 @@ void showWhatsNew(BuildContext context, Release release) {
                   const Icon(Icons.auto_awesome,
                       color: AppTheme.accent, size: 20),
                   const SizedBox(width: 8),
-                  Text('${l.t("What's new", 'Что нового')} · v${release.version}',
+                  Text(
+                      '${l.t("What's new", 'Что нового')} · v${release.version}',
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w700)),
                 ],
@@ -119,48 +121,50 @@ class ChangelogScreen extends StatelessWidget {
     final l = context.watch<SettingsController>().l;
     return Scaffold(
       appBar: AppBar(title: Text(l.t('Changelog', 'История версий'))),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          for (final r in kReleases)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text('v${r.version}',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
-                        const SizedBox(width: 8),
-                        Text(r.date,
-                            style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF7D8590))),
-                        if (r.version == kAppVersion) ...[
+      body: AppSafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            for (final r in kReleases)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('v${r.version}',
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w700)),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accent.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(5),
+                          Text(r.date,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Color(0xFF7D8590))),
+                          if (r.version == kAppVersion) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(l.t('installed', 'установлено'),
+                                  style: const TextStyle(
+                                      fontSize: 10, color: AppTheme.accent)),
                             ),
-                            child: Text(l.t('installed', 'установлено'),
-                                style: const TextStyle(
-                                    fontSize: 10, color: AppTheme.accent)),
-                          ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _Highlights(release: r),
-                  ],
+                      ),
+                      const SizedBox(height: 10),
+                      _Highlights(release: r),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

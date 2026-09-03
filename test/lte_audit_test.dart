@@ -202,6 +202,32 @@ void main() {
     expect(transport.commandCount, 0);
   });
 
+  test('optional SSH properties cannot hide an already selected interface',
+      () async {
+    final transport = _ProjectionSensitiveSshTransport();
+    final service = await _connectedService(transport);
+
+    final findings = await LteAuditEngine().run(
+      service,
+      role: LteAuditRole.primary,
+      signal: _registeredSignal(),
+    );
+
+    expect(
+      findings.any((finding) =>
+          finding.titleEn == 'Selected LTE interface is unavailable'),
+      isFalse,
+    );
+    expect(
+        _finding(findings, 'LTE interface is enabled').sev, AuditSeverity.ok);
+    expect(
+      findings.any((finding) =>
+          finding.titleEn == 'LTE audit is incomplete' &&
+          finding.detailEn.contains('/interface/lte (optional properties)')),
+      isTrue,
+    );
+  });
+
   testWidgets('LTE audit stays readable on a narrow phone screen',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -270,7 +296,7 @@ Map<String, List<Map<String, String>>> _healthyMenus() => {
       ],
     };
 
-Future<LteService> _connectedService(_AuditTransport transport) async {
+Future<LteService> _connectedService(RouterOsTransport transport) async {
   final service = LteService(transportCandidates: (_) => [transport]);
   await service.connect(const LteConnection(
     host: '192.0.2.1',
@@ -337,6 +363,47 @@ class _AuditTransport implements RouterOsTransport {
     commandCount++;
     return const [];
   }
+
+  @override
+  Future<void> close() async {}
+}
+
+class _ProjectionSensitiveSshTransport implements RouterOsTransport {
+  @override
+  String get kind => 'SSH';
+
+  @override
+  Future<void> connect() async {}
+
+  @override
+  Future<List<Map<String, String>>> read(
+    String menuPath, {
+    Map<String, String>? filters,
+    List<String>? fields,
+  }) async {
+    if (menuPath == '/interface/lte') {
+      const identity = {'name', 'default-name', 'disabled', 'running'};
+      if ((fields ?? const []).any((field) => !identity.contains(field))) {
+        return const [];
+      }
+      return [
+        projectReadFields({
+          'name': 'lte1',
+          'disabled': 'false',
+          'running': 'true',
+        }, fields),
+      ];
+    }
+    final rows = _healthyMenus()[menuPath] ?? const [];
+    return rows.map((row) => projectReadFields(row, fields)).toList();
+  }
+
+  @override
+  Future<List<Map<String, String>>> command(
+    String path,
+    Map<String, String> params,
+  ) async =>
+      const [];
 
   @override
   Future<void> close() async {}

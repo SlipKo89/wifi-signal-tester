@@ -9,6 +9,7 @@ import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
 import 'theme.dart';
 import 'wifi_log_screen.dart';
+import 'widgets/app_safe_area.dart';
 
 class _Dev {
   final StationSignal station;
@@ -159,48 +160,51 @@ class _DevicesScreenState extends State<DevicesScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: TextField(
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: l.t('Search name / IP / MAC', 'Поиск имя / IP / MAC'),
-                isDense: true,
+      body: AppSafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: TextField(
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText:
+                      l.t('Search name / IP / MAC', 'Поиск имя / IP / MAC'),
+                  isDense: true,
+                ),
+                onChanged: (v) => setState(() => _query = v.toLowerCase()),
               ),
-              onChanged: (v) => setState(() => _query = v.toLowerCase()),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<_Dev>>(
-              future: _future,
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final all = snap.data!;
-                final items = _query.isEmpty
-                    ? all
-                    : all.where((d) => d.identity.matches(_query)).toList();
-                if (items.isEmpty) {
-                  return Center(
-                    child: Text(
-                        l.t('No devices on Wi-Fi right now.',
-                            'Сейчас в Wi-Fi никого нет.'),
-                        style: const TextStyle(color: Color(0xFF7D8590))),
+            Expanded(
+              child: FutureBuilder<List<_Dev>>(
+                future: _future,
+                builder: (context, snap) {
+                  if (!snap.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final all = snap.data!;
+                  final items = _query.isEmpty
+                      ? all
+                      : all.where((d) => d.identity.matches(_query)).toList();
+                  if (items.isEmpty) {
+                    return Center(
+                      child: Text(
+                          l.t('No devices on Wi-Fi right now.',
+                              'Сейчас в Wi-Fi никого нет.'),
+                          style: const TextStyle(color: Color(0xFF7D8590))),
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFF232B36)),
+                    itemBuilder: (context, i) => _row(l, items[i]),
                   );
-                }
-                return ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1, color: Color(0xFF232B36)),
-                  itemBuilder: (context, i) => _row(l, items[i]),
-                );
-              },
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -243,7 +247,7 @@ class _DeviceSheet extends StatelessWidget {
     final l = context.watch<SettingsController>().l;
     final s = dev.station;
     final color = AppTheme.signalColor(s.signalDbm);
-    return SafeArea(
+    return AppSafeArea(
       child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),

@@ -27,6 +27,17 @@ class StationSignal {
   final String? ssid;
   final String? uptime;
 
+  /// Vendor-neutral PHY/security details where the registration table exposes
+  /// them. RouterOS currently leaves most of these null; Keenetic RCI reports
+  /// them directly.
+  final String? wifiMode;
+  final String? security;
+  final bool? pmf;
+  final int? spatialStreams;
+  final int? channelWidthMhz;
+  final int? mcs;
+  final int? guardIntervalNs;
+
   /// Cumulative bytes the AP has sent to / received from the client
   /// (download / upload for the client). Used to derive live throughput.
   final int? apTxBytes;
@@ -48,6 +59,13 @@ class StationSignal {
     this.interfaceName,
     this.ssid,
     this.uptime,
+    this.wifiMode,
+    this.security,
+    this.pmf,
+    this.spatialStreams,
+    this.channelWidthMhz,
+    this.mcs,
+    this.guardIntervalNs,
     this.apTxBytes,
     this.apRxBytes,
     this.pThroughputKbps,

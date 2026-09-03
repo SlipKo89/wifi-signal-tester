@@ -1,6 +1,8 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+typedef HistoryDatabaseOpener = Future<Database> Function();
+
 /// One recorded measurement (our own app data only).
 class Sample {
   final int tsMs;
@@ -62,25 +64,63 @@ class Sample {
 class SessionInfo {
   final int id;
   final int startedMs;
+  final int endedMs;
   final int sampleCount;
-  const SessionInfo(this.id, this.startedMs, this.sampleCount);
+  final String? routerHost;
+
+  const SessionInfo(
+    this.id,
+    this.startedMs,
+    this.endedMs,
+    this.sampleCount, {
+    this.routerHost,
+  });
+
+  Duration get duration => Duration(milliseconds: endedMs - startedMs);
 }
 
 /// Local SQLite store for recorded measurement sessions.
 class HistoryStore {
+  final HistoryDatabaseOpener _databaseOpener;
   Database? _db;
+  Future<Database>? _opening;
+  Future<void>? _closing;
+
+  HistoryStore({HistoryDatabaseOpener? databaseOpener})
+      : _databaseOpener = databaseOpener ?? _openDefaultDatabase;
 
   Future<Database> _open() async {
-    if (_db != null) return _db!;
+    final closing = _closing;
+    if (closing != null) await closing;
+
+    final existing = _db;
+    if (existing != null) return existing;
+    return _opening ??= _openDatabase();
+  }
+
+  Future<Database> _openDatabase() async {
+    try {
+      final db = await _databaseOpener();
+      _db = db;
+      return db;
+    } finally {
+      // A failed open must be retryable, while concurrent callers must all
+      // share the same in-flight Future.
+      _opening = null;
+    }
+  }
+
+  static Future<Database> _openDefaultDatabase() async {
     final dir = await getDatabasesPath();
-    _db = await openDatabase(
+    return openDatabase(
       p.join(dir, 'wifi_history.db'),
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE sessions(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            started INTEGER NOT NULL
+            started INTEGER NOT NULL,
+            router_host TEXT
           )''');
         await db.execute('''
           CREATE TABLE samples(
@@ -91,16 +131,34 @@ class HistoryStore {
             phone_rssi INTEGER, ap_signal INTEGER, ap_snr INTEGER, delta INTEGER,
             tx_rate TEXT, rx_rate TEXT, down_kbps INTEGER, up_kbps INTEGER
           )''');
-        await db.execute(
-            'CREATE INDEX idx_samples_session ON samples(session_id)');
+        await db
+            .execute('CREATE INDEX idx_samples_session ON samples(session_id)');
+      },
+      onUpgrade: (db, oldVersion, _) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE sessions ADD COLUMN router_host TEXT');
+        }
       },
     );
-    return _db!;
   }
 
-  Future<int> startSession(int startedMs) async {
+  Future<int> startSession(int startedMs, {String? routerHost}) async {
     final db = await _open();
-    return db.insert('sessions', {'started': startedMs});
+    return db.insert('sessions', {
+      'started': startedMs,
+      'router_host': _nonEmpty(routerHost),
+    });
+  }
+
+  Future<void> setRouterHostIfEmpty(int sessionId, String routerHost) async {
+    final normalized = _nonEmpty(routerHost);
+    if (normalized == null) return;
+    final db = await _open();
+    await db.rawUpdate(
+      'UPDATE sessions SET router_host = ? '
+      'WHERE id = ? AND (router_host IS NULL OR router_host = ?)',
+      [normalized, sessionId, ''],
+    );
   }
 
   Future<void> addSample(int sessionId, Sample s) async {
@@ -111,14 +169,17 @@ class HistoryStore {
   Future<List<SessionInfo>> sessions() async {
     final db = await _open();
     final rows = await db.rawQuery('''
-      SELECT s.id, s.started, COUNT(m.id) AS n
+      SELECT s.id, s.started, s.router_host, COUNT(m.id) AS n,
+             COALESCE(MAX(m.ts), s.started) AS effective_ended
       FROM sessions s LEFT JOIN samples m ON m.session_id = s.id
       GROUP BY s.id ORDER BY s.started DESC''');
     return rows
         .map((r) => SessionInfo(
               r['id'] as int,
               r['started'] as int,
+              (r['effective_ended'] as num?)?.toInt() ?? r['started'] as int,
               (r['n'] as int?) ?? 0,
+              routerHost: r['router_host'] as String?,
             ))
         .toList();
   }
@@ -132,14 +193,22 @@ class HistoryStore {
 
   Future<void> deleteSession(int sessionId) async {
     final db = await _open();
-    await db.delete('samples', where: 'session_id = ?', whereArgs: [sessionId]);
-    await db.delete('sessions', where: 'id = ?', whereArgs: [sessionId]);
+    await db.transaction((txn) async {
+      await txn.delete(
+        'samples',
+        where: 'session_id = ?',
+        whereArgs: [sessionId],
+      );
+      await txn.delete('sessions', where: 'id = ?', whereArgs: [sessionId]);
+    });
   }
 
   Future<void> clearAll() async {
     final db = await _open();
-    await db.delete('samples');
-    await db.delete('sessions');
+    await db.transaction((txn) async {
+      await txn.delete('samples');
+      await txn.delete('sessions');
+    });
   }
 
   /// Renders a session as CSV text.
@@ -170,4 +239,32 @@ class HistoryStore {
     }
     return b.toString();
   }
+
+  /// Closes the app-owned database. Concurrent close calls share one Future;
+  /// a later read may open it again (useful after a controller is recreated).
+  Future<void> close() => _closing ??= _closeDatabase();
+
+  Future<void> _closeDatabase() async {
+    try {
+      Database? db = _db;
+      final opening = _opening;
+      if (db == null && opening != null) {
+        try {
+          db = await opening;
+        } catch (_) {
+          // There is no open handle to close. The next operation can retry.
+        }
+      }
+      if (identical(_db, db)) _db = null;
+      _opening = null;
+      await db?.close();
+    } finally {
+      _closing = null;
+    }
+  }
+}
+
+String? _nonEmpty(String? value) {
+  final text = value?.trim();
+  return text == null || text.isEmpty ? null : text;
 }

@@ -9,6 +9,7 @@ class FailureBanner extends StatelessWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onEditConnection;
   final VoidCallback? onSystemSettings;
+  final Future<void> Function()? onTrustHostKey;
   final VoidCallback onDiagnostics;
   final VoidCallback onDismiss;
 
@@ -21,6 +22,7 @@ class FailureBanner extends StatelessWidget {
     this.onRetry,
     this.onEditConnection,
     this.onSystemSettings,
+    this.onTrustHostKey,
   });
 
   @override
@@ -63,6 +65,17 @@ class FailureBanner extends StatelessWidget {
                       failure.description(l),
                       style: const TextStyle(fontSize: 12, height: 1.35),
                     ),
+                    if (failure.userDetail(l) case final detail?) ...[
+                      const SizedBox(height: 7),
+                      SelectableText(
+                        detail,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -96,6 +109,15 @@ class FailureBanner extends StatelessWidget {
                   onPressed: onSystemSettings,
                   icon: const Icon(Icons.settings_outlined, size: 17),
                   label: Text(l.t('System settings', 'Настройки Android')),
+                ),
+              if (onTrustHostKey != null)
+                TextButton.icon(
+                  onPressed: onTrustHostKey,
+                  icon: const Icon(Icons.verified_user_outlined, size: 17),
+                  label: Text(l.t(
+                    'Trust new SSH key',
+                    'Доверять новому SSH-ключу',
+                  )),
                 ),
               TextButton.icon(
                 onPressed: onDiagnostics,

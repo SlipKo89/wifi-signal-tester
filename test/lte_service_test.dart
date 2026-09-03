@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wifi_apk/lte/lte_service.dart';
+import 'package:wifi_apk/mikrotik/port_knocking.dart';
 import 'package:wifi_apk/mikrotik/router_os_transport.dart';
 
 void main() {
@@ -103,6 +104,12 @@ void main() {
       useTls: false,
       port: 8080,
       interfaceName: 'lte-main',
+      portKnocking: PortKnockConfig(
+        enabled: true,
+        steps: [
+          PortKnockStep(protocol: PortKnockProtocol.tcp, port: 1234),
+        ],
+      ),
     );
 
     final restored = LteConnection.fromJson(original.toJson());
@@ -110,6 +117,31 @@ void main() {
     expect(restored.useTls, isFalse);
     expect(restored.port, 8080);
     expect(restored.interfaceName, 'lte-main');
+    expect(restored.portKnocking.enabled, isTrue);
+    expect(restored.portKnocking.steps.single.port, 1234);
+  });
+
+  test('LTE knocking rejects auto transport before trying candidates',
+      () async {
+    final candidate = _FakeTransport(kind: 'API');
+    final service = LteService(transportCandidates: (_) => [candidate]);
+
+    await expectLater(
+      service.connect(const LteConnection(
+        host: '192.0.2.4',
+        username: 'monitor',
+        password: 'secret',
+        portKnocking: PortKnockConfig(
+          enabled: true,
+          steps: [
+            PortKnockStep(protocol: PortKnockProtocol.tcp, port: 1234),
+          ],
+        ),
+      )),
+      throwsA(isA<RouterOsException>()),
+    );
+
+    expect(candidate.connectCalls, 0);
   });
 }
 
@@ -121,6 +153,7 @@ class _FakeTransport implements RouterOsTransport {
   final Map<String, String> monitor;
 
   bool closed = false;
+  int connectCalls = 0;
   String? lastCommandPath;
   Map<String, String>? lastCommandParams;
 
@@ -133,6 +166,7 @@ class _FakeTransport implements RouterOsTransport {
 
   @override
   Future<void> connect() async {
+    connectCalls++;
     if (connectError != null) throw connectError!;
   }
 

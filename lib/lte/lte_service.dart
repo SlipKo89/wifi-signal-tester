@@ -1,7 +1,10 @@
 import '../mikrotik/binary_api_transport.dart';
+import '../mikrotik/knock_aware_transport.dart';
+import '../mikrotik/port_knocking.dart';
 import '../mikrotik/rest_transport.dart';
 import '../mikrotik/router_os_transport.dart';
 import '../mikrotik/ssh_transport.dart';
+import '../mikrotik/ssh_host_key_store.dart';
 import 'lte_signal.dart';
 
 class LteConnection {
@@ -12,6 +15,7 @@ class LteConnection {
   final bool useTls;
   final int? port;
   final String? interfaceName;
+  final PortKnockConfig portKnocking;
 
   const LteConnection({
     required this.host,
@@ -21,6 +25,7 @@ class LteConnection {
     this.useTls = true,
     this.port,
     this.interfaceName,
+    this.portKnocking = const PortKnockConfig.disabled(),
   });
 
   Map<String, dynamic> toJson() => {
@@ -32,6 +37,7 @@ class LteConnection {
         if (port != null) 'port': port,
         if (interfaceName != null && interfaceName!.isNotEmpty)
           'interface': interfaceName,
+        'portKnocking': portKnocking.toJson(),
       };
 
   factory LteConnection.fromJson(Map<String, dynamic> json) {
@@ -52,6 +58,7 @@ class LteConnection {
       useTls: json['useTls'] as bool? ?? true,
       port: (json['port'] as num?)?.toInt(),
       interfaceName: json['interface'] as String?,
+      portKnocking: PortKnockConfig.fromJson(json['portKnocking']),
     );
   }
 }
@@ -94,9 +101,11 @@ class LteService {
 
   Future<void> connect(LteConnection connection) async {
     await close();
+    _validateKnockingTransport(connection);
     host = connection.host;
     Object? lastError;
-    for (final transport in _transportCandidates(connection)) {
+    for (final candidate in _transportCandidates(connection)) {
+      final transport = _withKnocking(connection, candidate);
       try {
         await transport.connect();
         final selected =
@@ -107,6 +116,7 @@ class LteService {
       } catch (error) {
         lastError = error;
         await transport.close();
+        if (error is SshHostKeyChangedException) rethrow;
       }
     }
     host = null;
@@ -209,6 +219,30 @@ class LteService {
     TransportPreference transport,
   ) =>
       connection.transport == transport ? connection.port : null;
+
+  static void _validateKnockingTransport(LteConnection connection) {
+    if (connection.portKnocking.enabled &&
+        connection.transport == TransportPreference.auto) {
+      throw RouterOsException(
+        'Port knocking requires an explicitly selected transport',
+      );
+    }
+    if (connection.portKnocking.validationError != null) {
+      throw RouterOsException('Invalid port-knocking configuration');
+    }
+  }
+
+  static RouterOsTransport _withKnocking(
+    LteConnection connection,
+    RouterOsTransport transport,
+  ) {
+    if (!connection.portKnocking.enabled) return transport;
+    return KnockAwareTransport(
+      delegate: transport,
+      host: connection.host,
+      config: connection.portKnocking,
+    );
+  }
 
   Future<String> _selectInterface(
     RouterOsTransport transport,

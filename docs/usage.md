@@ -10,7 +10,7 @@ version history see [CHANGELOG.md](../CHANGELOG.md).
 
 1. [What the app is for](#1-what-the-app-is-for)
 2. [What you need before you start](#2-what-you-need-before-you-start)
-3. [Preparing the MikroTik](#3-preparing-the-mikrotik)
+3. [Preparing the router](#3-preparing-the-router)
 4. [First launch and permissions](#4-first-launch-and-permissions)
 5. [Connecting](#5-connecting)
 6. [Reading the dashboard](#6-reading-the-dashboard)
@@ -22,9 +22,10 @@ version history see [CHANGELOG.md](../CHANGELOG.md).
 12. [Settings](#12-settings)
 13. [Reference and help](#13-reference-and-help)
 14. [LTE signal diagnostics](#14-lte-signal-diagnostics)
-15. [Support report](#15-support-report)
-16. [Troubleshooting](#16-troubleshooting)
-17. [What the app never does](#17-what-the-app-never-does)
+15. [Zabbix history](#15-zabbix-history)
+16. [Support report](#16-support-report)
+17. [Troubleshooting](#17-troubleshooting)
+18. [What the app never does](#18-what-the-app-never-does)
 
 ---
 
@@ -35,9 +36,9 @@ access point**. That half is not enough. A phone can show a comfortable −50 dB
 while the AP hears the phone at −75 dBm — the AP shouts, the phone whispers, and
 the connection stutters in one direction only.
 
-This app reads the **other half** from the MikroTik itself (CAPsMAN or plain
-Wi-Fi), for **your device's MAC only**, and puts both halves side by side with
-the difference between them:
+This app reads the **other half** from the router itself — MikroTik (CAPsMAN or
+plain Wi-Fi), plus an initial Keenetic Alpha integration — for **your device's
+MAC only**, and puts both halves side by side with the difference between them:
 
 <img src="screenshots/dashboard.png" width="300" alt="Two-sided dashboard">
 
@@ -45,15 +46,18 @@ the difference between them:
 
 - An Android phone with the APK from the
   [Releases page](../../../releases/latest).
-- A MikroTik running CAPsMAN or serving Wi-Fi itself, reachable from that phone.
-- A **read-only** RouterOS user (see the next section).
+- A supported router reachable from that phone: MikroTik, or the Keenetic Alpha
+  compatibility baseline described below.
+- A dedicated account for monitoring (see the next section).
 - The phone connected to the Wi-Fi you want to test (not mobile data) — the app
   identifies your station by its IP on the router.
 
 Nothing needs to be installed on the router, and nothing about its configuration
 has to change beyond enabling the service you connect through.
 
-## 3. Preparing the MikroTik
+## 3. Preparing the router
+
+### MikroTik
 
 Full walkthrough: [mikrotik-readonly-user.md](mikrotik-readonly-user.md). Short
 version — a group without `write`, plus the service you prefer:
@@ -81,6 +85,40 @@ per poll against 60 ms over REST), and it stays read-only: the app builds every
 command itself from a menu path plus `print`/`monitor once`, and refuses
 anything else.
 
+**Optional port knocking.** If the management service is protected by an
+existing RouterOS port-knocking firewall sequence, enable the advanced block in
+the Wi-Fi or LTE connection profile. Add 1–8 TCP/UDP steps in their exact order,
+then choose one transport explicitly; `Auto` is intentionally refused so the
+app will not probe several management ports. The default delay is 300 ms
+between packets and 500 ms before connecting. Adjust both to the timeouts of
+your firewall rules. Ports are hidden by default and the sequence is stored
+with the password in platform secure storage.
+
+The app does not create the firewall sequence. It only sends the configured
+packets before the first connection and once after a real network/session
+failure. Depending on the existing RouterOS rules, this can temporarily add the
+phone/computer IP to a dynamic address list. Authentication, command and SSH
+host-key errors do not repeat the sequence.
+
+### Keenetic Alpha
+
+The first Keenetic integration uses HTTPS RCI and is developed and verified on
+**Runner 4G (KN-2212) with KeeneticOS 5.01.C.3.0-1**. It is deliberately marked
+Alpha: other models and releases may return different fields. Thanks to
+**Netspay** for providing the test router.
+
+Create a separate Keenetic user and make sure HTTPS RCI is reachable either at
+the local router address or through its KeenDNS hostname. In the connection
+form choose *Keenetic (Alpha)*. There is no transport chooser in this mode:
+HTTPS RCI is the only implemented Keenetic transport.
+
+The client performs the required x-ndw2 challenge-response login, then only
+reads a fixed whitelist of `show` endpoints for system/version, associations,
+DHCP bindings and ARP. The sole POST is `/auth`; the client has no generic RCI
+configuration call. The current Alpha covers the two-sided dashboard for the
+phone running the app. Keenetic audits, logs and browsing other clients are not
+enabled yet.
+
 ## 4. First launch and permissions
 
 The app asks for **location** once. That is not tracking: Android only reveals
@@ -96,13 +134,23 @@ Wi-Fi or network settings, so it cannot connect, disconnect or forget networks.
 
 Fill in the form on the first screen:
 
+- **Router vendor** — MikroTik, or Keenetic (Alpha).
 - **Host / IP** — the router's address, e.g. `192.168.88.1`.
 - **Username / Password** — the read-only user.
 - **Transport** — `Auto (REST → API → SSH)` unless you have a reason.
 - **Port** — leave empty for the standard port; the field is enabled only when
   you pin a transport (a custom port belongs to one protocol).
 - **TLS** — on for HTTPS/api-ssl. Self-signed certificates are accepted, which is
-  the norm on a LAN.
+  the norm on a private RouterOS LAN. This encrypts the connection but does not
+  authenticate that certificate, so use it only on a trusted LAN/VPN.
+- **Port knocking (advanced)** — use only with an already configured MikroTik
+  firewall sequence and an explicitly selected REST/API/SSH transport. Add the
+  exact TCP/UDP ports and tune the two delays if the router uses short timeouts.
+
+On the first successful SSH connection the app remembers the router's host-key
+fingerprint in platform secure storage. If that host later presents another
+key, the connection stops and shows both fingerprints. Trust the new key only
+after confirming a RouterOS reinstall, SSH-key regeneration or device change.
 
 **Several routers.** Press *Add another router* to build a list — a central
 CAPsMAN box plus standalone APs, for example. The app polls all of them and
@@ -140,7 +188,7 @@ doesn't report it — marked as an estimate), tx/rx rate, CCQ, per-chain signal,
 throughput derived from byte counters, uptime on this AP, and a roam counter for
 the session.
 
-**Router health.** Board, RouterOS version, CPU load, uptime.
+**Router health.** Model, RouterOS/KeeneticOS version, CPU load, uptime.
 
 **Ping.** Real ICMP round-trip to the gateway each poll. Latency spikes or loss
 while the signal looks strong point at interference or a busy AP.
@@ -240,7 +288,8 @@ The audit is deliberately conservative and says so when it is unsure:
 
 ⏺ in the app bar records every poll into an on-device SQLite database. ⋮ →
 *History* lists sessions; open one for the samples, share it as CSV, or delete
-it. Deleting removes only the app's own data.
+it. A Wi-Fi session detail keeps phone/AP signal, AP SNR and client traffic on
+separate synchronized tracks. Deleting removes only the app's own data.
 
 ## 11. Targets and alerts
 
@@ -257,11 +306,17 @@ notification permission.
 | Setting | Meaning |
 |---------|---------|
 | Language | Russian / English, switches immediately |
-| Poll interval | How often both sides are read (default ~2 s) |
+| Polling profile | Fast / Normal / Economical presets, or Custom. The default Normal profile reads live signal and ping every 2 s, router health/CPU every 15 s and refreshes IP→MAC discovery every 30 s |
+| Custom polling intervals | Separate periods for signal/ping, router health/CPU and IP→MAC client discovery |
 | History length | How many points the sparkline keeps |
 | Connection diagnosis | Automatic run after connect/roam and its settling delay (default 10 s); manual run remains available |
 | Targets | Minimum signal, minimum SNR, maximum Δ |
 | Alerts | Beep + vibrate on a breach, and the Δ threshold |
+
+The app pauses live Wi-Fi requests and ping while it is in the background. On
+return it immediately takes a fresh sample and continues the selected profile.
+Changing the network or BSSID bypasses the IP→MAC cache, so roaming remains
+responsive even with an economical discovery interval.
 
 ## 13. Reference and help
 
@@ -406,7 +461,66 @@ RouterOS often includes IMEI, IMSI and ICCID in the monitor response. The app
 does not model, display, log or persist those identifiers; they are discarded
 immediately after the response is parsed.
 
-## 15. Support report
+## 15. Zabbix history
+
+Open ⋮ → *Zabbix history*, or *Settings → Integrations → Zabbix*. This optional
+integration reads metrics that Zabbix has already collected; it does not replace
+the app's live RouterOS reads or phone/LTE recordings.
+
+Paste an existing API token, select HTTPS or HTTP, enter the frontend host/path
+and optionally a custom port. For example: HTTPS,
+`zabbix.example.com/zabbix`, port `8443`, or HTTP, `192.168.1.20/zabbix`, port
+`8080`. Tap *Test and save*. The app then:
+
+1. detects the Zabbix API version;
+2. shows only hosts readable by that token;
+3. loads active supported numeric items for the selected host;
+4. lets you search by item name, key or units;
+5. shows latest/minimum/average/maximum and a chart.
+
+For one hour and 24 hours it requests bounded raw `history.get` values. Seven
+and 30 days use hourly `trend.get` averages and retain the hourly min/max in the
+summary. If trends are unavailable, a clearly labelled bounded raw-history
+fallback is shown. Reaching the 1,500-point cap is also called out, so a partial
+raw series is never presented as complete.
+
+The standalone Zabbix screen remains an explorer for arbitrary metrics. To put
+those metrics into a real measurement, open a saved Wi-Fi or LTE session and
+use *Zabbix context → Link Zabbix*:
+
+1. select the saved Zabbix profile and the host representing that router;
+2. map the useful slots (Wi-Fi RSSI/SNR/CCQ, LTE RSRP/RSRQ/SINR/RSSI/CQI,
+   CPU, latency, loss, traffic and client count) to the exact items;
+3. check every suggested mapping — name/key matching is only a convenience and
+   custom templates may use different semantics;
+4. save the link. New sessions for the same router reuse it.
+
+The session then reads Zabbix values for exactly its start/end interval and
+draws stacked tracks with one movable time cursor. Every track has its own Y
+scale, so dBm, percent, milliseconds and traffic are not mixed. Matching local
+and Zabbix radio metrics share a track only when their units match. *Export
+combined CSV* produces a long-form file with source, metric, timestamp, value
+and unit for retrospective analysis.
+
+Only the mapping metadata is saved outside secure storage. The API token stays
+in the protected Zabbix profile. Zabbix points are requested on demand and are
+not copied into either local SQLite history. Removing a Zabbix profile therefore
+makes its context unavailable until the link is configured again; it does not
+damage the local session.
+
+Tap the help icon on the Zabbix screen for the exact least-privilege setup, or
+read [zabbix-readonly-user.md](zabbix-readonly-user.md). Use a dedicated User
+role, Host permission **Read**, and an API method allow-list containing only
+`host.get`, `item.get`, `history.get` and `trend.get`. An administrator should
+create the expiring token for that service user.
+
+The token is stored in platform secure storage and never enters support
+reports. Forgetting the profile removes only its local copy; revoke the token
+in Zabbix separately. HTTPS remains the default and validates the certificate.
+HTTP is available for legacy/local installations, but it sends the API token
+and metrics without encryption: use it only on a trusted LAN or through a VPN.
+
+## 16. Support report
 
 ⋮ → *Support report* creates troubleshooting material you can send to the
 developer. Nothing is collected remotely and nothing is uploaded automatically.
@@ -425,24 +539,29 @@ tokens, private keys, raw RouterOS responses and full lists of other clients are
 never included, even with that switch enabled. Review `report.txt` before
 sharing. *Copy readable report* is available when a ZIP is inconvenient.
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 | Symptom | Cause and fix |
 |---------|---------------|
 | "Not connected to Wi-Fi" while you are | Location permission denied, or the phone is on mobile data. Grant location; the app also judges by IP, so check you have a LAN address. |
-| AP card empty, "not on a MikroTik-managed AP" | Your phone associated with an AP this router doesn't manage. Add that router too (*Add another router*). |
+| AP card empty / phone absent from the association table | Your phone associated with an AP this router doesn't manage, or the association has not appeared yet. Add the serving router too and retry. |
 | Authentication failed | Wrong user/password, or the group lacks the policy for that transport (`rest-api`, `api`, `ssh`). |
 | "REST API not available" | RouterOS 6, or `www-ssl` disabled. Switch the transport to Auto, API or SSH. |
 | Router unreachable | Wrong host, or you're not on its network. Check the gateway shown in the summary. |
 | Values refresh slowly | Android Wi-Fi scan throttling — see the Reference entry, or raise the poll interval. |
 | SNR marked as estimate | The registration table doesn't report SNR (typical for CAPsMAN); it is derived from the radio's measured noise floor. |
 | Nothing at all over SSH | The user's group needs the `ssh` policy; check `/ip service` allows your subnet. LTE can also use REST or the binary API. |
+| SSH host key changed | Compare the shown fingerprint with the router. If RouterOS was reinstalled or the device/key was intentionally replaced, choose **Trust new SSH key**; otherwise do not continue. |
 | LTE says no interface was found | Check that `/interface lte print` contains an enabled interface, or clear/correct the optional interface name in the LTE form. |
 | LTE says that data is still loading | The router is connected, but valid modem metrics have not arrived. Let the automatic polling continue; if it persists, check that the LTE interface is running and the modem is registering. |
 | LTE is registered but metrics remain empty | Some modem/RouterOS combinations need a current modem firmware before they expose radio metrics. |
+| Zabbix rejects the token | Check token expiry, API access in the role, the four-method allow-list and Host permission Read for the selected host groups. |
+| Zabbix connects but shows no hosts | The token is valid, but its user cannot read any host groups. Add Read—not Read-write—host permission. |
+| Zabbix history is empty | The item may have no values in that period, or Zabbix housekeeping no longer retains raw history/trends. Try another range and check item retention. |
+| Zabbix TLS validation fails | Use a trusted certificate for the frontend. This version does not silently accept invalid or self-signed Zabbix certificates. |
 | Audit says "Report incomplete" | Those menus couldn't be read — usually a session dropped while the app was in the background (it reconnects, so just re-run), or a user without rights to them. |
 
-## 17. What the app never does
+## 18. What the app never does
 
 - **On the router:** no writes, ever. There is no write path in the code — the
   transport interface exposes only reads, and the SSH transport additionally
@@ -451,6 +570,10 @@ sharing. *Copy readable report* is available when a ZIP is inconvenient.
   wireless and system menus for the audit, or the LTE interface/monitor in the
   separate LTE tool. LTE modem/SIM identifiers returned by RouterOS are
   discarded rather than stored.
+- **In Zabbix:** it only calls `host.get`, `item.get`, `history.get` and
+  `trend.get`. It cannot create users/tokens, modify monitoring configuration,
+  acknowledge problems or send values. Removing a local profile does not issue
+  a server-side delete.
 - **On the phone:** it reads the Wi-Fi chip but never changes, connects,
   disconnects or forgets a network — the permission to do so is explicitly
   removed from the manifest. It accesses no contacts or media. The only data it

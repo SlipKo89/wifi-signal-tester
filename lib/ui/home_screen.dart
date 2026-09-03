@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../app_info.dart';
 import '../audit/audit.dart';
+import '../keenetic/keenetic_compatibility.dart';
 import '../models/phone_signal.dart';
 import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
@@ -22,12 +23,14 @@ import 'support_diagnostics_screen.dart';
 import 'theme.dart';
 import 'whats_new.dart';
 import 'wifi_log_screen.dart';
+import 'widgets/app_safe_area.dart';
 import 'widgets/connection_form.dart';
 import 'widgets/failure_banner.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/platform_badge.dart';
 import 'widgets/roam_transition.dart';
 import 'widgets/signal_card.dart';
+import 'zabbix_screen.dart';
 
 /// Formats a kbps value as Kbps/Mbps.
 String _fmtKbps(int kbps) =>
@@ -87,6 +90,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 settings.setAlertsEnabled(!settings.alertsEnabled);
                 ctrl.applySettings(
                   pollSeconds: settings.pollSeconds,
+                  healthPollSeconds: settings.healthPollSeconds,
+                  identityPollSeconds: settings.identityPollSeconds,
                   historyLength: settings.historyLength,
                   alertsEnabled: settings.alertsEnabled,
                   alertThresholdDb: settings.alertThresholdDb,
@@ -139,6 +144,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   open(const WifiLogScreen());
                 case 'lte':
                   open(const LteScreen());
+                case 'zabbix':
+                  open(const ZabbixScreen());
                 case 'reference':
                   open(const ReferenceScreen());
                 case 'guide':
@@ -156,12 +163,12 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (_) => [
-              if (connected && !ctrl.phoneOnly)
+              if (connected && !ctrl.phoneOnly && ctrl.hasMikrotikRouters)
                 PopupMenuItem(
                   value: 'audit_wifi',
                   child: Text(l.t('Wi-Fi audit', 'Аудит Wi-Fi')),
                 ),
-              if (connected && !ctrl.phoneOnly)
+              if (connected && !ctrl.phoneOnly && ctrl.hasMikrotikRouters)
                 PopupMenuItem(
                   value: 'audit_system',
                   child: Text(l.t('System audit', 'Системный аудит')),
@@ -172,12 +179,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                       l.t('Network audit (phone)', 'Аудит сети (телефон)')),
                 ),
-              if (connected && !ctrl.phoneOnly)
+              if (connected && !ctrl.phoneOnly && ctrl.hasMikrotikRouters)
                 PopupMenuItem(
                   value: 'devices',
                   child: Text(l.t('Devices', 'Устройства')),
                 ),
-              if (connected && !ctrl.phoneOnly)
+              if (connected && !ctrl.phoneOnly && ctrl.hasMikrotikRouters)
                 PopupMenuItem(
                   value: 'wifi_logs',
                   child: Row(
@@ -196,6 +203,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Icon(Icons.cell_tower, size: 19),
                     const SizedBox(width: 10),
                     Text(l.t('LTE diagnostics', 'Диагностика LTE')),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'zabbix',
+                child: Row(
+                  children: [
+                    const Icon(Icons.monitor_heart_outlined, size: 19),
+                    const SizedBox(width: 10),
+                    Text(l.t('Zabbix history', 'История из Zabbix')),
                   ],
                 ),
               ),
@@ -232,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: AppSafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -255,6 +272,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   onSystemSettings: ctrl.failure!.wantsSystemSettings
                       ? openAppSettings
                       : null,
+                  onTrustHostKey: ctrl.failure!.sshHostKeyChange == null
+                      ? null
+                      : ctrl.trustNewSshHostKey,
                   onDiagnostics: () => open(const SupportDiagnosticsScreen()),
                   onDismiss: ctrl.dismissFailure,
                 ),
@@ -266,6 +286,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onConnect: (routers) {
                     ctrl.applySettings(
                       pollSeconds: settings.pollSeconds,
+                      healthPollSeconds: settings.healthPollSeconds,
+                      identityPollSeconds: settings.identityPollSeconds,
                       historyLength: settings.historyLength,
                       alertsEnabled: settings.alertsEnabled,
                       alertThresholdDb: settings.alertThresholdDb,
@@ -280,6 +302,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPhoneOnly: () {
                     ctrl.applySettings(
                       pollSeconds: settings.pollSeconds,
+                      healthPollSeconds: settings.healthPollSeconds,
+                      identityPollSeconds: settings.identityPollSeconds,
                       historyLength: settings.historyLength,
                       alertsEnabled: settings.alertsEnabled,
                       alertThresholdDb: settings.alertThresholdDb,
@@ -315,7 +339,7 @@ class _TitleBar extends StatelessWidget {
     ];
     final sub = ctrl.state == MonitorState.connected && parts.isNotEmpty
         ? parts.join(' · ')
-        : 'MikroTik Wi-Fi Tester';
+        : 'Multi-vendor Wi-Fi Tester';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -356,6 +380,10 @@ class _Dashboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (ctrl.keeneticAlpha) ...[
+          _KeeneticAlphaBanner(ctrl: ctrl),
+          const SizedBox(height: 12),
+        ],
         if (!ctrl.offWifi) _StatusBanner(ctrl: ctrl),
         if (!ctrl.offWifi)
           LinkDiagnosticsCard(
@@ -450,12 +478,16 @@ class _Dashboard extends StatelessWidget {
                             'report this client…',
                         'На точке ${ctrl.connectedApName} — ждём данные от '
                             'роутера…')
-                    : l.t(
-                        "This client isn't on a MikroTik-managed AP (standalone / "
-                            'non-CAPsMAN). No AP-side signal — only the phone side.',
-                        'Клиент не на управляемой точке MikroTik (standalone / '
-                            'не CAPsMAN). Сигнала с точки нет — только сторона '
-                            'телефона.'))
+                    : ctrl.keeneticAlpha
+                        ? l.t(
+                            'This phone is not present in the Keenetic association table yet. Only phone-side metrics are available.',
+                            'Телефон пока не найден в таблице подключений Keenetic. Доступны только показатели телефона.')
+                        : l.t(
+                            "This client isn't on a MikroTik-managed AP (standalone / "
+                                'non-CAPsMAN). No AP-side signal — only the phone side.',
+                            'Клиент не на управляемой точке MikroTik (standalone / '
+                                'не CAPsMAN). Сигнала с точки нет — только сторона '
+                                'телефона.'))
                 : null,
             metrics: [
               MetricTile(
@@ -485,6 +517,27 @@ class _Dashboard extends StatelessWidget {
                   label: 'TX rate', value: ap?.txRate ?? '—', helpKey: 'rate'),
               MetricTile(
                   label: 'RX rate', value: ap?.rxRate ?? '—', helpKey: 'rate'),
+              if (ap?.wifiMode != null)
+                MetricTile(label: l.t('Mode', 'Режим'), value: ap!.wifiMode!),
+              if (ap?.channelWidthMhz != null)
+                MetricTile(
+                    label: l.t('Width', 'Ширина'),
+                    value: '${ap!.channelWidthMhz}',
+                    unit: 'MHz'),
+              if (ap?.spatialStreams != null)
+                MetricTile(label: 'NSS', value: '${ap!.spatialStreams}'),
+              if (ap?.mcs != null)
+                MetricTile(label: 'MCS', value: '${ap!.mcs}'),
+              if (ap?.security != null)
+                MetricTile(
+                    label: l.t('Security', 'Защита'), value: ap!.security!),
+              if (ap?.pmf != null)
+                MetricTile(
+                  label: 'PMF',
+                  value: ap!.pmf!
+                      ? l.t('enabled', 'включён')
+                      : l.t('disabled', 'выключен'),
+                ),
               if (ap?.pThroughputKbps != null)
                 MetricTile(
                     label: l.t('Est. thr', 'Оц. пропуск'),
@@ -529,6 +582,81 @@ class _Dashboard extends StatelessWidget {
         const SizedBox(height: 12),
         _HistoryChart(phone: ctrl.phoneHistory, ap: ctrl.apHistory),
       ],
+    );
+  }
+}
+
+class _KeeneticAlphaBanner extends StatelessWidget {
+  final MonitorController ctrl;
+
+  const _KeeneticAlphaBanner({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
+    final verified = ctrl.keeneticCompatibilityVerified;
+    final color = verified ? const Color(0xFF2F81F7) : const Color(0xFFD29922);
+    final actual = [
+      if (ctrl.keeneticModel != null) ctrl.keeneticModel!,
+      if (ctrl.keeneticRelease != null) 'KeeneticOS ${ctrl.keeneticRelease!}',
+    ].join(' · ');
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.science_outlined, size: 19, color: color),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l.t('Keenetic integration · Alpha',
+                      'Интеграция Keenetic · Альфа'),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  verified
+                      ? l.t(
+                          'Verified baseline: $kKeeneticAlphaModel, KeeneticOS $kKeeneticAlphaRelease.',
+                          'Проверенная база: $kKeeneticAlphaModel, KeeneticOS $kKeeneticAlphaRelease.')
+                      : l.t(
+                          'This router differs from the verified $kKeeneticAlphaModel / KeeneticOS $kKeeneticAlphaRelease baseline. Check the values carefully.',
+                          'Этот роутер отличается от проверенной базы $kKeeneticAlphaModel / KeeneticOS $kKeeneticAlphaRelease. Перепроверяй значения.'),
+                  style: const TextStyle(
+                    color: Color(0xFFC9D1D9),
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+                if (actual.isNotEmpty && !verified) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    actual,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF9AA4B2),
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -619,7 +747,8 @@ class _RouterHealthCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (ctrl.routerVersion != null)
-                  Text('RouterOS ${ctrl.routerVersion}',
+                  Text(
+                      '${ctrl.platformLabel ?? 'Router'} ${ctrl.routerVersion}',
                       style: const TextStyle(
                           fontSize: 11, color: Color(0xFF7D8590))),
               ],

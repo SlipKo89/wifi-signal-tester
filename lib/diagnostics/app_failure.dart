@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import '../l10n/l10n.dart';
+import '../mikrotik/port_knocking.dart';
+import '../mikrotik/ssh_host_key_store.dart';
 
 enum AppFailureKind {
   authentication,
@@ -14,6 +16,8 @@ enum AppFailureKind {
   sessionClosed,
   offWifi,
   locationPermission,
+  sshHostKeyChanged,
+  portKnocking,
   stationNotFound,
   unmanagedAp,
   partialConnection,
@@ -31,6 +35,7 @@ class AppFailure {
   final AppFailureSeverity severity;
   final String? technical;
   final int occurrences;
+  final SshHostKeyChangedException? sshHostKeyChange;
 
   const AppFailure({
     required this.kind,
@@ -38,9 +43,31 @@ class AppFailure {
     required this.severity,
     this.technical,
     this.occurrences = 1,
+    this.sshHostKeyChange,
   });
 
   factory AppFailure.classify(Object error) {
+    if (error is SshHostKeyChangedException) {
+      return AppFailure(
+        kind: AppFailureKind.sshHostKeyChanged,
+        code: 'SSH-KEY-01',
+        severity: AppFailureSeverity.error,
+        technical: error.toString(),
+        sshHostKeyChange: error,
+      );
+    }
+    final initialText = error.toString().toLowerCase();
+    if (error is PortKnockException ||
+        initialText.contains('port knocking') ||
+        initialText.contains('port-knock') ||
+        initialText.contains('portknockexception')) {
+      return AppFailure(
+        kind: AppFailureKind.portKnocking,
+        code: 'KNOCK-01',
+        severity: AppFailureSeverity.error,
+        technical: _clean(error),
+      );
+    }
     final raw = _clean(error);
     final text = raw.toLowerCase();
 
@@ -68,6 +95,7 @@ class AppFailure {
       );
     }
     if (text.contains('permission denied') ||
+        text.contains('access denied') ||
         text.contains('not enough permissions') ||
         text.contains('not permitted') ||
         text.contains('not allowed')) {
@@ -164,26 +192,31 @@ class AppFailure {
 
   String title(L10n l) => switch (kind) {
         AppFailureKind.authentication =>
-          l.t('MikroTik login failed', 'Не удалось войти в MikroTik'),
+          l.t('Router login failed', 'Не удалось войти в роутер'),
         AppFailureKind.accessDenied =>
           l.t('Not enough read permissions', 'Не хватает прав на чтение'),
         AppFailureKind.timeout =>
-          l.t('MikroTik did not answer in time', 'MikroTik не ответил вовремя'),
+          l.t('Router did not answer in time', 'Роутер не ответил вовремя'),
         AppFailureKind.connectionRefused =>
           l.t('Connection was refused', 'Соединение отклонено'),
         AppFailureKind.unreachable =>
-          l.t('MikroTik is unreachable', 'MikroTik недоступен'),
+          l.t('Router is unreachable', 'Роутер недоступен'),
         AppFailureKind.tls =>
           l.t('Secure connection failed', 'Ошибка защищённого подключения'),
         AppFailureKind.unsupported => l.t(
-            'Transport or required RouterOS menu is unavailable',
-            'Транспорт или нужное меню RouterOS недоступны'),
+            'Transport or required router data is unavailable',
+            'Транспорт или нужные данные роутера недоступны'),
         AppFailureKind.sessionClosed =>
           l.t('Router session was closed', 'Сессия с роутером закрылась'),
         AppFailureKind.offWifi =>
           l.t('Phone is not on Wi-Fi', 'Телефон не подключён к Wi-Fi'),
         AppFailureKind.locationPermission =>
           l.t('Wi-Fi identity is hidden', 'Данные Wi-Fi скрыты системой'),
+        AppFailureKind.sshHostKeyChanged =>
+          l.t('SSH host key changed', 'Изменился SSH-ключ роутера'),
+        AppFailureKind.portKnocking => l.t(
+            'Port knocking did not open the connection',
+            'Port knocking не открыл подключение'),
         AppFailureKind.stationNotFound => l.t(
             'Phone is not in the registration table',
             'Телефон не найден в registration table'),
@@ -200,14 +233,14 @@ class AppFailure {
   String description(L10n l) => switch (kind) {
         AppFailureKind.authentication => l.t(
             'The router answered but rejected the username or password. Also '
-                'check the policy required by REST, API or SSH.',
+                'check the permissions required by the selected transport.',
             'Роутер ответил, но не принял логин или пароль. Также проверь права, '
-                'необходимые для REST, API или SSH.'),
+                'необходимые выбранному транспорту.'),
         AppFailureKind.accessDenied => l.t(
-            'The account connected, but RouterOS denied one of the read-only '
-                'menus. Check the user group policies.',
-            'Учётная запись подключилась, но RouterOS запретил чтение одного из '
-                'меню. Проверь политики группы пользователя.'),
+            'The account connected, but the router denied one of the read-only '
+                'queries. Check the user permissions.',
+            'Учётная запись подключилась, но роутер запретил один из запросов '
+                'только для чтения. Проверь права пользователя.'),
         AppFailureKind.timeout => l.t(
             'Check that the phone is on the router network, the host and port '
                 'are correct, and the selected service is enabled.',
@@ -215,9 +248,9 @@ class AppFailure {
                 'а выбранный сервис включён.'),
         AppFailureKind.connectionRefused => l.t(
             'The host is reachable, but nothing accepts this connection. Check '
-                'the transport, port and RouterOS service state.',
+                'the transport, port and router service state.',
             'Узел доступен, но соединение на этом порту никто не принимает. '
-                'Проверь транспорт, порт и состояние сервиса RouterOS.'),
+                'Проверь транспорт, порт и состояние сервиса роутера.'),
         AppFailureKind.unreachable => l.t(
             'Check the router address and make sure the phone is connected to '
                 'a network that can reach it.',
@@ -229,14 +262,14 @@ class AppFailure {
             'Не удалось установить TLS-соединение. Проверь порт HTTPS/API-SSL, '
                 'сертификат или выбери правильный транспорт.'),
         AppFailureKind.unsupported => l.t(
-            'The selected protocol or required Wi-Fi/LTE menu is not available '
-                'on this RouterOS installation.',
-            'На этой установке RouterOS нет выбранного протокола или нужного '
-                'меню Wi-Fi/LTE.'),
+            'The selected protocol or required Wi-Fi/LTE data is not available '
+                'on this router.',
+            'На этом роутере нет выбранного протокола или нужных данных '
+                'Wi-Fi/LTE.'),
         AppFailureKind.sessionClosed => l.t(
-            'Android or RouterOS closed an idle session. The app retries once; '
+            'Android or the router closed an idle session. The app retries once; '
                 'use Retry if the session did not recover.',
-            'Android или RouterOS закрыли неактивную сессию. Приложение делает '
+            'Android или роутер закрыли неактивную сессию. Приложение делает '
                 'одну попытку восстановления; при необходимости нажми «Повторить».'),
         AppFailureKind.offWifi => l.t(
             'Connect to Wi-Fi to measure the link. Mobile data cannot provide '
@@ -248,6 +281,22 @@ class AppFailure {
                 'to reveal SSID and BSSID.',
             'Android требует разрешение геолокации и включённую службу, чтобы '
                 'показать SSID и BSSID.'),
+        AppFailureKind.sshHostKeyChanged => l.t(
+            'The router presented a different SSH key. This is expected after '
+                'a RouterOS reinstall or device replacement, but can also mean '
+                'that another host intercepted the connection. Verify the '
+                'fingerprint before trusting the new key.',
+            'Роутер предъявил другой SSH-ключ. Такое бывает после переустановки '
+                'RouterOS или замены устройства, но также может означать '
+                'перехват соединения. Проверь fingerprint перед тем, как '
+                'доверять новому ключу.'),
+        AppFailureKind.portKnocking => l.t(
+            'Check the sequence, protocols and delays, then make sure one '
+                'specific REST, API or SSH transport is selected. The app '
+                'does not change firewall rules on the router.',
+            'Проверь последовательность, протоколы и задержки, затем убедись, '
+                'что выбран один конкретный транспорт REST, API или SSH. '
+                'Приложение не меняет правила firewall на роутере.'),
         AppFailureKind.stationNotFound => l.t(
             'The phone is on a known AP, but has not appeared in its registration '
                 'table for several polls. It may be roaming or reconnecting.',
@@ -255,9 +304,9 @@ class AppFailure {
                 'появляется в registration table. Возможно, идёт роуминг или '
                 'переподключение.'),
         AppFailureKind.unmanagedAp => l.t(
-            'The phone is on Wi-Fi, but none of the configured MikroTiks reports '
+            'The phone is on Wi-Fi, but none of the configured routers reports '
                 'this BSSID/client. Only phone-side metrics are available.',
-            'Телефон в Wi-Fi, но ни один настроенный MikroTik не сообщает эту '
+            'Телефон в Wi-Fi, но ни один настроенный роутер не сообщает эту '
                 'BSSID/станцию. Доступны только показатели телефона.'),
         AppFailureKind.partialConnection => l.t(
             'Monitoring continues with the routers that answered. Open the '
@@ -271,13 +320,30 @@ class AppFailure {
                 'диагностический архив.'),
       };
 
-  bool get canRetry => kind != AppFailureKind.locationPermission;
+  String? userDetail(L10n l) {
+    final change = sshHostKeyChange;
+    if (change == null) return null;
+    return l.t(
+      '${change.presented.host}:${change.presented.port}\n'
+          'Previous: ${change.expected.fingerprint}\n'
+          'Presented: ${change.presented.fingerprint}',
+      '${change.presented.host}:${change.presented.port}\n'
+          'Прежний: ${change.expected.fingerprint}\n'
+          'Новый: ${change.presented.fingerprint}',
+    );
+  }
+
+  bool get canRetry =>
+      kind != AppFailureKind.locationPermission &&
+      kind != AppFailureKind.sshHostKeyChanged;
 
   bool get wantsConnectionEdit => switch (kind) {
         AppFailureKind.authentication ||
         AppFailureKind.accessDenied ||
         AppFailureKind.connectionRefused ||
         AppFailureKind.tls ||
+        AppFailureKind.sshHostKeyChanged ||
+        AppFailureKind.portKnocking ||
         AppFailureKind.unsupported =>
           true,
         _ => false,
@@ -290,11 +356,20 @@ class AppFailure {
         'kind': kind.name,
         'severity': severity.name,
         if (technical != null) 'technical': technical,
+        if (sshHostKeyChange != null) ...{
+          'ssh_host': sshHostKeyChange!.presented.host,
+          'ssh_port': sshHostKeyChange!.presented.port,
+          'ssh_previous_fingerprint': sshHostKeyChange!.expected.fingerprint,
+          'ssh_presented_fingerprint': sshHostKeyChange!.presented.fingerprint,
+        },
         'occurrences': occurrences,
       };
 
   static String _clean(Object error) {
-    final text = error.toString().replaceFirst('RouterOsException: ', '');
+    final text = error
+        .toString()
+        .replaceFirst('RouterOsException: ', '')
+        .replaceFirst('RouterAccessException: ', '');
     return text.length <= 500 ? text : '${text.substring(0, 500)}…';
   }
 }

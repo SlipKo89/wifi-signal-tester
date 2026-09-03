@@ -6,7 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-04
+
 ### Added
+- **Optional TCP/UDP port knocking for MikroTik Wi-Fi and LTE profiles.** A
+  profile can hold 1–8 ordered steps plus inter-step and post-knock delays. The
+  sequence runs before the selected REST, binary API or SSH connection and at
+  most once more after a genuine network/session failure. Authentication,
+  RouterOS command and SSH host-key errors never trigger another knock.
+- **Optional read-only Zabbix history integration** using a user-supplied API
+  token. It discovers readable hosts and active numeric items, shows raw
+  `history.get` data for 1/24 hours and hourly `trend.get` aggregates for 7/30
+  days, with a bounded raw-history fallback, min/average/max/latest summary and
+  a searchable metric picker. Zabbix 5.4/6.0 legacy and 6.4+ Bearer-style
+  authentication are selected from the unauthenticated API version probe.
+- In-app bilingual guidance for creating a dedicated Zabbix User role, granting
+  host-group Read access and allowing only `host.get`, `item.get`,
+  `history.get` and `trend.get`. Saved server profiles keep their tokens in
+  platform secure storage.
+- Zabbix profiles can select HTTPS or HTTP and specify a custom port separately
+  from the host/path. HTTPS remains the default; cleartext HTTP is labelled in
+  saved profiles and shows a persistent token-exposure warning.
+- Saved Wi-Fi and LTE sessions can now be linked to a Zabbix host and a checked
+  semantic mapping of signal, CPU, latency, loss, traffic or client-count
+  items. Opening the session requests Zabbix values for the same time window
+  and shows local and remote tracks on one synchronized timeline with a shared
+  cursor and separate honest Y scales. A combined long-form CSV can be shared.
+  Mapping metadata contains no token; external points are read on demand and
+  are never silently copied into the local SQLite histories.
+- **Keenetic Wi-Fi integration (Alpha)** over HTTPS RCI. The first compatibility
+  baseline is Runner 4G (KN-2212) with KeeneticOS 5.01.C.3.0-1 and provides the
+  current phone's AP-side RSSI, PHY rates and association facts alongside the
+  existing phone metrics, plus router model/version/CPU/uptime. Other Keenetic
+  models and releases are intentionally shown as unverified. Thanks to Netspay
+  for providing the test hardware.
 - LTE connection profiles now keep several routers in secure platform storage.
   The connection screen lets the operator select or forget one router, and
   transparently migrates the previous single-profile format.
@@ -17,13 +50,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   presence, MTU, roaming, driver/network mode and native band/operator locks.
   Passed checks, compatibility notes, MikroTik documentation links and a
   dedicated PDF export are included.
+- **F-Droid/Fastlane store metadata** in English and Russian, with the app icon,
+  redacted screenshots and version-specific release notes. The listing remains
+  maintained and versioned beside the source code without adding signing keys
+  or a Fastlane runtime dependency.
+
+### Changed
+- Wi-Fi monitoring now offers Fast, Normal, Economical and Custom polling
+  profiles. Live signal/ping, router health/CPU and IP-to-MAC discovery have
+  independent intervals; the latter two are cached instead of being requested
+  on every signal sample. A network/BSSID change invalidates client discovery
+  immediately, and the BSSID-owning/serving router is queried first.
+- Live Wi-Fi polling and ping pause while the app is in the background and
+  resume with an immediate fresh sample. This avoids invisible router traffic
+  and stale throughput spikes without weakening roaming detection while the app
+  is on screen.
+- New Wi-Fi recordings remember the serving router address and open as detailed
+  sessions with signal, SNR and client-traffic timelines. Existing databases
+  migrate in place; old sessions remain readable and can use a per-session
+  Zabbix link.
+
+### Removed
+- Removed the unused `cupertino_icons` direct dependency and the unused GitHub
+  issues URL constant. This does not change the application UI or behaviour.
 
 ### Security
+- Port-knocking sequences are stored only inside the existing platform-secure
+  router profiles, concealed by default in the UI and excluded from support
+  reports and transport events. Knocking requires one explicitly selected
+  transport, so it cannot fan out into REST/API/SSH probing. The app sends only
+  the configured TCP/UDP packets and never creates or changes RouterOS firewall
+  rules; an existing rule may temporarily place the device IP in a dynamic
+  address list as the intended network-side effect.
+- SSH connections now use trust on first use (TOFU). The key is remembered in
+  platform secure storage only after authentication and a successful read-only
+  identity probe. If the same host later presents another key, Wi-Fi and LTE
+  connections stop and show the previous/new fingerprints; replacing the saved
+  key requires an explicit user action.
+- Self-signed TLS certificates on MikroTik REST/API remain accepted by design
+  for typical private-LAN installations. This exception does not apply to
+  Zabbix or Keenetic HTTPS.
+- The Zabbix client has a compiled read-only JSON-RPC allowlist and no public
+  generic call. It never creates users/tokens, changes monitoring objects or
+  acknowledges problems. HTTPS uses normal certificate validation. Explicitly
+  selected HTTP is unencrypted and therefore warns that the token and metrics
+  are exposed in transit; it is intended only for a trusted LAN/VPN. Tokens are
+  excluded from logs and support bundles. Forgetting a profile only removes its
+  local secure-storage copy and explicitly does not claim to revoke the
+  server-side token.
+- The Keenetic client exposes no generic RCI command method. Its only POST is
+  the required x-ndw2 `/auth` exchange; all diagnostic reads are limited to a
+  compiled whitelist of five `GET /rci/show/...` paths. Credentials remain in
+  secure platform storage, and association/DHCP rows are filtered in memory to
+  the exact requested MAC/IP.
 - LTE audit menu reads use explicit field projections. SIM PIN, APN username
   and password, `modem-init`, IMEI, IMSI and ICCID are never requested. The
   audit does not run `at-chat`, scan, cell-monitor or any write-capable command.
-
 ### Fixed
+- Wi-Fi and LTE controllers now expose an idempotent, awaitable shutdown path.
+  It stops timers and new work, waits for in-flight connect/poll operations,
+  then independently closes ping/audio, RouterOS sessions and SQLite stores.
+  Synchronous Flutter `dispose()` starts that same guarded Future, so cleanup
+  errors are observed and one failed resource cannot prevent the others from
+  closing.
+- Wi-Fi measurement history now serialises concurrent SQLite opening, retries
+  cleanly after an opening failure, deletes related session rows atomically and
+  closes its database when the monitoring controller is disposed. Its existing
+  database schema and recorded sessions remain compatible.
+- Every full-screen view and modal detail sheet now follows one shared bottom
+  safe-area policy. Long lists, cards and action buttons remain fully scrollable
+  above Android gesture navigation and Samsung three-button navigation.
+- LTE configuration audit over SSH now falls back to plain `print` for the two
+  explicitly safe singleton menus `/system/resource` and
+  `/interface/lte/settings` when that RouterOS build rejects
+  `terse/proplist`. The complete output is immediately projected locally.
+- LTE interface identity is read separately from model/version-dependent
+  properties. A failed optional projection can no longer turn an already
+  selected and monitored `lte1` into the false critical finding “Selected LTE
+  interface is unavailable”; dependent checks are marked incomplete instead.
 - An initial zero-filled `monitor once` response, seen on some SSH/modem
   combinations, is no longer treated as a real LTE measurement. The dashboard
   shows a bilingual loading/status card and keeps polling until plausible radio

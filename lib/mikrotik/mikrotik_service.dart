@@ -1,67 +1,28 @@
 import '../models/station_signal.dart';
 import '../models/wireless_stack.dart';
+import '../router/router_connection.dart';
+import '../router/wifi_router_service.dart';
 import 'binary_api_transport.dart';
+import 'knock_aware_transport.dart';
 import 'rest_transport.dart';
 import 'router_os_transport.dart';
 import 'ssh_transport.dart';
+import 'ssh_host_key_store.dart';
 
 export 'router_os_transport.dart' show TransportPreference;
-
-/// Connection settings for a router.
-class RouterConnection {
-  final String host;
-  final String username;
-  final String password;
-
-  /// Preferred transport; the service falls back to the others on failure.
-  final TransportPreference transport;
-  final bool useTls;
-
-  /// Non-default port. Only meaningful with an explicit [transport] — in `auto`
-  /// mode each candidate uses its own standard port.
-  final int? port;
-
-  const RouterConnection({
-    required this.host,
-    required this.username,
-    required this.password,
-    this.transport = TransportPreference.auto,
-    this.useTls = true,
-    this.port,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'host': host,
-        'username': username,
-        'password': password,
-        'transport': transport.name,
-        'useTls': useTls,
-        if (port != null) 'port': port,
-      };
-
-  factory RouterConnection.fromJson(Map<String, dynamic> j) => RouterConnection(
-        host: j['host'] as String,
-        username: j['username'] as String,
-        password: j['password'] as String,
-        transport: TransportPreference.values.firstWhere(
-          (t) => t.name == j['transport'],
-          orElse: () => TransportPreference.auto,
-        ),
-        useTls: j['useTls'] as bool? ?? true,
-        port: (j['port'] as num?)?.toInt(),
-      );
-}
+export '../router/router_connection.dart' show RouterConnection, RouterVendor;
 
 /// High-level, read-only orchestration over a [RouterOsTransport]:
 /// picks a transport, detects the wireless stack, and returns the signal for
 /// exactly one MAC (ours).
-class MikrotikService {
+class MikrotikService implements WifiRouterService {
   RouterOsTransport? _transport;
   final TransportEventSink? onEvent;
 
   MikrotikService({this.onEvent});
 
   /// The router this service talks to (host is used as a label).
+  @override
   String? host;
 
   /// Every registration table the router actually exposes (an endpoint can
@@ -82,9 +43,25 @@ class MikrotikService {
   int? _nf5g;
 
   WirelessStack? get stack => _stack;
+  @override
+  RouterVendor get vendor => RouterVendor.mikrotik;
+  @override
   String? get transportKind => _transport?.kind;
+  @override
+  String? get stackLabel => _stack?.label;
+  @override
+  String get platformLabel => 'RouterOS';
+  @override
+  bool get alphaIntegration => false;
+  @override
+  String? get deviceModel => null;
+  @override
+  String? get softwareVersion => null;
+  @override
+  bool get compatibilityVerified => true;
 
   /// AP name for a BSSID the phone reports, if this router owns that radio.
+  @override
   String? apNameForBssid(String? bssid) =>
       bssid == null ? null : _bssidToAp[bssid.toLowerCase()];
 
@@ -100,6 +77,7 @@ class MikrotikService {
   }
 
   /// Router health: cpu-load, version, board-name, uptime, free/total memory.
+  @override
   Future<Map<String, String>?> readResource() async {
     try {
       final r = await _transport!.read('/system/resource');
@@ -110,24 +88,34 @@ class MikrotikService {
   }
 
   /// Noise floor for the band of [mhz], falling back to the other band.
+  @override
   int? noiseFloorForFreq(int? mhz) {
     if (mhz != null && mhz >= 4900) return _nf5g ?? _nf2g;
     return _nf2g ?? _nf5g;
   }
 
   /// Connects using the preferred transport, falling back to the other.
+  @override
   Future<void> connect(RouterConnection cfg) async {
+    if (cfg.portKnocking.enabled && cfg.transport == TransportPreference.auto) {
+      throw RouterOsException(
+        'Port knocking requires an explicitly selected transport',
+      );
+    }
+    if (cfg.portKnocking.validationError != null) {
+      throw RouterOsException('Invalid port-knocking configuration');
+    }
     host = cfg.host;
     final attempts = <RouterOsTransport>[];
     switch (cfg.transport) {
       case TransportPreference.rest:
-        attempts.add(_rest(cfg));
+        attempts.add(_withKnocking(cfg, _rest(cfg)));
         break;
       case TransportPreference.binary:
-        attempts.add(_binary(cfg));
+        attempts.add(_withKnocking(cfg, _binary(cfg)));
         break;
       case TransportPreference.ssh:
-        attempts.add(_ssh(cfg));
+        attempts.add(_withKnocking(cfg, _ssh(cfg)));
         break;
       case TransportPreference.auto:
         // SSH last: it is the slowest (a console command per read) but the most
@@ -151,6 +139,7 @@ class MikrotikService {
       } catch (e) {
         lastError = e;
         await t.close();
+        if (e is SshHostKeyChangedException) rethrow;
       }
     }
     throw RouterOsException('Could not connect: ${lastError ?? 'unknown'}');
@@ -184,6 +173,18 @@ class MikrotikService {
         password: cfg.password,
         port: _portFor(cfg, TransportPreference.ssh),
       );
+
+  RouterOsTransport _withKnocking(
+    RouterConnection cfg,
+    RouterOsTransport transport,
+  ) {
+    if (!cfg.portKnocking.enabled) return transport;
+    return KnockAwareTransport(
+      delegate: transport,
+      host: cfg.host,
+      config: cfg.portKnocking,
+    );
+  }
 
   Future<void> _detectStacks() async {
     final t = _transport!;
@@ -266,6 +267,7 @@ class MikrotikService {
   }
 
   /// Resolves our MAC from our IP via ARP, then DHCP leases as a fallback.
+  @override
   Future<String?> resolveMacForIp(String ip) async {
     final t = _transport!;
     final arp = await t.read('/ip/arp');
@@ -296,6 +298,7 @@ class MikrotikService {
   /// some tables answer 200-but-empty, so we search them all (last-found first)
   /// instead of committing to one. Matches case-insensitively and locally —
   /// registration tables are tiny.
+  @override
   Future<StationSignal?> fetchStation(String mac) async {
     final t = _transport!;
     final target = mac.toLowerCase();
@@ -334,6 +337,7 @@ class MikrotikService {
     return result;
   }
 
+  @override
   Future<void> close() async {
     await _transport?.close();
     _transport = null;

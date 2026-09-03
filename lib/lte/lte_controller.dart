@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../diagnostics/app_failure.dart';
+import '../mikrotik/ssh_host_key_store.dart';
 import '../audit/audit.dart';
 import 'lte_audit.dart';
 import 'lte_diagnostics.dart';
@@ -15,16 +16,23 @@ enum LteMonitorState { idle, connecting, connected, error }
 class LteController extends ChangeNotifier {
   static const liveHistoryLimit = 600;
   static const diagnosticHistoryLimit = 60;
+  static const _cleanupTimeout = Duration(seconds: 3);
+  static const _activeOperationShutdownTimeout = Duration(seconds: 12);
 
   final LteService _service;
   final LteHistoryStore recordings;
   Timer? _timer;
   bool _refreshing = false;
+  Completer<void>? _refreshDone;
+  Completer<void>? _connectDone;
+  bool _shuttingDown = false;
+  Future<void>? _shutdownFuture;
   int _generation = 0;
   int? _recordingSessionId;
 
   LteMonitorState state = LteMonitorState.idle;
   AppFailure? failure;
+  SshHostKeyChangedException? _pendingSshHostKeyChange;
   LteConnection? _lastConnection;
   LteSignal? signal;
   Map<String, String>? routerResource;
@@ -68,13 +76,34 @@ class LteController extends ChangeNotifier {
     return int.tryParse(RegExp(r'\d+').firstMatch(raw)?.group(0) ?? '');
   }
 
-  Future<bool> connect(LteConnection connection) async {
-    await stopRecording(notify: false);
+  Future<bool> connect(LteConnection connection) {
+    if (_shuttingDown) return Future.value(false);
+    final done = Completer<void>();
+    _connectDone = done;
+    return _connectTracked(connection, done);
+  }
+
+  Future<bool> _connectTracked(
+    LteConnection connection,
+    Completer<void> done,
+  ) async {
+    try {
+      return await _connectInternal(connection);
+    } finally {
+      if (!done.isCompleted) done.complete();
+      if (identical(_connectDone, done)) _connectDone = null;
+    }
+  }
+
+  Future<bool> _connectInternal(LteConnection connection) async {
     _generation++;
     final generation = _generation;
+    await stopRecording(notify: false);
+    if (_shuttingDown || generation != _generation) return false;
     stopLive(notify: false);
     state = LteMonitorState.connecting;
     failure = null;
+    _pendingSshHostKeyChange = null;
     signal = null;
     routerResource = null;
     history.clear();
@@ -88,26 +117,40 @@ class LteController extends ChangeNotifier {
 
     try {
       await _service.connect(connection);
-      if (generation != _generation) return false;
+      if (_shuttingDown || generation != _generation) {
+        await _ignoreCleanup(_service.close);
+        return false;
+      }
       routerResource = await _service.readResource();
-      if (generation != _generation) return false;
+      if (_shuttingDown || generation != _generation) {
+        await _ignoreCleanup(_service.close);
+        return false;
+      }
       state = LteMonitorState.connected;
       waitingForFirstSample = true;
       notifyListeners();
       startLive();
       await refresh();
+      if (_shuttingDown || generation != _generation) return false;
       return true;
     } catch (e) {
-      if (generation != _generation) return false;
+      if (_shuttingDown || generation != _generation) {
+        await _ignoreCleanup(_service.close);
+        return false;
+      }
+      if (e is SshHostKeyChangedException) {
+        _pendingSshHostKeyChange = e;
+      }
       state = LteMonitorState.error;
       failure = AppFailure.classify(e);
       notifyListeners();
-      await _service.close();
+      await _ignoreCleanup(_service.close);
       return false;
     }
   }
 
   Future<void> retry() async {
+    if (_shuttingDown) return;
     final connection = _lastConnection;
     if (connection == null) return;
     if (state == LteMonitorState.connected) {
@@ -117,9 +160,22 @@ class LteController extends ChangeNotifier {
     }
   }
 
+  Future<void> trustNewSshHostKey() async {
+    if (_shuttingDown) return;
+    final change = _pendingSshHostKeyChange;
+    if (change == null) return;
+    await trustChangedSshHostKey(change);
+    _pendingSshHostKeyChange = null;
+    await retry();
+  }
+
   Future<void> refresh() async {
-    if (_refreshing || state != LteMonitorState.connected) return;
+    if (_refreshing || _shuttingDown || state != LteMonitorState.connected) {
+      return;
+    }
     _refreshing = true;
+    final done = Completer<void>();
+    _refreshDone = done;
     final generation = _generation;
     if (waitingForFirstSample) firstSampleAttempts++;
     try {
@@ -144,11 +200,14 @@ class LteController extends ChangeNotifier {
       failure = AppFailure.classify(e);
     } finally {
       _refreshing = false;
-      if (generation == _generation) notifyListeners();
+      if (!done.isCompleted) done.complete();
+      if (identical(_refreshDone, done)) _refreshDone = null;
+      if (!_shuttingDown && generation == _generation) notifyListeners();
     }
   }
 
   void startLive() {
+    if (_shuttingDown) return;
     _timer?.cancel();
     _timer = Timer.periodic(pollInterval, (_) => refresh());
     notifyListeners();
@@ -165,16 +224,20 @@ class LteController extends ChangeNotifier {
   void stopLive({bool notify = true}) {
     _timer?.cancel();
     _timer = null;
-    if (notify) notifyListeners();
+    if (notify && !_shuttingDown) notifyListeners();
   }
 
   Future<bool> startRecording({String? routerLabel}) async {
-    if (recording || state != LteMonitorState.connected || signal == null) {
+    if (_shuttingDown ||
+        recording ||
+        state != LteMonitorState.connected ||
+        signal == null) {
       return false;
     }
     final current = signal!;
     final now = DateTime.now();
     final router = routerBoard ?? routerLabel;
+    final routerHost = routerLabel?.trim();
     final titleParts = <String>[
       if (router != null && router.trim().isNotEmpty) router.trim(),
       current.interfaceName,
@@ -185,6 +248,8 @@ class LteController extends ChangeNotifier {
         startedMs: now.millisecondsSinceEpoch,
         title: titleParts.join(' · '),
         router: router,
+        routerHost:
+            routerHost == null || routerHost.isEmpty ? null : routerHost,
         interfaceName: current.interfaceName,
         operatorName: current.operatorName,
         technology: current.technology,
@@ -244,12 +309,20 @@ class LteController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    if (_shuttingDown) {
+      await shutdown();
+      return;
+    }
     _generation++;
     stopLive(notify: false);
+    final serviceClose = _ignoreCleanup(_service.close);
+    final refresh = _refreshDone?.future;
+    if (refresh != null) await refresh;
     await stopRecording(notify: false);
-    await _service.close();
+    await serviceClose;
     state = LteMonitorState.idle;
     failure = null;
+    _pendingSshHostKeyChange = null;
     signal = null;
     routerResource = null;
     history.clear();
@@ -258,6 +331,49 @@ class LteController extends ChangeNotifier {
     waitingForFirstSample = false;
     firstSampleAttempts = 0;
     notifyListeners();
+  }
+
+  /// Terminal, idempotent cleanup for the controller's timer, current
+  /// operation, RouterOS transport and SQLite history.
+  Future<void> shutdown() {
+    final existing = _shutdownFuture;
+    if (existing != null) return existing;
+    _shuttingDown = true;
+    _generation++;
+    _timer?.cancel();
+    _timer = null;
+    final future = _shutdownResources();
+    _shutdownFuture = future;
+    return future;
+  }
+
+  Future<void> _shutdownResources() async {
+    final connect = _connectDone?.future;
+    final refresh = _refreshDone?.future;
+    if (connect != null || refresh != null) {
+      try {
+        await Future.wait([
+          if (connect != null) connect,
+          if (refresh != null) refresh,
+        ]).timeout(_activeOperationShutdownTimeout);
+      } catch (_) {
+        // Continue with bounded resource cleanup even if a transport call is
+        // stuck beyond its own normal timeout.
+      }
+    }
+    await _ignoreCleanup(() => stopRecording(notify: false));
+    await Future.wait([
+      _ignoreCleanup(_service.close),
+      _ignoreCleanup(recordings.close),
+    ]);
+  }
+
+  Future<void> _ignoreCleanup(Future<void> Function() action) async {
+    try {
+      await action().timeout(_cleanupTimeout);
+    } catch (_) {
+      // Cleanup is best-effort, but its Future is always observed.
+    }
   }
 
   ({double min, double average, double max})? stats(
@@ -272,13 +388,7 @@ class LteController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _generation++;
-    _timer?.cancel();
-    unawaited(() async {
-      await stopRecording(notify: false);
-      await recordings.close();
-    }());
-    unawaited(_service.close());
+    unawaited(shutdown());
     super.dispose();
   }
 }

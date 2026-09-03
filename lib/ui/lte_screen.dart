@@ -10,6 +10,7 @@ import '../lte/lte_diagnostics.dart';
 import '../lte/lte_quality_score.dart';
 import '../lte/lte_service.dart';
 import '../lte/lte_signal.dart';
+import '../mikrotik/port_knocking.dart';
 import '../mikrotik/router_os_transport.dart';
 import '../settings/settings_controller.dart';
 import 'lte_alignment_screen.dart';
@@ -17,7 +18,9 @@ import 'lte_audit_screen.dart';
 import 'lte_history_screen.dart';
 import 'metric_help.dart';
 import 'theme.dart';
+import 'widgets/app_safe_area.dart';
 import 'widgets/metric_tile.dart';
+import 'widgets/port_knocking_editor.dart';
 import 'widgets/zoomable_lte_chart.dart';
 
 class LteScreen extends StatefulWidget {
@@ -39,6 +42,7 @@ class _LteScreenState extends State<LteScreen> {
   TransportPreference _transport = TransportPreference.auto;
   bool _useTls = true;
   bool _obscurePassword = true;
+  PortKnockConfig _portKnocking = const PortKnockConfig.disabled();
   List<LteConnection> _savedProfiles = const [];
 
   @override
@@ -65,6 +69,7 @@ class _LteScreenState extends State<LteScreen> {
     _useTls = saved.useTls;
     _port.text = saved.port?.toString() ?? '';
     _interface.text = saved.interfaceName ?? '';
+    _portKnocking = saved.portKnocking;
   }
 
   void _newProfile() {
@@ -79,6 +84,7 @@ class _LteScreenState extends State<LteScreen> {
     _useTls = true;
     _port.clear();
     _interface.clear();
+    _portKnocking = const PortKnockConfig.disabled();
   }
 
   void _changed() {
@@ -117,6 +123,28 @@ class _LteScreenState extends State<LteScreen> {
       );
       return;
     }
+    if (_portKnocking.enabled && _transport == TransportPreference.auto) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l.t(
+            'Choose one transport before using port knocking.',
+            'Перед использованием port knocking выбери один конкретный транспорт.',
+          )),
+        ),
+      );
+      return;
+    }
+    if (_portKnocking.validationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l.t(
+            'Add 1–${PortKnockConfig.maxSteps} valid port-knocking steps.',
+            'Добавь от 1 до ${PortKnockConfig.maxSteps} корректных шагов port knocking.',
+          )),
+        ),
+      );
+      return;
+    }
     final connection = LteConnection(
       host: host,
       username: username,
@@ -126,6 +154,7 @@ class _LteScreenState extends State<LteScreen> {
       port: port,
       interfaceName:
           _interface.text.trim().isEmpty ? null : _interface.text.trim(),
+      portKnocking: _portKnocking,
     );
     if (await _controller.connect(connection)) {
       _alignmentSession.reset();
@@ -303,7 +332,7 @@ class _LteScreenState extends State<LteScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: AppSafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -312,6 +341,9 @@ class _LteScreenState extends State<LteScreen> {
                 failure: _controller.failure!,
                 l: l,
                 onRetry: _controller.retry,
+                onTrustHostKey: _controller.failure!.sshHostKeyChange == null
+                    ? null
+                    : _controller.trustNewSshHostKey,
               ),
             if (connected)
               _LteDashboard(
@@ -442,6 +474,7 @@ class _LteScreenState extends State<LteScreen> {
               items: [
                 DropdownMenuItem(
                   value: TransportPreference.auto,
+                  enabled: !_portKnocking.enabled,
                   child: Text(l.t(
                       'Auto (REST → API → SSH)', 'Авто (REST → API → SSH)')),
                 ),
@@ -506,6 +539,15 @@ class _LteScreenState extends State<LteScreen> {
                   ),
                 ],
               ],
+            ),
+            const SizedBox(height: 12),
+            PortKnockingEditor(
+              value: _portKnocking,
+              l: l,
+              enabled: !busy,
+              requiresExplicitTransport: _portKnocking.enabled &&
+                  _transport == TransportPreference.auto,
+              onChanged: (value) => setState(() => _portKnocking = value),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -587,6 +629,7 @@ class _LteScreenState extends State<LteScreen> {
       profile.username,
       if (profile.interfaceName?.isNotEmpty ?? false) profile.interfaceName!,
       profile.port == null ? transport : '$transport:${profile.port}',
+      if (profile.portKnocking.enabled) 'Knock',
     ];
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1273,11 +1316,13 @@ class _LteFailureCard extends StatelessWidget {
   final AppFailure failure;
   final L10n l;
   final VoidCallback onRetry;
+  final Future<void> Function()? onTrustHostKey;
 
   const _LteFailureCard({
     required this.failure,
     required this.l,
     required this.onRetry,
+    this.onTrustHostKey,
   });
 
   @override
@@ -1309,11 +1354,41 @@ class _LteFailureCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(failure.description(l),
                       style: const TextStyle(fontSize: 12, height: 1.35)),
+                  if (failure.userDetail(l) case final detail?) ...[
+                    const SizedBox(height: 7),
+                    SelectableText(
+                      detail,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 5),
-                  TextButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh, size: 17),
-                    label: Text(l.t('Retry', 'Повторить')),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (failure.canRetry)
+                        TextButton.icon(
+                          onPressed: onRetry,
+                          icon: const Icon(Icons.refresh, size: 17),
+                          label: Text(l.t('Retry', 'Повторить')),
+                        ),
+                      if (onTrustHostKey != null)
+                        TextButton.icon(
+                          onPressed: onTrustHostKey,
+                          icon: const Icon(
+                            Icons.verified_user_outlined,
+                            size: 17,
+                          ),
+                          label: Text(l.t(
+                            'Trust new SSH key',
+                            'Доверять новому SSH-ключу',
+                          )),
+                        ),
+                    ],
                   ),
                 ],
               ),

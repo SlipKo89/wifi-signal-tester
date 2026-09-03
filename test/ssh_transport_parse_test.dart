@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wifi_apk/lte/lte_signal.dart';
+import 'package:wifi_apk/mikrotik/router_os_transport.dart';
 import 'package:wifi_apk/mikrotik/ssh_transport.dart';
 
 /// The samples below are verbatim RouterOS 7.22 output captured over SSH from a
@@ -158,6 +159,73 @@ void main() {
       expect(signal.bandwidthMhz, 20);
       expect(signal.earfcn, 3250);
       expect(signal.rsrq, -12.5);
+    });
+  });
+
+  group('projected singleton reads', () {
+    test('system resource falls back to safe plain print', () async {
+      final commands = <String>[];
+      final transport = SshTransport.forTesting((command) async {
+        commands.add(command);
+        if (command == '/system resource print') {
+          return '       uptime: 2d3h\n'
+              '       version: 7.21.1 (stable)\n'
+              '    board-name: SXTR\n'
+              '    free-memory: 64MiB';
+        }
+        return 'expected end of command';
+      });
+
+      final rows = await transport.read(
+        '/system/resource',
+        fields: const ['board-name', 'version', 'uptime'],
+      );
+
+      expect(rows.single, {
+        'board-name': 'SXTR',
+        'version': '7.21.1 (stable)',
+        'uptime': '2d3h',
+      });
+      expect(commands.last, '/system resource print');
+      expect(commands.where((command) => command.contains('proplist')),
+          hasLength(2));
+    });
+
+    test('LTE settings falls back to safe plain print', () async {
+      final commands = <String>[];
+      final transport = SshTransport.forTesting((command) async {
+        commands.add(command);
+        if (command == '/interface lte settings print') {
+          return '       mode: auto\n'
+              '   sim-slot: a\n'
+              'firmware-path: firmware';
+        }
+        return 'expected end of command';
+      });
+
+      final rows = await transport.read(
+        '/interface/lte/settings',
+        fields: const ['mode', 'sim-slot'],
+      );
+
+      expect(rows.single, {'mode': 'auto', 'sim-slot': 'a'});
+      expect(commands.last, '/interface lte settings print');
+    });
+
+    test('sensitive LTE interface menu never gets an unprojected fallback',
+        () async {
+      final commands = <String>[];
+      final transport = SshTransport.forTesting((command) async {
+        commands.add(command);
+        return 'expected end of command';
+      });
+
+      await expectLater(
+        transport.read('/interface/lte', fields: const ['name', 'running']),
+        throwsA(isA<RouterOsException>()),
+      );
+      expect(commands, isNot(contains('/interface lte print')));
+      expect(commands.every((command) => command.contains('proplist')), isTrue);
     });
   });
 }

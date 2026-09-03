@@ -5,6 +5,9 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:meta/meta.dart';
 
 import 'router_os_transport.dart';
+import 'ssh_host_key_store.dart';
+
+typedef SshCommandRunner = Future<String> Function(String command);
 
 /// RouterOS SSH transport: runs console commands over SSH and parses the CLI
 /// output back into the same rows the REST/API transports return.
@@ -31,8 +34,12 @@ class SshTransport implements RouterOsTransport {
   final String username;
   final String password;
   final Duration timeout;
+  final SshCommandRunner? _commandRunner;
+  final SshHostKeyStore _hostKeyStore;
 
   SSHClient? _client;
+  SshHostKeyRecord? _pendingFirstUseKey;
+  SshHostKeyChangedException? _rejectedHostKey;
 
   /// RouterOS runs one command per channel; requests are serialised so a poll
   /// and an audit can't interleave on the same connection.
@@ -76,6 +83,14 @@ class SshTransport implements RouterOsTransport {
   /// carries the numbers we came for.
   static const _signalKeys = ['signal-strength', 'rx-signal', 'signal'];
 
+  /// These singleton menus reject `terse`/`proplist` on some RouterOS builds.
+  /// Their complete plain output contains no credentials or modem identifiers,
+  /// so it is safe to parse it locally and immediately apply [fields].
+  static const _safePlainPrintFallbackMenus = {
+    '/system/resource',
+    '/interface/lte/settings',
+  };
+
   /// ANSI/VT sequences RouterOS may still emit.
   static final _ansiRe = RegExp(r'\x1B\[[0-9;?]*[a-zA-Z]');
 
@@ -85,7 +100,22 @@ class SshTransport implements RouterOsTransport {
     required this.password,
     int? port,
     this.timeout = const Duration(seconds: 10),
-  }) : port = port ?? 22;
+    SshHostKeyStore? hostKeyStore,
+  })  : port = port ?? 22,
+        _commandRunner = null,
+        _hostKeyStore = hostKeyStore ?? defaultSshHostKeyStore;
+
+  @visibleForTesting
+  SshTransport.forTesting(
+    SshCommandRunner commandRunner, {
+    SshHostKeyStore? hostKeyStore,
+  })  : host = 'test.invalid',
+        port = 22,
+        username = 'test',
+        password = '',
+        timeout = const Duration(seconds: 1),
+        _commandRunner = commandRunner,
+        _hostKeyStore = hostKeyStore ?? defaultSshHostKeyStore;
 
   @override
   String get kind => 'SSH';
@@ -120,6 +150,7 @@ class SshTransport implements RouterOsTransport {
     if (identity.trim().isEmpty) {
       throw RouterOsException('SSH connected but the console returned nothing');
     }
+    await _rememberFirstUseKey();
   }
 
   Future<SSHClient> _login(String user) async {
@@ -129,16 +160,80 @@ class SshTransport implements RouterOsTransport {
       socket,
       username: user,
       onPasswordRequest: () => password,
+      onVerifyHostKey: (algorithm, fingerprint) => _verifyHostKey(
+        algorithm,
+        utf8.decode(fingerprint, allowMalformed: false),
+      ),
     );
     try {
       await client.authenticated.timeout(timeout);
     } catch (e) {
       client.close();
+      final changed = _rejectedHostKey;
+      if (changed != null) {
+        _rejectedHostKey = null;
+        throw changed;
+      }
       if (e is SSHAuthFailError) rethrow;
       throw RouterOsException(_friendly(e));
     }
     return client;
   }
+
+  Future<bool> _verifyHostKey(String algorithm, String fingerprint) async {
+    final presented = SshHostKeyRecord(
+      host: host,
+      port: port,
+      algorithm: algorithm,
+      fingerprint: fingerprint,
+    );
+    final expected = await _hostKeyStore.read(host, port);
+    if (expected == null) {
+      // Do not persist a key before authentication and the read-only identity
+      // probe succeed. A typo in a password must not pin an unrelated host.
+      _pendingFirstUseKey = presented;
+      return true;
+    }
+    if (expected.algorithm == presented.algorithm &&
+        expected.fingerprint == presented.fingerprint) {
+      _pendingFirstUseKey = null;
+      return true;
+    }
+    _rejectedHostKey = SshHostKeyChangedException(
+      expected: expected,
+      presented: presented,
+    );
+    return false;
+  }
+
+  Future<void> _rememberFirstUseKey() async {
+    final pending = _pendingFirstUseKey;
+    if (pending == null) return;
+    final existing = await _hostKeyStore.read(host, port);
+    if (existing == null) {
+      await _hostKeyStore.write(pending);
+    } else if (existing.algorithm != pending.algorithm ||
+        existing.fingerprint != pending.fingerprint) {
+      throw SshHostKeyChangedException(
+        expected: existing,
+        presented: pending,
+      );
+    }
+    _pendingFirstUseKey = null;
+  }
+
+  @visibleForTesting
+  Future<bool> verifyHostKeyForTesting(
+    String algorithm,
+    String fingerprint,
+  ) =>
+      _verifyHostKey(algorithm, fingerprint);
+
+  @visibleForTesting
+  Future<void> rememberFirstUseKeyForTesting() => _rememberFirstUseKey();
+
+  @visibleForTesting
+  SshHostKeyChangedException? get rejectedHostKeyForTesting => _rejectedHostKey;
 
   String _friendly(Object e) {
     if (e is TimeoutException) return 'SSH timed out';
@@ -192,6 +287,25 @@ class SshTransport implements RouterOsTransport {
       }
       lastError = null;
       break;
+    }
+    if (fields != null &&
+        fields.isNotEmpty &&
+        _safePlainPrintFallbackMenus.contains(menuPath) &&
+        (lastError != null || rows.isEmpty)) {
+      // Do not generalise this fallback: an unprojected `/interface/lte print`
+      // can contain SIM PIN or modem-init. Only the two explicitly safe
+      // singleton menus above may be read without a server-side projection.
+      final out = await _run('$menu print');
+      if (_isSyntaxError(out)) {
+        lastError = out.trim().split('\n').first;
+      } else {
+        rows = parseRecords(out);
+        if (rows.isEmpty) {
+          final single = parseLabelled(out);
+          if (single.isNotEmpty) rows = [single];
+        }
+        lastError = null;
+      }
     }
     if (lastError != null) {
       throw RouterOsException('$menuPath: $lastError');
@@ -255,7 +369,9 @@ class SshTransport implements RouterOsTransport {
   /// Serialises the command, runs it, and returns stdout+stderr as text.
   Future<String> _run(String command) {
     final safe = _readOnlyCommand(command);
-    final result = _queue.then((_) => _exec(safe));
+    final result = _queue.then(
+      (_) => _commandRunner == null ? _exec(safe) : _commandRunner(safe),
+    );
     // Keep the chain alive even if this command failed.
     _queue = result.then((_) {}, onError: (_) {});
     return result;

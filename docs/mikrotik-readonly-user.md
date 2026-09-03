@@ -43,6 +43,23 @@ Lock the services down to your test subnet if you can:
 /ip service set ssh     address=192.168.88.0/24
 ```
 
+## Optional port knocking
+
+The app can use an **existing** RouterOS port-knocking firewall sequence before
+REST, binary API or SSH. Configure and test that sequence independently using
+the official MikroTik guidance; the app deliberately has no method that creates
+or changes firewall/address-list rules.
+
+In the Wi-Fi or LTE profile, enable the advanced port-knocking block, enter the
+exact ordered TCP/UDP steps and select one transport explicitly. `Auto` is not
+allowed in this mode. The sequence is stored in platform secure storage and is
+not included in support reports. Sending it may cause your existing firewall
+rules to place the source in a temporary dynamic address list — that is the
+intended exception at the network layer, not a RouterOS configuration write by
+the app.
+
+Official guide: <https://help.mikrotik.com/docs/spaces/ROS/pages/154042369/Port%2Bknocking>
+
 ## The SSH transport, specifically
 
 REST and the binary API are kept read-only by a shared command gate: menu reads
