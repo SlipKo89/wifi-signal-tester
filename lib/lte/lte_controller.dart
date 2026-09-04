@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../diagnostics/app_failure.dart';
 import '../mikrotik/ssh_host_key_store.dart';
+import '../routeros_updates/routeros_security.dart';
 import '../audit/audit.dart';
 import 'lte_audit.dart';
 import 'lte_diagnostics.dart';
@@ -21,6 +22,7 @@ class LteController extends ChangeNotifier {
 
   final LteService _service;
   final LteHistoryStore recordings;
+  final RouterOsSecurityService _routerOsSecurity;
   Timer? _timer;
   bool _refreshing = false;
   Completer<void>? _refreshDone;
@@ -36,6 +38,8 @@ class LteController extends ChangeNotifier {
   LteConnection? _lastConnection;
   LteSignal? signal;
   Map<String, String>? routerResource;
+  RouterOsSecurityStatus? routerOsSecurityWarning;
+  bool routerOsSecurityChecking = false;
   final List<LteSignal> history = [];
   DateTime? lastUpdated;
   Duration pollInterval = const Duration(seconds: 3);
@@ -47,8 +51,11 @@ class LteController extends ChangeNotifier {
   LteController({
     LteService? service,
     LteHistoryStore? historyStore,
+    RouterOsSecurityService? routerOsSecurityService,
   })  : _service = service ?? LteService(),
-        recordings = historyStore ?? LteHistoryStore();
+        recordings = historyStore ?? LteHistoryStore(),
+        _routerOsSecurity =
+            routerOsSecurityService ?? RouterOsSecurityService.instance;
 
   String? get interfaceName => _service.interfaceName;
   String? get transportKind => _service.transportKind;
@@ -106,6 +113,8 @@ class LteController extends ChangeNotifier {
     _pendingSshHostKeyChange = null;
     signal = null;
     routerResource = null;
+    routerOsSecurityWarning = null;
+    routerOsSecurityChecking = false;
     history.clear();
     lastUpdated = null;
     recordedSampleCount = 0;
@@ -129,6 +138,7 @@ class LteController extends ChangeNotifier {
       state = LteMonitorState.connected;
       waitingForFirstSample = true;
       notifyListeners();
+      unawaited(_refreshRouterOsSecurity(generation, connection.host));
       startLive();
       await refresh();
       if (_shuttingDown || generation != _generation) return false;
@@ -146,6 +156,35 @@ class LteController extends ChangeNotifier {
       notifyListeners();
       await _ignoreCleanup(_service.close);
       return false;
+    }
+  }
+
+  Future<void> _refreshRouterOsSecurity(int generation, String host) async {
+    final version = routerResource?['version'];
+    if (version == null || version.trim().isEmpty) return;
+    routerOsSecurityChecking = true;
+    notifyListeners();
+    try {
+      final cached = await _routerOsSecurity.catalog(allowNetwork: false);
+      if (_shuttingDown || generation != _generation) return;
+      routerOsSecurityWarning = _routerOsSecurity.evaluate(
+        host: host,
+        installedVersion: version,
+        catalog: cached,
+      );
+      notifyListeners();
+      final current = await _routerOsSecurity.catalog();
+      if (_shuttingDown || generation != _generation) return;
+      routerOsSecurityWarning = _routerOsSecurity.evaluate(
+        host: host,
+        installedVersion: version,
+        catalog: current,
+      );
+    } finally {
+      if (!_shuttingDown && generation == _generation) {
+        routerOsSecurityChecking = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -325,6 +364,8 @@ class LteController extends ChangeNotifier {
     _pendingSshHostKeyChange = null;
     signal = null;
     routerResource = null;
+    routerOsSecurityWarning = null;
+    routerOsSecurityChecking = false;
     history.clear();
     lastUpdated = null;
     recordedSampleCount = 0;

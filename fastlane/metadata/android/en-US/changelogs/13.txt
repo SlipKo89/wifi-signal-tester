@@ -1,0 +1,1 @@
+Added a clear start screen for MikroTik Wi-Fi, MikroTik LTE and Keenetic Wi-Fi Alpha. Named MikroTik sites keep separate router sets and migrate existing profiles safely. Wi-Fi and LTE now show official RouterOS security-update recommendations. SSH capability caching prevents repeated expected probes from flooding RouterOS logs.

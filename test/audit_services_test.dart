@@ -169,6 +169,40 @@ void main() {
       expect(findings.where((f) => f.titleEn.contains('telnet')), isEmpty);
     });
 
+    test('security advisory is branch-aware and deduplicates ordinary update',
+        () async {
+      final svc = _FakeMikrotikService(_menus(
+        services: const [],
+        extra: const {
+          '/system/resource': [
+            {'board-name': 'test', 'version': '7.24.1', 'cpu-load': '1'}
+          ],
+          '/system/package/update': [
+            {
+              'installed-version': '7.24.1',
+              'latest-version': '7.24.2',
+              'status': 'New version is available',
+            }
+          ],
+        },
+      ));
+
+      final findings = await AuditEngine().run([svc], scope: AuditScope.system);
+      final security = findings.singleWhere(
+        (finding) =>
+            finding.titleEn == 'Important RouterOS security update recommended',
+      );
+
+      expect(security.detailEn, contains('7.24.1'));
+      expect(security.detailEn, contains('7.24.2'));
+      expect(security.sourceUrl, 'https://mikrotik.com/supportsec');
+      expect(
+        findings
+            .where((finding) => finding.titleEn == 'RouterOS update available'),
+        isEmpty,
+      );
+    });
+
     test('checks MikroTik hardening recommendations and adds sources',
         () async {
       final svc = _FakeMikrotikService(_menus(

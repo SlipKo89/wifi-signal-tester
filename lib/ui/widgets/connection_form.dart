@@ -7,6 +7,7 @@ import '../../mikrotik/mikrotik_service.dart';
 import '../../mikrotik/port_knocking.dart';
 import '../../services/credentials_store.dart';
 import '../../settings/settings_controller.dart';
+import '../../sites/wifi_site.dart';
 import '../theme.dart';
 import 'port_knocking_editor.dart';
 
@@ -16,12 +17,20 @@ class ConnectionForm extends StatefulWidget {
   final void Function(List<RouterConnection> routers) onConnect;
   final VoidCallback? onPhoneOnly;
   final bool busy;
+  final RouterVendor vendor;
+  final WifiSite? site;
+  final bool quickConnection;
+  final ValueChanged<WifiSite>? onSiteChanged;
 
   const ConnectionForm({
     super.key,
     required this.onConnect,
     this.onPhoneOnly,
     this.busy = false,
+    this.vendor = RouterVendor.mikrotik,
+    this.site,
+    this.quickConnection = false,
+    this.onSiteChanged,
   });
 
   @override
@@ -37,7 +46,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
 
   final List<RouterConnection> _routers = [];
 
-  RouterVendor _vendor = RouterVendor.mikrotik;
+  late final RouterVendor _vendor;
   TransportPreference _transport = TransportPreference.auto;
   bool _useTls = true;
   bool _obscure = true;
@@ -46,24 +55,22 @@ class _ConnectionFormState extends State<ConnectionForm> {
   @override
   void initState() {
     super.initState();
-    _store.loadRouters().then((saved) {
-      if (saved.isEmpty || !mounted) return;
-      setState(() {
-        _routers
-          ..clear()
-          ..addAll(saved);
-        // Prefill the editor with the first saved router for convenience.
-        final first = saved.first;
-        _host.text = first.host;
-        _user.text = first.username;
-        _pass.text = first.password;
-        _vendor = first.vendor;
-        _transport = first.transport;
-        _useTls = first.useTls;
-        _port.text = first.port?.toString() ?? '';
-        _portKnocking = first.portKnocking;
+    _vendor = widget.vendor;
+    final site = widget.site;
+    if (site != null) {
+      _routers.addAll(site.routers);
+      if (_routers.isNotEmpty) _applyRouter(_routers.first);
+    } else if (_vendor == RouterVendor.keenetic) {
+      _store.loadKeeneticProfiles().then((saved) {
+        if (saved.isEmpty || !mounted) return;
+        setState(() {
+          _routers
+            ..clear()
+            ..addAll(saved);
+          _applyRouter(saved.first);
+        });
       });
-    });
+    }
   }
 
   @override
@@ -92,7 +99,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
     );
   }
 
-  void _addRouter() {
+  Future<void> _addRouter() async {
     final cfg = _currentInput();
     if (cfg == null) return;
     if (!_validatePortKnocking(cfg)) return;
@@ -101,22 +108,32 @@ class _ConnectionFormState extends State<ConnectionForm> {
         (router) => router.vendor == cfg.vendor && router.host == cfg.host,
       );
       _routers.add(cfg);
-      _host.clear();
-      _pass.clear();
-      _port.clear();
-      _portKnocking = const PortKnockConfig.disabled();
+      if (_vendor == RouterVendor.mikrotik) {
+        _host.clear();
+        _pass.clear();
+        _port.clear();
+        _portKnocking = const PortKnockConfig.disabled();
+      }
     });
-    _store.saveRouters(_routers);
+    await _persistRouters();
   }
 
-  void _removeRouter(RouterConnection r) {
-    setState(() => _routers.removeWhere(
-          (x) => x.vendor == r.vendor && x.host == r.host,
-        ));
-    _store.saveRouters(_routers);
+  Future<void> _removeRouter(RouterConnection r) async {
+    setState(() {
+      _routers.removeWhere(
+        (x) => x.vendor == r.vendor && x.host == r.host,
+      );
+      if (_host.text.trim() == r.host) {
+        _host.clear();
+        _pass.clear();
+        _port.clear();
+        _portKnocking = const PortKnockConfig.disabled();
+      }
+    });
+    await _persistRouters();
   }
 
-  void _connect() {
+  Future<void> _connect() async {
     // Include whatever is typed but not yet added. If it names a host already in
     // the list, the fields win — otherwise editing the transport or password of
     // a saved router would silently do nothing.
@@ -133,10 +150,60 @@ class _ConnectionFormState extends State<ConnectionForm> {
         list.add(current);
       }
     }
+    if (_vendor == RouterVendor.keenetic) {
+      final selected = current ?? (list.isEmpty ? null : list.first);
+      list
+        ..clear()
+        ..addAll(selected == null ? const [] : [selected]);
+    }
     if (list.isEmpty) return;
     if (list.any((router) => !_validatePortKnocking(router))) return;
-    _store.saveRouters(list);
+    if (widget.site != null) {
+      final used = widget.site!.copyWith(
+        routers: List.unmodifiable(list),
+        lastUsedAtMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      await _store.upsertSite(used);
+      widget.onSiteChanged?.call(used);
+    } else if (_vendor == RouterVendor.keenetic) {
+      final saved = [..._routers];
+      final selected = list.first;
+      final at = saved.indexWhere((router) => router.host == selected.host);
+      if (at < 0) {
+        saved.add(selected);
+      } else {
+        saved[at] = selected;
+      }
+      await _store.saveKeeneticProfiles(saved);
+    }
+    if (!mounted) return;
     widget.onConnect(list);
+  }
+
+  Future<void> _persistRouters() async {
+    if (widget.site != null) {
+      final changed = widget.site!.copyWith(
+        routers: List.unmodifiable(_routers),
+      );
+      await _store.upsertSite(changed);
+      widget.onSiteChanged?.call(changed);
+    } else if (_vendor == RouterVendor.keenetic) {
+      await _store.saveKeeneticProfiles(_routers);
+    }
+  }
+
+  void _applyRouter(RouterConnection router) {
+    _host.text = router.host;
+    _user.text = router.username;
+    _pass.text = router.password;
+    _transport = router.transport;
+    _useTls = router.useTls;
+    _port.text = router.port?.toString() ?? '';
+    _portKnocking = router.portKnocking;
+  }
+
+  void _editRouter(RouterConnection router) {
+    setState(() => _applyRouter(router));
   }
 
   bool _validatePortKnocking(RouterConnection connection) {
@@ -172,17 +239,21 @@ class _ConnectionFormState extends State<ConnectionForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(l.t('Router connection', 'Подключение к роутеру'),
+            Text(_formTitle(l),
                 style:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
               _vendor == RouterVendor.mikrotik
                   ? l.t(
-                      'Read-only. Add every router whose APs you want to see '
-                          '(central CAPsMAN + standalone APs).',
-                      'Только чтение. Добавь каждый роутер, чьи точки хочешь видеть '
-                          '(центральный CAPsMAN + отдельные точки).')
+                      widget.quickConnection
+                          ? 'Temporary read-only connection. Nothing entered here is saved.'
+                          : 'Read-only. Add every router whose APs belong to this site '
+                              '(central CAPsMAN + standalone APs).',
+                      widget.quickConnection
+                          ? 'Временное подключение только для чтения. Введённые здесь данные не сохраняются.'
+                          : 'Только чтение. Добавь каждый роутер с точками этого объекта '
+                              '(центральный CAPsMAN + отдельные точки).')
                   : l.t(
                       'Read-only Keenetic Alpha over HTTPS RCI. The first build '
                           'monitors the current phone only.',
@@ -195,35 +266,15 @@ class _ConnectionFormState extends State<ConnectionForm> {
               ..._routers.map(_routerChip),
             ],
             const SizedBox(height: 14),
-            DropdownButtonFormField<RouterVendor>(
-              key: ValueKey(_vendor),
-              initialValue: _vendor,
-              isExpanded: true,
+            InputDecorator(
               decoration: InputDecoration(
-                labelText: l.t('Router vendor', 'Производитель'),
+                labelText: l.t('Mode', 'Режим'),
               ),
-              items: [
-                const DropdownMenuItem(
-                  value: RouterVendor.mikrotik,
-                  child: Text('MikroTik'),
-                ),
-                DropdownMenuItem(
-                  value: RouterVendor.keenetic,
-                  child: Text(l.t('Keenetic (Alpha)', 'Keenetic (Альфа)')),
-                ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  _vendor = value;
-                  if (value == RouterVendor.keenetic) {
-                    _transport = TransportPreference.auto;
-                    _useTls = true;
-                    _port.clear();
-                    _portKnocking = const PortKnockConfig.disabled();
-                  }
-                });
-              },
+              child: Text(
+                _vendor == RouterVendor.mikrotik
+                    ? 'MikroTik Wi-Fi'
+                    : 'Keenetic Wi-Fi · Alpha',
+              ),
             ),
             if (_vendor == RouterVendor.keenetic) ...[
               const SizedBox(height: 10),
@@ -385,7 +436,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
             OutlinedButton.icon(
               onPressed: _addRouter,
               icon: const Icon(Icons.add, size: 18),
-              label: Text(l.t('Add another router', 'Добавить ещё роутер')),
+              label: Text(_addLabel(l)),
             ),
             const SizedBox(height: 10),
             FilledButton.icon(
@@ -432,6 +483,9 @@ class _ConnectionFormState extends State<ConnectionForm> {
   }
 
   String _connectLabel(L10n l) {
+    if (_vendor == RouterVendor.keenetic) {
+      return l.t('Connect to Keenetic', 'Подключиться к Keenetic');
+    }
     final n = _routers.length +
         (_currentInput() != null &&
                 !_routers.any((router) =>
@@ -443,6 +497,28 @@ class _ConnectionFormState extends State<ConnectionForm> {
         ? l.t('Connect ($n routers)', 'Подключить ($n роутеров)')
         : l.t('Connect', 'Подключить');
   }
+
+  String _formTitle(L10n l) {
+    if (_vendor == RouterVendor.keenetic) {
+      return l.t('Keenetic connection', 'Подключение к Keenetic');
+    }
+    if (widget.quickConnection) {
+      return l.t('Quick connection', 'Быстрое подключение');
+    }
+    final site = widget.site;
+    final name = site?.imported == true
+        ? l.t('Imported routers', 'Импортированные роутеры')
+        : site?.name;
+    return site == null
+        ? l.t('MikroTik connection', 'Подключение к MikroTik')
+        : l.t('Site: $name', 'Объект: $name');
+  }
+
+  String _addLabel(L10n l) => _vendor == RouterVendor.keenetic
+      ? l.t('Save this profile', 'Сохранить этот профиль')
+      : widget.quickConnection
+          ? l.t('Add another temporary router', 'Добавить временный роутер')
+          : l.t('Add router to site', 'Добавить роутер в объект');
 
   /// `192.168.88.1 · monitor · SSH:2222` — the transport only shows when it was
   /// pinned, since `auto` is the norm.
@@ -476,7 +552,16 @@ class _ConnectionFormState extends State<ConnectionForm> {
           const Icon(Icons.router, size: 16, color: AppTheme.accent),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(_chipLabel(r), style: const TextStyle(fontSize: 13)),
+            child: InkWell(
+              onTap: () => _editRouter(r),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(
+                  _chipLabel(r),
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
           ),
           InkWell(
             onTap: () => _removeRouter(r),

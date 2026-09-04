@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-05
+
+### Added
+- A new mode home screen separates MikroTik Wi-Fi, MikroTik LTE and Keenetic
+  Wi-Fi Alpha instead of mixing vendor and radio workflows in one connection
+  form.
+- Named MikroTik Wi-Fi sites/objects. Each home, office or customer location
+  keeps its own multi-router set; sites can be created, renamed, annotated and
+  deleted, while quick connections remain temporary and phone-only mode stays
+  directly available.
+- One-time migration of the former global router list into an "Imported
+  routers" site, with MikroTik and Keenetic credentials separated in platform
+  secure storage and the legacy key retained for safe downgrade.
+- RouterOS security-version intelligence for MikroTik Wi-Fi and LTE
+  connections. The app uses branch-aware comparison with the applicable fixed
+  RouterOS release, shows a dashboard warning and adds the same
+  recommendation to the system audit without starting an update.
+- A dated offline advisory catalogue plus a once-daily refresh from MikroTik's
+  official Security page over normally verified HTTPS. Warnings show their
+  source/freshness and deliberately distinguish a vendor recommendation from a
+  claim that a particular router is vulnerable or compromised.
+
+### Changed
+- Keenetic now has its own saved-profile form and can no longer be accidentally
+  included in a MikroTik multi-router set. Tapping a saved router loads it for
+  editing; removing it also clears the editor so Connect cannot silently add it
+  back.
+
+### Fixed
+- RouterOS SSH capability probes are now cached per menu. Missing wireless
+  generations stop after the first rejected menu command, and an unsupported
+  registration-table `print terse` fallback is no longer retried on every live
+  poll. This prevents expected read-only detection from flooding the MikroTik
+  `script,error` log while preserving support for mixed RouterOS Wi-Fi stacks.
+
 ## [0.4.1] - 2026-09-05
 
 ### Security

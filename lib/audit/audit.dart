@@ -1,5 +1,6 @@
 import '../mikrotik/mikrotik_service.dart';
 import '../mikrotik/router_os_transport.dart';
+import '../routeros_updates/routeros_security.dart';
 
 enum AuditSeverity { critical, warn, info, ok }
 
@@ -68,7 +69,14 @@ class AuditEngine {
         _standaloneChecks(c, out);
         _bestPractices(c, out);
       } else {
-        _hardeningChecks(c, out);
+        final version = c.resource?['version'];
+        final security = version == null
+            ? null
+            : RouterOsSecurityService.instance.evaluate(
+                host: c.host ?? 'MikroTik',
+                installedVersion: version,
+              );
+        _hardeningChecks(c, out, security);
       }
     }
     out.sort((a, b) => a.sev.index.compareTo(b.sev.index));
@@ -653,7 +661,11 @@ class AuditEngine {
   static const _servicesUrl =
       'https://manual.mikrotik.com/docs/system-information-and-utilities/services/';
 
-  void _hardeningChecks(_Ctx c, List<Finding> out) {
+  void _hardeningChecks(
+    _Ctx c,
+    List<Finding> out,
+    RouterOsSecurityStatus? security,
+  ) {
     // NTP time sync.
     final ntp = c.ntp;
     if (ntp != null) {
@@ -694,9 +706,46 @@ class AuditEngine {
       }
     }
 
-    // Software update.
+    // Important security releases are compared by RouterOS branch. Do not
+    // call the installed version "vulnerable": MikroTik may intentionally
+    // withhold applicability details while asking everyone to upgrade.
+    if (security != null) {
+      final checked = security.catalog.checkedAt;
+      final freshness = checked == null
+          ? 'bundled catalogue dated 2026-09-03'
+          : 'official page checked ${_shortDate(checked)}';
+      final freshnessRu = checked == null
+          ? 'встроенный каталог от 03.09.2026'
+          : 'официальная страница проверена ${_shortDate(checked)}';
+      out.add(Finding(AuditSeverity.warn,
+          titleEn: 'Important RouterOS security update recommended',
+          titleRu: 'Рекомендуется важное обновление безопасности RouterOS',
+          detailEn:
+              '${security.installedVersion} predates the applicable fixed '
+              'release (at least ${security.fixedVersion}; $freshness). '
+              'MikroTik says '
+              'most configurations are not at immediate risk, but highly '
+              'recommends upgrading. The audit does not claim that this '
+              'particular router is compromised.',
+          detailRu:
+              '${security.installedVersion} старше применимого исправленного '
+              'выпуска (не ниже ${security.fixedVersion}; $freshnessRu). '
+              'MikroTik пишет, '
+              'что большинству конфигураций ничего не угрожает немедленно, но '
+              'настоятельно рекомендует обновиться. Аудит не утверждает, что '
+              'этот роутер скомпрометирован.',
+          fixEn: 'Read the vendor announcement, back up the configuration and '
+              'plan a controlled upgrade. The app never starts it.',
+          fixRu: 'Прочитай бюллетень, сделай резервную копию и запланируй '
+              'контролируемое обновление. Приложение его не запускает.',
+          where: c.host,
+          sourceUrl: RouterOsSecurityCatalog.sourceUrl));
+    }
+
+    // Ordinary update information reported by RouterOS itself. Suppress it
+    // when the stronger security recommendation above already covers it.
     final upd = c.update;
-    if (upd != null) {
+    if (upd != null && security == null) {
       final installed = upd['installed-version'] ?? '';
       final latest = upd['latest-version'] ?? '';
       if (latest.isNotEmpty &&
@@ -864,6 +913,11 @@ class AuditEngine {
             where: p['name']));
       }
     }
+  }
+
+  String _shortDate(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${value.year}-${two(value.month)}-${two(value.day)}';
   }
 
   void _firewallPresence(_Ctx c, List<Finding> out) {

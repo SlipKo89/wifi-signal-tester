@@ -46,6 +46,23 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Settings screen + language selection (RU/EN, lightweight i18n)
 - [x] Live throughput, CCQ, p-throughput, uptime metrics
 
+## Navigation & connection profiles
+- [x] Introduce **Sites / Objects** above router profiles: each site has a
+      name (for example Home, Office, Customer warehouse), notes and its own
+      ordered MikroTik AP/router set. Connecting to a site starts all routers
+      in that set; a temporary quick connection remains available.
+- [x] Migrate the current global saved-router list without losing credentials:
+      place MikroTik entries into one automatically created "Imported routers"
+      site, move Keenetic entries to its own profile list, retain the legacy key
+      for downgrade and keep all secret-bearing records in secure storage.
+- [x] Add a mode landing screen with MikroTik Wi-Fi, MikroTik LTE and Keenetic
+      Wi-Fi (Alpha) as primary cards; keep Zabbix, histories, reference and
+      settings as secondary tools. Active Wi-Fi sessions have a Continue action,
+      sites are sorted by last use and phone-only monitoring stays easy to reach.
+- [x] Split connection editors by mode/vendor so a Wi-Fi site cannot
+      accidentally mix MikroTik and Keenetic credentials. Reuse one app shell,
+      shared settings and histories rather than creating separate applications.
+
 ## v0.2 — added mid-cycle ✅
 - [x] Config audit (read-only): audits operating state (current-channel) and
       applied configs only; inline+named security; RF best-practices with fixes
@@ -202,22 +219,24 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [ ] Exportable survey report (PDF/CSV with spots + verdicts) for clients
 
 ### D. RouterOS version intelligence
-- [ ] Warn after connection when the installed RouterOS predates an official
-      important security release. Read the installed version only, fetch the
-      generic MikroTik stable/long-term RSS over normal HTTPS at most daily,
-      cache it with an updated-at timestamp and keep a bundled offline fallback.
-      Never run `check-for-updates` or start an upgrade on the router.
-- [ ] Curate a rule-based advisory catalogue from official MikroTik Security
+- [x] Warn after Wi-Fi or LTE connection when the installed RouterOS predates
+      an official important security release. Read the installed version only, fetch the
+      official MikroTik Security page over strictly verified HTTPS at most
+      daily, cache the minimal parsed catalogue with an updated-at timestamp
+      and keep a dated bundled offline fallback. The dashboard and system audit
+      link to the source and never run `check-for-updates` or start an upgrade.
+- [~] Curate a rule-based advisory catalogue from official MikroTik Security
       announcements and only precise changelog entries. Match affected/fixed
       version ranges with actually used components, wireless stacks and LTE
       modem models; distinguish confirmed applicability, vendor-recommended
       security updates and merely relevant changes instead of inferring a
-      vulnerability from vague phrases such as "improve stability".
-- [ ] Show source links, advisory/catalogue freshness, channel-aware version
-      comparison and per-installed-version snooze. Keep ordinary update info,
-      security recommendations and known compatibility issues deduplicated in
-      the system audit; never claim that an unpublished issue affects a
-      particular configuration.
+      vulnerability from vague phrases such as "improve stability". The first
+      branch-aware September 2026 rule is implemented; a maintained multi-rule
+      catalogue remains.
+- [~] Source links, catalogue freshness, branch-aware comparison and audit
+      deduplication are implemented. Left: per-installed-version snooze and
+      known compatibility advisories. Never claim that an unpublished issue
+      affects a particular configuration.
 
 ## Tech debt / risks
 - [x] Binary API dead-session recovery: serialised commands reconnect once,

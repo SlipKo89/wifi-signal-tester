@@ -27,10 +27,15 @@ void showWhatsNew(BuildContext context, Release release) {
                   const Icon(Icons.auto_awesome,
                       color: AppTheme.accent, size: 20),
                   const SizedBox(width: 8),
-                  Text(
+                  Expanded(
+                    child: Text(
                       '${l.t("What's new", 'Что нового')} · v${release.version}',
                       style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),

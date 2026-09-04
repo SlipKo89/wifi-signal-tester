@@ -1,37 +1,30 @@
-# Wi-Fi Signal Tester 0.4.1
+# Wi-Fi Signal Tester 0.4.2
 
-This patch release pins the official SHA-256 checksum for the Gradle 8.11.1
-complete distribution used by the Android wrapper. Gradle and F-Droid can now
-reject a modified build-tool archive before it is used. Application runtime
-behaviour is unchanged from 0.4.0.
+This release makes the growing application easier to navigate and reduces
+noise on MikroTik routers monitored over SSH.
 
-- Version 0.4.0 added optional read-only Zabbix history. Saved Wi-Fi and LTE sessions can map
-  external items, align local and remote tracks on one timeline and export a
-  combined CSV. HTTPS remains the default; HTTP requires an explicit choice and
-  carries a token-exposure warning.
-- Added Keenetic Wi-Fi support as an explicit Alpha, currently verified on
-  Runner 4G (KN-2212) with KeeneticOS 5.01.C.3.0-1. The restricted HTTPS RCI
-  client reads AP-side association data without exposing generic commands.
-- MikroTik Wi-Fi and LTE profiles can optionally send a fixed TCP/UDP
-  port-knocking sequence before one explicitly selected REST, API or SSH
-  transport. The application never creates or changes RouterOS firewall rules.
-- LTE profiles now save several routers securely. A separate read-only LTE
-  configuration audit checks APN references, route role, passthrough, MTU,
-  roaming, IPv4/IPv6 and native radio restrictions, with PDF export.
-- Added Fast, Normal, Economical and Custom polling profiles. Expensive router
-  facts are cached, and monitoring plus gateway ping pause while the app is in
-  the background.
-- SSH now uses trust on first use. A changed key stops the connection and shows
-  the previous and new fingerprints before the user can explicitly replace it.
-- Improved asynchronous shutdown and SQLite history reliability. Long screens
-  and detail sheets now remain above Android gesture and three-button navigation.
-- Added English and Russian F-Droid/Fastlane metadata with the icon, redacted
-  screenshots and version-specific release notes.
+- A new start screen separates MikroTik Wi-Fi, MikroTik LTE and Keenetic Wi-Fi
+  Alpha into dedicated tools.
+- Named MikroTik Wi-Fi sites keep an independent router set for each home,
+  office or customer location. Sites can be created, renamed, annotated and
+  deleted; a quick connection can remain temporary.
+- Existing saved routers migrate once into an "Imported routers" site. MikroTik
+  and Keenetic credentials remain separate in platform secure storage, and the
+  legacy record is retained for a safe downgrade.
+- MikroTik Wi-Fi and LTE dashboards now compare the installed RouterOS release
+  with official security update recommendations. The check is branch-aware,
+  cites MikroTik's source and never starts or installs an update.
+- The SSH transport now remembers a working RouterOS `print` flavour for each
+  menu. Missing wireless generations and rejected registration-table fallbacks
+  are probed only once per connection instead of filling `script,error` logs on
+  every live poll.
+- The official SHA-256 checksum remains pinned for the Gradle 8.11.1 wrapper
+  distribution used by Android and F-Droid builds.
 
 Assets:
 
-- `wifi-signal-tester-0.4.1.apk` — Android;
-- `wifi-signal-tester-0.4.1-macos-arm64.zip` — unpack to get
+- `wifi-signal-tester-0.4.2.apk` — Android;
+- `wifi-signal-tester-0.4.2-macos-arm64.zip` — unpack to get
   `Wi-Fi Signal Tester.app` for an Apple-silicon Mac.
 
 The Mac build is currently intended for testing and is not yet Developer ID
@@ -41,39 +34,33 @@ See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 ---
 
-# Wi-Fi Signal Tester 0.4.1
+# Wi-Fi Signal Tester 0.4.2
 
-В этом патч-релизе закреплена официальная контрольная сумма SHA-256 полного
-дистрибутива Gradle 8.11.1, используемого Android wrapper. Gradle и F-Droid
-теперь могут отклонить изменённый архив сборочных инструментов до его
-использования. Поведение приложения не изменилось относительно версии 0.4.0.
+Этот релиз упрощает навигацию по выросшему приложению и уменьшает количество
+служебных ошибок на MikroTik при мониторинге через SSH.
 
-- В версии 0.4.0 добавлена необязательная read-only история Zabbix. Внешние метрики можно
-  привязать к сохранённым Wi-Fi/LTE-сессиям, совместить с локальными на одной
-  шкале времени и выгрузить общим CSV. По умолчанию используется HTTPS; HTTP
-  включается явно и сопровождается предупреждением об открытой передаче токена.
-- Добавлена явно помеченная Alpha-поддержка Wi-Fi Keenetic, проверенная на
-  Runner 4G (KN-2212) с KeeneticOS 5.01.C.3.0-1. Ограниченный HTTPS RCI-клиент
-  читает данные клиента точки и не предоставляет произвольных команд.
-- Профили MikroTik Wi-Fi и LTE могут выполнить фиксированную TCP/UDP
-  последовательность port knocking перед одним явно выбранным REST, API или SSH.
-  Приложение не создаёт и не изменяет правила firewall RouterOS.
-- LTE-профили безопасно сохраняют несколько роутеров. Отдельный read-only
-  LTE-аудит проверяет APN, роль маршрута, passthrough, MTU, roaming, IPv4/IPv6 и
-  ограничения радио и умеет выгружать PDF.
-- Добавлены профили опроса «Быстрый», «Обычный», «Экономный» и «Свой». Тяжёлые
-  сведения о роутере кэшируются, а мониторинг и ping приостанавливаются в фоне.
-- SSH использует trust on first use. При смене известного ключа подключение
-  останавливается и показывает старый и новый fingerprints до явной замены.
-- Улучшены асинхронное освобождение ресурсов и надёжность SQLite-историй.
-  Длинные экраны больше не перекрываются навигационными кнопками Android.
-- Добавлены русские и английские метаданные F-Droid/Fastlane, иконка,
-  обезличенные скриншоты и отдельные заметки для каждой версии.
+- Новый стартовый экран разделяет MikroTik Wi-Fi, MikroTik LTE и Keenetic
+  Wi-Fi Alpha на самостоятельные инструменты.
+- Именованные объекты MikroTik Wi-Fi хранят отдельный набор роутеров для дома,
+  офиса или объекта заказчика. Объекты можно создавать, переименовывать,
+  дополнять описанием и удалять; быстрое подключение можно не сохранять.
+- Существующие профили один раз переносятся в объект «Импортированные роутеры».
+  Данные MikroTik и Keenetic разделены в защищённом хранилище платформы, а
+  прежняя запись сохранена для безопасного отката приложения.
+- Экраны MikroTik Wi-Fi и LTE сопоставляют установленную версию RouterOS с
+  официальными рекомендациями по обновлениям безопасности. Проверка учитывает
+  ветку выпуска, показывает ссылку MikroTik и никогда не запускает обновление.
+- SSH-транспорт запоминает рабочий вариант команды RouterOS `print` для каждого
+  меню. Отсутствующие поколения Wi-Fi и неподдерживаемые варианты registration
+  table проверяются один раз за подключение, а не засоряют `script,error` при
+  каждом цикле мониторинга.
+- Для Android/F-Droid по-прежнему закреплена официальная контрольная сумма
+  SHA-256 дистрибутива Gradle 8.11.1.
 
 Файлы:
 
-- `wifi-signal-tester-0.4.1.apk` — Android;
-- `wifi-signal-tester-0.4.1-macos-arm64.zip` — распакуй, внутри будет
+- `wifi-signal-tester-0.4.2.apk` — Android;
+- `wifi-signal-tester-0.4.2-macos-arm64.zip` — распакуй, внутри будет
   `Wi-Fi Signal Tester.app` для Mac на Apple Silicon.
 
 Сборка для Mac пока предназначена для тестирования и не подписана Developer ID

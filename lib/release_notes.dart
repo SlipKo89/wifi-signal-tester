@@ -9,6 +9,17 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.4.2', '2026-09-05', [
+    'A new start screen separates MikroTik Wi-Fi, MikroTik LTE and Keenetic Wi-Fi Alpha into clear tools',
+    'Named MikroTik sites keep independent router sets; existing profiles migrate safely into Imported routers and quick connections can remain temporary',
+    'MikroTik Wi-Fi and LTE dashboards now warn about RouterOS releases covered by an official security update recommendation without changing the router',
+    'SSH remembers supported RouterOS print variants so wireless capability detection no longer floods the router script,error log during live monitoring',
+  ], [
+    'Новый стартовый экран разделяет MikroTik Wi-Fi, MikroTik LTE и Keenetic Wi-Fi Alpha на понятные инструменты',
+    'Именованные объекты MikroTik хранят независимые наборы роутеров; старые профили безопасно переносятся в «Импортированные роутеры», а быстрое подключение можно не сохранять',
+    'Экраны MikroTik Wi-Fi и LTE предупреждают о версиях RouterOS, для которых MikroTik рекомендует обновление безопасности, ничего не изменяя на роутере',
+    'SSH запоминает поддерживаемые варианты print, поэтому определение Wi-Fi-возможностей больше не засоряет журнал RouterOS script,error во время мониторинга',
+  ]),
   Release('0.4.1', '2026-09-05', [
     'The Android Gradle wrapper now pins the official SHA-256 checksum for Gradle 8.11.1 so modified build-tool archives are rejected before use; application behaviour is unchanged',
   ], [

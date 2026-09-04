@@ -189,6 +189,16 @@ void main() {
       expect(commands.last, '/system resource print');
       expect(commands.where((command) => command.contains('proplist')),
           hasLength(2));
+
+      await transport.read(
+        '/system/resource',
+        fields: const ['board-name', 'version', 'uptime'],
+      );
+
+      expect(commands.where((command) => command.contains('proplist')),
+          hasLength(2));
+      expect(commands.where((command) => command == '/system resource print'),
+          hasLength(2));
     });
 
     test('LTE settings falls back to safe plain print', () async {
@@ -226,6 +236,82 @@ void main() {
       );
       expect(commands, isNot(contains('/interface lte print')));
       expect(commands.every((command) => command.contains('proplist')), isTrue);
+    });
+  });
+
+  group('SSH capability cache', () {
+    test('reuses the successful print flavour after one negotiation', () async {
+      final commands = <String>[];
+      final transport = SshTransport.forTesting((command) async {
+        commands.add(command);
+        if (command == '/ip arp print') {
+          return '0 address=192.168.88.10 '
+              'mac-address=AA:BB:CC:DD:EE:FF';
+        }
+        return 'expected end of command';
+      });
+
+      await transport.read('/ip/arp');
+      await transport.read('/ip/arp');
+
+      expect(commands.where((c) => c == '/ip arp print terse'), hasLength(1));
+      expect(commands.where((c) => c == '/ip arp print'), hasLength(2));
+    });
+
+    test('an absent registration menu causes only one router error', () async {
+      final commands = <String>[];
+      final transport = SshTransport.forTesting((command) async {
+        commands.add(command);
+        return 'bad command name registration-table (line 1 column 25)';
+      });
+
+      await expectLater(
+        transport.read('/interface/wifi/capsman/registration-table'),
+        throwsA(isA<RouterOsException>()),
+      );
+      await expectLater(
+        transport.read(
+          '/interface/wifi/capsman/registration-table',
+          fields: const ['mac-address'],
+        ),
+        throwsA(isA<RouterOsException>()),
+      );
+
+      expect(commands, hasLength(1));
+      expect(commands.single,
+          '/interface wifi capsman registration-table print stats');
+    });
+
+    test('a rejected registration terse merge is not retried each poll',
+        () async {
+      final commands = <String>[];
+      final transport = SshTransport.forTesting((command) async {
+        commands.add(command);
+        if (command == '/caps-man registration-table print stats') {
+          return '0 mac-address=AA:BB:CC:DD:EE:FF interface=cap1';
+        }
+        if (command == '/caps-man registration-table print terse') {
+          return 'bad parameter terse (line 1 column 29)';
+        }
+        return 'expected end of command';
+      });
+
+      await transport.read('/caps-man/registration-table');
+      await transport.read('/caps-man/registration-table');
+      await transport.read('/caps-man/registration-table');
+
+      expect(
+        commands.where(
+          (c) => c == '/caps-man registration-table print stats',
+        ),
+        hasLength(3),
+      );
+      expect(
+        commands.where(
+          (c) => c == '/caps-man registration-table print terse',
+        ),
+        hasLength(1),
+      );
     });
   });
 }

@@ -21,6 +21,7 @@ import 'theme.dart';
 import 'widgets/app_safe_area.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/port_knocking_editor.dart';
+import 'widgets/routeros_security_banner.dart';
 import 'widgets/zoomable_lte_chart.dart';
 
 class LteScreen extends StatefulWidget {
@@ -345,6 +346,14 @@ class _LteScreenState extends State<LteScreen> {
                     ? null
                     : _controller.trustNewSshHostKey,
               ),
+            if (connected && _controller.routerOsSecurityWarning != null) ...[
+              RouterOsSecurityBanner(
+                l: l,
+                warnings: [_controller.routerOsSecurityWarning!],
+                checking: _controller.routerOsSecurityChecking,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (connected)
               _LteDashboard(
                 controller: _controller,

@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'app_info.dart';
 import 'settings/settings_controller.dart';
 import 'state/monitor_controller.dart';
-import 'ui/home_screen.dart';
+import 'ui/mode_home_screen.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
@@ -49,7 +49,7 @@ class WifiApkApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: const HomeScreen(),
+          home: const ModeHomeScreen(),
         ),
       ),
     );

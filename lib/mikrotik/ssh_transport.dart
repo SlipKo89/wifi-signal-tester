@@ -9,6 +9,16 @@ import 'ssh_host_key_store.dart';
 
 typedef SshCommandRunner = Future<String> Function(String command);
 
+class _SshReadPlan {
+  final String variant;
+  final bool omitProjection;
+
+  const _SshReadPlan({required this.variant, this.omitProjection = false});
+
+  String command(String menu, String projection) =>
+      '$menu $variant${omitProjection ? '' : projection}';
+}
+
 /// RouterOS SSH transport: runs console commands over SSH and parses the CLI
 /// output back into the same rows the REST/API transports return.
 ///
@@ -82,6 +92,26 @@ class SshTransport implements RouterOsTransport {
   /// Signal fields across stacks — used to tell whether `print stats` already
   /// carries the numbers we came for.
   static const _signalKeys = ['signal-strength', 'rx-signal', 'signal'];
+
+  /// Successful print flavour per exact read shape. RouterOS logs rejected
+  /// non-interactive SSH commands as `script,error`, so capability probing must
+  /// happen once rather than on every monitoring tick.
+  final Map<String, _SshReadPlan> _readPlans = {};
+
+  /// Reads for which every safe print flavour was rejected. Callers commonly
+  /// use an exception to detect an absent wireless generation; remembering the
+  /// result prevents those expected probes from polluting the router log.
+  final Map<String, String> _unsupportedReads = {};
+
+  /// A missing menu is independent of field projection. Keep it separately so
+  /// a later audit cannot probe with fields what stack detection already proved
+  /// absent without fields.
+  final Map<String, String> _missingMenus = {};
+
+  /// Some registration tables expose runtime signal fields only in
+  /// `print terse`, while others reject `terse` outright. Cache that secondary
+  /// capability separately from the primary `print stats` plan.
+  final Map<String, bool> _registrationTerseMerge = {};
 
   /// These singleton menus reject `terse`/`proplist` on some RouterOS builds.
   /// Their complete plain output contains no credentials or modem identifiers,
@@ -261,6 +291,11 @@ class SshTransport implements RouterOsTransport {
     validateReadFields(fields);
     final menu = _consoleMenu(menuPath);
     final isRegTable = menuPath.endsWith('registration-table');
+    final readKey = _readKey(menuPath, fields);
+    final knownFailure = _missingMenus[menuPath] ?? _unsupportedReads[readKey];
+    if (knownFailure != null) {
+      throw RouterOsException('$menuPath: $knownFailure');
+    }
 
     // Which print flavour to ask for, in order:
     //   * `stats` — registration tables only: plain `terse` hides the runtime
@@ -274,50 +309,86 @@ class SshTransport implements RouterOsTransport {
 
     var rows = <Map<String, String>>[];
     String? lastError;
-    for (final variant in variants) {
-      final out = await _run('$menu $variant$projection');
+    _SshReadPlan? selectedPlan;
+
+    final cachedPlan = _readPlans[readKey];
+    if (cachedPlan != null) {
+      final out = await _run(cachedPlan.command(menu, projection));
       if (_isSyntaxError(out)) {
-        lastError = out.trim().split('\n').first;
-        continue; // this flavour isn't supported here — try the next
+        // Capabilities can change after an in-place RouterOS/package upgrade.
+        // Forget the stale plan and negotiate once more on this connection.
+        _readPlans.remove(readKey);
+        lastError = _firstLine(out);
+      } else {
+        rows = _decodeRows(out);
+        selectedPlan = cachedPlan;
       }
-      rows = parseRecords(out);
-      if (rows.isEmpty) {
-        final single = parseLabelled(out);
-        if (single.isNotEmpty) rows = [single];
-      }
-      lastError = null;
-      break;
     }
+
+    if (selectedPlan == null) {
+      for (final variant in variants) {
+        final plan = _SshReadPlan(variant: variant);
+        final out = await _run(plan.command(menu, projection));
+        if (_isSyntaxError(out)) {
+          lastError = _firstLine(out);
+          // When RouterOS rejects the menu leaf itself, changing `stats` to
+          // `terse` or plain `print` cannot help and only adds two more errors.
+          if (_isMissingMenuError(out, menuPath)) {
+            _missingMenus[menuPath] = lastError;
+            break;
+          }
+          continue; // this print flavour isn't supported — try the next
+        }
+        rows = _decodeRows(out);
+        selectedPlan = plan;
+        lastError = null;
+        break;
+      }
+    }
+
     if (fields != null &&
         fields.isNotEmpty &&
         _safePlainPrintFallbackMenus.contains(menuPath) &&
+        selectedPlan?.omitProjection != true &&
         (lastError != null || rows.isEmpty)) {
       // Do not generalise this fallback: an unprojected `/interface/lte print`
       // can contain SIM PIN or modem-init. Only the two explicitly safe
       // singleton menus above may be read without a server-side projection.
       final out = await _run('$menu print');
       if (_isSyntaxError(out)) {
-        lastError = out.trim().split('\n').first;
+        lastError = _firstLine(out);
       } else {
-        rows = parseRecords(out);
-        if (rows.isEmpty) {
-          final single = parseLabelled(out);
-          if (single.isNotEmpty) rows = [single];
-        }
+        rows = _decodeRows(out);
+        selectedPlan = const _SshReadPlan(
+          variant: 'print',
+          omitProjection: true,
+        );
         lastError = null;
       }
     }
     if (lastError != null) {
+      _unsupportedReads[readKey] = lastError;
       throw RouterOsException('$menuPath: $lastError');
     }
+    if (selectedPlan != null) _readPlans[readKey] = selectedPlan;
 
     // Classic wireless keeps `signal-strength` in the plain table rather than
     // in stats; if stats came back without any signal, merge terse on top.
     if (isRegTable &&
         rows.isNotEmpty &&
-        !rows.any((r) => _signalKeys.any(r.containsKey))) {
+        !rows.any((r) => _signalKeys.any(r.containsKey)) &&
+        selectedPlan?.variant != 'print terse' &&
+        _registrationTerseMerge[menuPath] != false) {
       final terse = await _run('$menu print terse');
-      if (!_isSyntaxError(terse)) _mergeByMac(rows, parseRecords(terse));
+      if (_isSyntaxError(terse)) {
+        _registrationTerseMerge[menuPath] = false;
+      } else {
+        final extra = parseRecords(terse);
+        final suppliesSignal =
+            extra.any((row) => _signalKeys.any(row.containsKey));
+        _registrationTerseMerge[menuPath] = suppliesSignal;
+        if (suppliesSignal) _mergeByMac(rows, extra);
+      }
     }
 
     if (filters != null && filters.isNotEmpty) {
@@ -332,6 +403,25 @@ class SshTransport implements RouterOsTransport {
       rows = rows.map((row) => projectReadFields(row, fields)).toList();
     }
     return rows;
+  }
+
+  String _readKey(String menuPath, List<String>? fields) =>
+      '$menuPath|${fields == null || fields.isEmpty ? 'all' : 'projected'}';
+
+  String _firstLine(String out) => out.trim().split('\n').first;
+
+  List<Map<String, String>> _decodeRows(String out) {
+    final rows = parseRecords(out);
+    if (rows.isNotEmpty) return rows;
+    final single = parseLabelled(out);
+    return single.isEmpty ? <Map<String, String>>[] : [single];
+  }
+
+  bool _isMissingMenuError(String out, String menuPath) {
+    final leaf = menuPath.split('/').last.toLowerCase();
+    final text = out.toLowerCase();
+    return text.contains('bad command name $leaf') ||
+        text.contains('invalid command name $leaf');
   }
 
   @override

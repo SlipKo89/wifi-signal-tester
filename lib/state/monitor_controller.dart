@@ -16,6 +16,7 @@ import '../mikrotik/ssh_host_key_store.dart';
 import '../models/phone_signal.dart';
 import '../models/station_signal.dart';
 import '../router/wifi_router_service.dart';
+import '../routeros_updates/routeros_security.dart';
 import '../services/beeper.dart';
 import '../services/phone_wifi_service.dart';
 import '../services/ping_service.dart';
@@ -41,14 +42,18 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
   final DateTime _startedAt = DateTime.now();
   final Beeper _beeper;
   final PingService _ping;
+  final RouterOsSecurityService _routerOsSecurity;
 
   MonitorController({
     HistoryStore? historyStore,
     Beeper? beeper,
     PingService? pingService,
+    RouterOsSecurityService? routerOsSecurityService,
   })  : history = historyStore ?? HistoryStore(),
         _beeper = beeper ?? Beeper(),
-        _ping = pingService ?? PingService() {
+        _ping = pingService ?? PingService(),
+        _routerOsSecurity =
+            routerOsSecurityService ?? RouterOsSecurityService.instance {
     WidgetsBinding.instance.addObserver(this);
     diagnosticLog.record('APP-START', 'Monitoring controller started');
   }
@@ -81,6 +86,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Health of the serving router (cpu-load, version, board, uptime).
   Map<String, String>? routerResource;
+  List<RouterOsSecurityStatus> routerOsSecurityWarnings = const [];
+  bool routerOsSecurityChecking = false;
   int? get cpuLoad => int.tryParse(routerResource?['cpu-load'] ?? '');
   String? get routerBoard => routerResource?['board-name'];
   String? get routerVersion => routerResource?['version'];
@@ -340,6 +347,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     final generation = _sessionGeneration;
     state = MonitorState.connecting;
     phoneOnly = false;
+    routerOsSecurityWarnings = const [];
+    routerOsSecurityChecking = false;
     failure = null;
     _connectionWarning = null;
     _pendingSshHostKeyChange = null;
@@ -434,6 +443,7 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
             : AppFailure.partial(failures.length, cfgs.length);
     failure = _connectionWarning;
     notifyListeners();
+    unawaited(_refreshRouterOsSecurity(generation));
     await refresh();
     startLive();
   }
@@ -454,6 +464,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     _resetPollingCaches();
     _serving = null;
     phoneOnly = true;
+    routerOsSecurityWarnings = const [];
+    routerOsSecurityChecking = false;
     _lastConfigs = const [];
     state = MonitorState.connected;
     failure = null;
@@ -1165,6 +1177,49 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _refreshRouterOsSecurity(int generation) async {
+    final services = routers;
+    if (services.isEmpty) return;
+    routerOsSecurityChecking = true;
+    notifyListeners();
+    try {
+      final resources = await Future.wait(services.map((service) async {
+        try {
+          return (service: service, resource: await service.readResource());
+        } catch (_) {
+          return (service: service, resource: null);
+        }
+      }));
+      if (_shuttingDown || generation != _sessionGeneration) return;
+
+      Future<void> applyCatalog(
+          RouterOsSecurityCatalog catalog, bool isFinal) async {
+        if (_shuttingDown || generation != _sessionGeneration) return;
+        routerOsSecurityWarnings = List.unmodifiable(resources.map((entry) {
+          final version = entry.resource?['version'];
+          if (version == null || version.trim().isEmpty) return null;
+          return _routerOsSecurity.evaluate(
+            host: entry.service.host ?? 'MikroTik',
+            installedVersion: version,
+            catalog: catalog,
+          );
+        }).whereType<RouterOsSecurityStatus>());
+        routerOsSecurityChecking = !isFinal;
+        notifyListeners();
+      }
+
+      final cached = await _routerOsSecurity.catalog(allowNetwork: false);
+      await applyCatalog(cached, false);
+      final current = await _routerOsSecurity.catalog();
+      await applyCatalog(current, true);
+    } finally {
+      if (!_shuttingDown && generation == _sessionGeneration) {
+        routerOsSecurityChecking = false;
+        notifyListeners();
+      }
+    }
+  }
+
   void _resetPollingCaches() {
     _ourMac = null;
     _macCandidates = const [];
@@ -1239,6 +1294,8 @@ class MonitorController extends ChangeNotifier with WidgetsBindingObserver {
     connectedApName = null;
     lastWifiLogReport = null;
     _resetPollingCaches();
+    routerOsSecurityWarnings = const [];
+    routerOsSecurityChecking = false;
     _lastApName = null;
     roamCount = 0;
     lastRoamFrom = null;

@@ -7,9 +7,11 @@ import '../app_info.dart';
 import '../audit/audit.dart';
 import '../keenetic/keenetic_compatibility.dart';
 import '../models/phone_signal.dart';
+import '../router/router_connection.dart';
 import '../services/link_service.dart';
 import '../settings/settings_controller.dart';
 import '../state/monitor_controller.dart';
+import '../sites/wifi_site.dart';
 import 'about_dialog.dart';
 import 'audit_screen.dart';
 import 'delta_info.dart';
@@ -29,6 +31,7 @@ import 'widgets/failure_banner.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/platform_badge.dart';
 import 'widgets/roam_transition.dart';
+import 'widgets/routeros_security_banner.dart';
 import 'widgets/signal_card.dart';
 import 'zabbix_screen.dart';
 
@@ -46,20 +49,22 @@ Color _pingColor(int? ms, int? loss) {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final RouterVendor vendor;
+  final WifiSite? site;
+  final bool quickConnection;
+
+  const HomeScreen({
+    super.key,
+    this.vendor = RouterVendor.mikrotik,
+    this.site,
+    this.quickConnection = false,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Announce new features once after an update.
-    maybeShowWhatsNew(context, context.read<SettingsController>());
-  }
-
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<MonitorController>();
@@ -73,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const _TitleBar(),
+        title: _TitleBar(requestedVendor: widget.vendor),
         actions: [
           if (connected)
             IconButton(
@@ -282,6 +287,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 _Dashboard(ctrl: ctrl)
               else
                 ConnectionForm(
+                  vendor: widget.vendor,
+                  site: widget.site,
+                  quickConnection: widget.quickConnection,
                   busy: ctrl.state == MonitorState.connecting,
                   onConnect: (routers) {
                     ctrl.applySettings(
@@ -299,22 +307,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                     ctrl.connect(routers);
                   },
-                  onPhoneOnly: () {
-                    ctrl.applySettings(
-                      pollSeconds: settings.pollSeconds,
-                      healthPollSeconds: settings.healthPollSeconds,
-                      identityPollSeconds: settings.identityPollSeconds,
-                      historyLength: settings.historyLength,
-                      alertsEnabled: settings.alertsEnabled,
-                      alertThresholdDb: settings.alertThresholdDb,
-                      minSignalDbm: settings.minSignalDbm,
-                      minSnrDb: settings.minSnrDb,
-                      autoLinkDiagnostics: settings.autoLinkDiagnostics,
-                      linkDiagnosticDelaySeconds:
-                          settings.linkDiagnosticDelaySeconds,
-                    );
-                    ctrl.startPhoneOnly();
-                  },
+                  onPhoneOnly: widget.vendor == RouterVendor.mikrotik
+                      ? () {
+                          ctrl.applySettings(
+                            pollSeconds: settings.pollSeconds,
+                            healthPollSeconds: settings.healthPollSeconds,
+                            identityPollSeconds: settings.identityPollSeconds,
+                            historyLength: settings.historyLength,
+                            alertsEnabled: settings.alertsEnabled,
+                            alertThresholdDb: settings.alertThresholdDb,
+                            minSignalDbm: settings.minSignalDbm,
+                            minSnrDb: settings.minSnrDb,
+                            autoLinkDiagnostics: settings.autoLinkDiagnostics,
+                            linkDiagnosticDelaySeconds:
+                                settings.linkDiagnosticDelaySeconds,
+                          );
+                          ctrl.startPhoneOnly();
+                        }
+                      : null,
                 ),
             ],
           ),
@@ -325,7 +335,8 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TitleBar extends StatelessWidget {
-  const _TitleBar();
+  final RouterVendor requestedVendor;
+  const _TitleBar({required this.requestedVendor});
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<MonitorController>();
@@ -339,7 +350,9 @@ class _TitleBar extends StatelessWidget {
     ];
     final sub = ctrl.state == MonitorState.connected && parts.isNotEmpty
         ? parts.join(' · ')
-        : 'Multi-vendor Wi-Fi Tester';
+        : requestedVendor == RouterVendor.keenetic
+            ? 'Keenetic Wi-Fi · Alpha'
+            : 'MikroTik Wi-Fi';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -380,6 +393,14 @@ class _Dashboard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (ctrl.routerOsSecurityWarnings.isNotEmpty) ...[
+          RouterOsSecurityBanner(
+            l: l,
+            warnings: ctrl.routerOsSecurityWarnings,
+            checking: ctrl.routerOsSecurityChecking,
+          ),
+          const SizedBox(height: 12),
+        ],
         if (ctrl.keeneticAlpha) ...[
           _KeeneticAlphaBanner(ctrl: ctrl),
           const SizedBox(height: 12),

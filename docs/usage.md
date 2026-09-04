@@ -108,9 +108,9 @@ Alpha: other models and releases may return different fields. Thanks to
 **Netspay** for providing the test router.
 
 Create a separate Keenetic user and make sure HTTPS RCI is reachable either at
-the local router address or through its KeenDNS hostname. In the connection
-form choose *Keenetic (Alpha)*. There is no transport chooser in this mode:
-HTTPS RCI is the only implemented Keenetic transport.
+the local router address or through its KeenDNS hostname. Choose **Keenetic
+Wi-Fi — Alpha** on the app's mode screen. There is no transport chooser in this
+mode: HTTPS RCI is the only implemented Keenetic transport.
 
 The client performs the required x-ndw2 challenge-response login, then only
 reads a fixed whitelist of `show` endpoints for system/version, associations,
@@ -132,9 +132,16 @@ Wi-Fi or network settings, so it cannot connect, disconnect or forget networks.
 
 ## 5. Connecting
 
-Fill in the form on the first screen:
+The first screen separates **MikroTik Wi-Fi**, **MikroTik LTE** and **Keenetic
+Wi-Fi — Alpha**. Connection profiles are not mixed between these tools.
 
-- **Router vendor** — MikroTik, or Keenetic (Alpha).
+For MikroTik Wi-Fi, first select or create a **site**: a home, office or customer
+location with its own ordered set of routers/APs. Existing profiles are migrated
+once into *Imported routers*. Use *Quick connection without saving* for a
+one-off job, or *Phone-only network view* when no router is available.
+
+Inside a site, fill in:
+
 - **Host / IP** — the router's address, e.g. `192.168.88.1`.
 - **Username / Password** — the read-only user.
 - **Transport** — `Auto (REST → API → SSH)` unless you have a reason.
@@ -152,13 +159,12 @@ fingerprint in platform secure storage. If that host later presents another
 key, the connection stops and shows both fingerprints. Trust the new key only
 after confirming a RouterOS reinstall, SSH-key regeneration or device change.
 
-**Several routers.** Press *Add another router* to build a list — a central
-CAPsMAN box plus standalone APs, for example. The app polls all of them and
-follows your phone as it roams between them; the dashboard shows which AP
-currently serves you. Credentials go into the Android Keystore, never into plain
-preferences.
+**Several routers.** Press *Add router to site* to build the site's list — a
+central CAPsMAN box plus standalone APs, for example. The app polls all of them
+and follows your phone as it roams between them; the dashboard shows which AP
+currently serves you. Site credentials are kept in platform secure storage.
 
-**No router at hand?** Tap *Just view my network (no router)* for phone-only
+**No router at hand?** Tap *Phone-only network view* for phone-only
 mode: everything the phone knows about the link (RSSI, band, channel, standard,
 security, link speeds, ping) plus a phone-side audit. The AP card is hidden
 because there is nothing to read it from.

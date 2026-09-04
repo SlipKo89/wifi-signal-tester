@@ -60,6 +60,9 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 
 ## Features
 
+- **Separate field tools**: a mode screen opens MikroTik Wi-Fi, MikroTik LTE or
+  Keenetic Wi-Fi Alpha. MikroTik Wi-Fi profiles are grouped into named sites,
+  each with its own multi-router/AP set; one-off connections can stay unsaved.
 - **Two-sided view**: phone RSSI vs. the AP's signal for your station, plus the
   delta between them.
 - **From MikroTik**: `signal-strength` (dBm), `signal-to-noise` (SNR),
@@ -180,7 +183,7 @@ Apple notarization.
 
 ## Router side
 
-For **Keenetic Alpha**, select Keenetic in the connection form and enter either
+For **Keenetic Alpha**, select its dedicated mode and enter either
 the router address or its KeenDNS HTTPS hostname. The app uses Keenetic's
 challenge-response HTTPS RCI login and then only fixed `GET /rci/show/...`
 endpoints. It does not expose generic RCI calls. This first integration covers

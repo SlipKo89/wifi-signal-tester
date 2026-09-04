@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wifi_apk/router/router_connection.dart';
 import 'package:wifi_apk/settings/settings_controller.dart';
 import 'package:wifi_apk/ui/theme.dart';
 import 'package:wifi_apk/ui/widgets/connection_form.dart';
@@ -35,7 +36,10 @@ void main() {
           theme: AppTheme.dark,
           home: Scaffold(
             body: SingleChildScrollView(
-              child: ConnectionForm(onConnect: (_) {}),
+              child: ConnectionForm(
+                vendor: RouterVendor.keenetic,
+                onConnect: (_) {},
+              ),
             ),
           ),
         ),
@@ -43,7 +47,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Keenetic (Alpha)'), findsOneWidget);
+    expect(find.text('Keenetic Wi-Fi · Alpha'), findsOneWidget);
     expect(find.text('HTTPS RCI · x-ndw2'), findsOneWidget);
     expect(find.textContaining('Runner 4G (KN-2212)'), findsOneWidget);
     expect(find.textContaining('KeeneticOS 5.01.C.3.0-1'), findsOneWidget);
