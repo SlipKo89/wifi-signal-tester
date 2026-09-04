@@ -1,0 +1,1 @@
+Pinned the official SHA-256 checksum for the Gradle 8.11.1 distribution used by the Android wrapper. Modified build-tool archives are now rejected before use. Application behaviour is unchanged.

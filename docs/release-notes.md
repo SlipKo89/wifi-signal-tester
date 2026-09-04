@@ -1,6 +1,11 @@
-# Wi-Fi Signal Tester 0.4.0
+# Wi-Fi Signal Tester 0.4.1
 
-- Added optional read-only Zabbix history. Saved Wi-Fi and LTE sessions can map
+This patch release pins the official SHA-256 checksum for the Gradle 8.11.1
+complete distribution used by the Android wrapper. Gradle and F-Droid can now
+reject a modified build-tool archive before it is used. Application runtime
+behaviour is unchanged from 0.4.0.
+
+- Version 0.4.0 added optional read-only Zabbix history. Saved Wi-Fi and LTE sessions can map
   external items, align local and remote tracks on one timeline and export a
   combined CSV. HTTPS remains the default; HTTP requires an explicit choice and
   carries a token-exposure warning.
@@ -25,8 +30,8 @@
 
 Assets:
 
-- `wifi-signal-tester-0.4.0.apk` — Android;
-- `wifi-signal-tester-0.4.0-macos-arm64.zip` — unpack to get
+- `wifi-signal-tester-0.4.1.apk` — Android;
+- `wifi-signal-tester-0.4.1-macos-arm64.zip` — unpack to get
   `Wi-Fi Signal Tester.app` for an Apple-silicon Mac.
 
 The Mac build is currently intended for testing and is not yet Developer ID
@@ -36,9 +41,14 @@ See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 ---
 
-# Wi-Fi Signal Tester 0.4.0
+# Wi-Fi Signal Tester 0.4.1
 
-- Добавлена необязательная read-only история Zabbix. Внешние метрики можно
+В этом патч-релизе закреплена официальная контрольная сумма SHA-256 полного
+дистрибутива Gradle 8.11.1, используемого Android wrapper. Gradle и F-Droid
+теперь могут отклонить изменённый архив сборочных инструментов до его
+использования. Поведение приложения не изменилось относительно версии 0.4.0.
+
+- В версии 0.4.0 добавлена необязательная read-only история Zabbix. Внешние метрики можно
   привязать к сохранённым Wi-Fi/LTE-сессиям, совместить с локальными на одной
   шкале времени и выгрузить общим CSV. По умолчанию используется HTTPS; HTTP
   включается явно и сопровождается предупреждением об открытой передаче токена.
@@ -62,8 +72,8 @@ See [CHANGELOG.md](../blob/main/CHANGELOG.md) for the full history.
 
 Файлы:
 
-- `wifi-signal-tester-0.4.0.apk` — Android;
-- `wifi-signal-tester-0.4.0-macos-arm64.zip` — распакуй, внутри будет
+- `wifi-signal-tester-0.4.1.apk` — Android;
+- `wifi-signal-tester-0.4.1-macos-arm64.zip` — распакуй, внутри будет
   `Wi-Fi Signal Tester.app` для Mac на Apple Silicon.
 
 Сборка для Mac пока предназначена для тестирования и не подписана Developer ID

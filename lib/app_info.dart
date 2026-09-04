@@ -3,7 +3,7 @@
 const String kAppName = 'Wi-Fi Signal Tester';
 const String kAppTagline =
     'Two-sided Wi-Fi signal tester for MikroTik and Keenetic Alpha';
-const String kAppVersion = '0.4.0';
+const String kAppVersion = '0.4.1';
 
 const String kAuthor = 'SlipKo';
 const String kAuthorEmail = 'slipko89@gmail.com';

@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-05
+
+### Security
+- Pin the official SHA-256 checksum for the Gradle 8.11.1 complete
+  distribution used by the Android wrapper. Gradle and F-Droid can now reject
+  a modified distribution before it is used by the build. No application
+  runtime behaviour changed.
+
 ## [0.4.0] - 2026-09-04
 
 ### Added

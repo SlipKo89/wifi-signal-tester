@@ -9,6 +9,11 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.4.1', '2026-09-05', [
+    'The Android Gradle wrapper now pins the official SHA-256 checksum for Gradle 8.11.1 so modified build-tool archives are rejected before use; application behaviour is unchanged',
+  ], [
+    'Android Gradle wrapper теперь закрепляет официальный SHA-256 для Gradle 8.11.1 и отклоняет изменённый архив сборочных инструментов до его использования; поведение приложения не изменилось',
+  ]),
   Release('0.4.0', '2026-09-04', [
     'Optional read-only Zabbix history can be mapped onto saved Wi-Fi and LTE sessions with synchronized timelines and combined CSV export',
     'Keenetic Wi-Fi support starts as an explicit Alpha for Runner 4G and reads AP-side association data over a restricted HTTPS RCI client',
