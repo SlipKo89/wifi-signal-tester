@@ -9,6 +9,17 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.4.3b', '2026-09-05', [
+    'Fixed the endless loader and inactive Save action on the MikroTik Wi-Fi sites screen in macOS builds by enabling the required Keychain capability',
+    'Secure-storage reads and writes now have a time limit and show a retryable error instead of leaving the interface waiting forever',
+    'Editable Wi-Fi floor maps now support named survey sessions, manual points averaged from fresh two-sided RSSI/SNR cycles and four honest local heatmap layers',
+    'Portable .wifimap projects carry survey history between phone and desktop; optional per-point GPS stays off by default',
+  ], [
+    'Исправлены бесконечная загрузка и неработающее сохранение объектов MikroTik Wi-Fi в macOS: добавлена обязательная capability для Связки ключей',
+    'Чтение и запись защищённого хранилища теперь ограничены по времени и показывают ошибку с повтором вместо вечного ожидания',
+    'Редактируемые карты Wi-Fi получили именованные сессии, ручные точки с усреднением свежих двусторонних RSSI/SNR и четыре честных локальных heatmap-слоя',
+    'Проекты .wifimap переносят историю обследований между телефоном и desktop; необязательный GPS для точек по умолчанию выключен',
+  ]),
   Release('0.4.2', '2026-09-05', [
     'A new start screen separates MikroTik Wi-Fi, MikroTik LTE and Keenetic Wi-Fi Alpha into clear tools',
     'Named MikroTik sites keep independent router sets; existing profiles migrate safely into Imported routers and quick connections can remain temporary',

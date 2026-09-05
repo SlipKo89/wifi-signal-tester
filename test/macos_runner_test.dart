@@ -14,10 +14,21 @@ void main() {
     final appInfo = File(
       'macos/Runner/Configs/AppInfo.xcconfig',
     ).readAsStringSync();
+    final window =
+        File('macos/Runner/MainFlutterWindow.swift').readAsStringSync();
 
     for (final entitlements in [debug, release]) {
       expect(entitlements, contains('com.apple.security.app-sandbox'));
       expect(entitlements, contains('com.apple.security.network.client'));
+      expect(
+        entitlements,
+        contains('com.apple.security.files.user-selected.read-only'),
+      );
+      expect(
+        entitlements,
+        isNot(contains('com.apple.security.files.user-selected.read-write')),
+      );
+      expect(entitlements, contains('keychain-access-groups'));
       expect(
           entitlements, isNot(contains('com.apple.security.network.server')));
     }
@@ -28,5 +39,7 @@ void main() {
       appInfo,
       contains('PRODUCT_BUNDLE_IDENTIFIER = com.slipko.wifisignaltester'),
     );
+    expect(window, contains('call.method == "pickProject"'));
+    expect(window, contains('["wifimap"]'));
   });
 }

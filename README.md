@@ -40,11 +40,25 @@ Grab the latest build from the [Releases page](../../releases/latest):
 - Apple-silicon Mac (**Alpha**): `wifi-signal-tester-<version>-macos-arm64.zip` — unpack it
   to get `Wi-Fi Signal Tester.app`.
 
+Optional Alpha/Beta builds are listed separately under
+[all releases](../../releases).
+
 Every push/merge to `main` builds both platforms, creates the `v<version>` tag
 from `VERSION` and publishes one GitHub Release automatically. Both files are
 also available from that workflow run under
 [Actions](../../actions/workflows/release.yml) → *Artifacts*. Do not create
 release tags manually; bump the app version before the merge instead.
+
+Release channels are encoded in `VERSION`:
+
+- `X.Y.Z` — stable; GitHub marks it as the latest release;
+- `X.Y.Za` — Alpha pre-release;
+- `X.Y.Zb` — Beta pre-release.
+
+Alpha and Beta builds remain downloadable from the Releases page and workflow
+artifacts, but never move the `releases/latest` link away from the newest stable
+version. Dart package metadata uses the equivalent valid SemVer suffixes
+`-alpha` and `-beta`; the app and GitHub tag keep the compact `a`/`b` spelling.
 
 The Mac app is explicitly marked **Alpha** in its title bar and About dialog.
 The ZIP is currently an ad-hoc-signed test build, so Gatekeeper can warn
@@ -88,6 +102,14 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
 - **Focused link diagnosis**: run a fixed six-sample check manually, or let it
   start automatically after a configurable post-roam settling delay. The result
   is frozen for the current AP with likely causes and practical advice.
+- **Editable Wi-Fi floor surveys**: start from a metric grid or an
+  imported plan/photo, trace snap-to-grid walls, doors and windows with material
+  metadata, then create dated/named sessions and place measurement points. Each
+  pin averages fresh Phone/AP RSSI and SNR readings; four selectable local
+  heatmap layers leave unmeasured space unknown. Optional GPS is off by default.
+- **Phone ↔ desktop map transfer**: export or import one versioned `.wifimap`
+  package containing editable geometry, materials, measurements and an optional
+  background. GPS is opt-in; credentials and connection profiles are excluded.
 - **RouterOS Wi-Fi event analysis**: read the latest wireless/CAPsMAN logs for
   the current phone or a selected associated device, explain disconnect and
   authentication reasons, and measure reconnect/roaming gaps. It works through
@@ -221,8 +243,9 @@ that MAC → show both sides side by side.
 - **Device:** the app only reads the Wi-Fi chip (RSSI, SSID, frequency). It never
   changes, connects, disconnects or forgets any network. The manifest explicitly
   rejects `CHANGE_WIFI_STATE`, `CHANGE_NETWORK_STATE` and `WRITE_SETTINGS`; it
-  does not access contacts or media. It stores only its own data: router
-  credentials in the Keystore, settings, measurement history, and a temporary
+  does not access contacts and uses a system picker instead of broad media
+  access. It stores only its own data: router credentials in the Keystore,
+  settings, measurement history, selected floor-plan copies, and a temporary
   support ZIP when the user explicitly creates one.
 - Credentials are stored in the Android Keystore / iOS Keychain, never in plain
   preferences.

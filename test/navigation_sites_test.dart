@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wifi_apk/settings/settings_controller.dart';
+import 'package:wifi_apk/services/credentials_store.dart';
+import 'package:wifi_apk/sites/wifi_site.dart';
 import 'package:wifi_apk/state/monitor_controller.dart';
 import 'package:wifi_apk/ui/mode_home_screen.dart';
 import 'package:wifi_apk/ui/theme.dart';
@@ -91,4 +93,43 @@ void main() {
     expect(find.text('Быстрое подключение без сохранения'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('site storage failure replaces the spinner with retry',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'lang': 'en'});
+    final monitor = MonitorController();
+    addTearDown(monitor.shutdown);
+    final store = _FailingSitesStore();
+
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: await settings()),
+        ChangeNotifierProvider.value(value: monitor),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.dark,
+        home: WifiSitesScreen(store: store),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Saved sites are unavailable'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(store.loadAttempts, 2);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _FailingSitesStore extends CredentialsStore {
+  int loadAttempts = 0;
+
+  @override
+  Future<List<WifiSite>> loadSites() async {
+    loadAttempts++;
+    throw StateError('simulated secure storage failure');
+  }
 }

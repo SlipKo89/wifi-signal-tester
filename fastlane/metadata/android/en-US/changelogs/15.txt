@@ -1,0 +1,1 @@
+Beta: Wi-Fi floor maps now support named survey sessions, manually placed points averaged from fresh two-sided RSSI/SNR readings, four local heatmap layers and portable history in .wifimap. Also fixes secure MikroTik site storage on macOS.

@@ -3,8 +3,39 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Compact display/tag suffixes `a` and `b` map to the SemVer prerelease suffixes
+`-alpha` and `-beta` in package metadata.
 
 ## [Unreleased]
+
+## [0.4.3b] - 2026-09-05
+
+### Added
+- Initial editable Wi-Fi floor maps: create a plan on a user-scaled grid or
+  import PNG/JPEG/WebP as a private app-owned tracing layer, draw and erase
+  snap-to-grid walls, doors and windows with material metadata, pan/zoom, undo,
+  edit dimensions/scale/opacity and save projects locally.
+- Named Wi-Fi survey sessions inside each floor map. A manually placed point
+  averages five fresh two-sided RSSI/SNR monitor cycles, records min/max,
+  sample count, duration, AP and time, rejects a roam mid-capture, and renders
+  selectable Phone/AP RSSI/SNR local heatmap layers while leaving unmeasured
+  space visibly unknown. Estimated SNR remains labelled in point details.
+  Sessions can be switched, renamed or deleted for
+  day-to-day and before/after history.
+- Optional per-map foreground GPS context for new measurement points. It is off
+  by default, uses only a last-known fix when available, never moves an indoor
+  pin and never prevents a valid radio measurement from being saved.
+- Portable `.wifimap` project exchange between Android and desktop builds. The
+  versioned package carries geometry, materials, measurements and an optional
+  background; GPS is excluded by default and credentials/connection profiles
+  are outside the format. Import validates archive paths, sizes and values and
+  offers Replace or Create copy when the stable project ID already exists.
+
+### Fixed
+- macOS builds now declare the Keychain Sharing entitlement required by secure
+  credential storage. The MikroTik Wi-Fi sites screen no longer waits forever
+  when storage is unavailable: reads and writes are bounded, failures show a
+  retry action, and saves display an explicit error instead of appearing inert.
 
 ## [0.4.2] - 2026-09-05
 
@@ -600,7 +631,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.3b...HEAD
+[0.4.3b]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.2...v0.4.3b
+[0.4.2]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.2.5...v0.3.0

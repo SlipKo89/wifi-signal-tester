@@ -15,14 +15,24 @@ class CredentialsStore {
   static const _kRouters = 'routers_v2';
   static const _kSites = 'wifi_sites_v1';
   static const _kKeeneticProfiles = 'keenetic_profiles_v1';
+  static const _operationTimeout = Duration(seconds: 8);
+
+  Future<String?> _read(String key) =>
+      _storage.read(key: key).timeout(_operationTimeout);
+
+  Future<void> _write(String key, String value) =>
+      _storage.write(key: key, value: value).timeout(_operationTimeout);
+
+  Future<void> _delete(String key) =>
+      _storage.delete(key: key).timeout(_operationTimeout);
 
   Future<void> saveRouters(List<RouterConnection> routers) async {
     final data = jsonEncode(routers.map((r) => r.toJson()).toList());
-    await _storage.write(key: _kRouters, value: data);
+    await _write(_kRouters, data);
   }
 
   Future<List<RouterConnection>> loadRouters() async {
-    final raw = await _storage.read(key: _kRouters);
+    final raw = await _read(_kRouters);
     if (raw == null || raw.isEmpty) return [];
     try {
       final list = jsonDecode(raw) as List;
@@ -39,7 +49,7 @@ class CredentialsStore {
   /// once into a single imported site without deleting the old key, allowing a
   /// downgrade to an older app build without losing credentials.
   Future<List<WifiSite>> loadSites() async {
-    final raw = await _storage.read(key: _kSites);
+    final raw = await _read(_kSites);
     if (raw != null) return _decodeSites(raw);
 
     final legacy = await loadRouters();
@@ -61,9 +71,9 @@ class CredentialsStore {
   }
 
   Future<void> saveSites(List<WifiSite> sites) async {
-    await _storage.write(
-      key: _kSites,
-      value: jsonEncode(sites.map((site) => site.toJson()).toList()),
+    await _write(
+      _kSites,
+      jsonEncode(sites.map((site) => site.toJson()).toList()),
     );
   }
 
@@ -85,7 +95,7 @@ class CredentialsStore {
   }
 
   Future<List<RouterConnection>> loadKeeneticProfiles() async {
-    final raw = await _storage.read(key: _kKeeneticProfiles);
+    final raw = await _read(_kKeeneticProfiles);
     if (raw != null) return _decodeRouters(raw, RouterVendor.keenetic);
     final migrated = (await loadRouters())
         .where((router) => router.vendor == RouterVendor.keenetic)
@@ -98,9 +108,9 @@ class CredentialsStore {
     final keenetic = profiles
         .where((router) => router.vendor == RouterVendor.keenetic)
         .toList();
-    await _storage.write(
-      key: _kKeeneticProfiles,
-      value: jsonEncode(keenetic.map((router) => router.toJson()).toList()),
+    await _write(
+      _kKeeneticProfiles,
+      jsonEncode(keenetic.map((router) => router.toJson()).toList()),
     );
   }
 
@@ -133,8 +143,8 @@ class CredentialsStore {
   }
 
   Future<void> clear() async {
-    await _storage.delete(key: _kRouters);
-    await _storage.delete(key: _kSites);
-    await _storage.delete(key: _kKeeneticProfiles);
+    await _delete(_kRouters);
+    await _delete(_kSites);
+    await _delete(_kKeeneticProfiles);
   }
 }

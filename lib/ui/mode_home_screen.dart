@@ -16,6 +16,7 @@ import 'theme.dart';
 import 'whats_new.dart';
 import 'widgets/app_safe_area.dart';
 import 'wifi_sites_screen.dart';
+import 'wifi_floor_maps_screen.dart';
 import 'zabbix_screen.dart';
 
 class ModeHomeScreen extends StatefulWidget {
@@ -124,6 +125,8 @@ class _ModeHomeScreenState extends State<ModeHomeScreen> {
                   _open(const HistoryScreen());
                 case 'zabbix':
                   _open(const ZabbixScreen());
+                case 'floor_maps':
+                  _open(const WifiFloorMapsScreen());
                 case 'reference':
                   _open(const ReferenceScreen());
                 case 'changelog':
@@ -142,6 +145,10 @@ class _ModeHomeScreenState extends State<ModeHomeScreen> {
               PopupMenuItem(
                 value: 'zabbix',
                 child: Text(l.t('Zabbix history', 'История из Zabbix')),
+              ),
+              PopupMenuItem(
+                value: 'floor_maps',
+                child: Text(l.t('Wi-Fi floor maps', 'Карты Wi-Fi')),
               ),
               PopupMenuItem(
                 value: 'reference',
@@ -226,6 +233,17 @@ class _ModeHomeScreenState extends State<ModeHomeScreen> {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.map_outlined),
+                    title: Text(l.t('Wi-Fi floor maps', 'Карты Wi-Fi')),
+                    subtitle: Text(l.t(
+                      'Import or draw an editable scaled floor plan',
+                      'Импортировать или нарисовать редактируемый план в масштабе',
+                    )),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _open(const WifiFloorMapsScreen()),
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.monitor_heart_outlined),
                     title: Text(l.t('Zabbix history', 'История из Zabbix')),

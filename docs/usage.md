@@ -23,9 +23,10 @@ version history see [CHANGELOG.md](../CHANGELOG.md).
 13. [Reference and help](#13-reference-and-help)
 14. [LTE signal diagnostics](#14-lte-signal-diagnostics)
 15. [Zabbix history](#15-zabbix-history)
-16. [Support report](#16-support-report)
-17. [Troubleshooting](#17-troubleshooting)
-18. [What the app never does](#18-what-the-app-never-does)
+16. [Wi-Fi floor maps](#16-wi-fi-floor-maps)
+17. [Support report](#17-support-report)
+18. [Troubleshooting](#18-troubleshooting)
+19. [What the app never does](#19-what-the-app-never-does)
 
 ---
 
@@ -526,7 +527,51 @@ in Zabbix separately. HTTPS remains the default and validates the certificate.
 HTTP is available for legacy/local installations, but it sends the API token
 and metrics without encryption: use it only on a trusted LAN or through a VPN.
 
-## 16. Support report
+## 16. Wi-Fi floor maps
+
+Open *Additional tools → Wi-Fi floor maps*. A project can start from a blank
+grid or from a PNG, JPEG or WebP plan/photo selected through the platform file
+picker. Set the real room width and height and the grid-cell side in metres.
+
+The initial image-import workflow is intentionally assisted tracing, not an
+unreliable automatic conversion: the image becomes an opacity-adjustable layer,
+then *Object* draws walls, doors or windows snapped to grid intersections. Pick
+a material before drawing so the geometry is ready for later RF-loss estimates.
+Switch to *Move* to pan or pinch/scroll to zoom, *Erase* to tap a nearby object,
+and Undo to restore recent edits. Dimensions, cell size and image opacity stay
+editable through the tune button. Changes are saved locally after each edit.
+
+Create a named survey session for each visit or configuration state, for example
+*Before tuning — 05 Sep* and *After tuning — 06 Sep*. Select *Measure* and tap
+the real position on the plan. The app reuses the active live MikroTik monitor,
+waits for five fresh cycles and saves averaged/min/max Phone RSSI, AP RSSI,
+Phone SNR and AP SNR with the AP name and time. A roam during the window cancels
+the point instead of mixing two APs; estimated SNR remains marked in details.
+Use the layer menu to switch among those
+four local heatmaps; only measured neighbourhoods are coloured and the rest of
+the plan remains unknown. Switch sessions to review another day, and rename or
+delete a session from its action menu.
+
+The app copies only the explicitly selected image into its own data directory;
+it does not request access to the whole photo library. Deleting the map removes
+that app-owned copy. *Map parameters* can opt in to a last-known foreground GPS
+context for new points. GPS is off by default, never repositions the indoor pin,
+does not track in background and cannot prevent the radio sample from saving.
+Two-point calibration, constrained interpolation and user-confirmed wall
+detection remain later stages.
+
+Use the map card menu to export a `.wifimap` project, then transfer it through
+the platform share sheet, AirDrop, cloud drive, messenger or cable and import it
+from the + menu on another device. The package can include the tracing image and
+measurements, including AP names. GPS is a separate switch and stays off by
+default. Passwords, tokens and router connection profiles are never part of the
+format. If the same stable project ID is already present, choose explicitly
+between replacing it and creating a separate copy.
+
+In *Move* mode tap a measured marker to inspect its average, min/max range,
+sample count, dwell time, AP, timestamp and optional GPS accuracy.
+
+## 17. Support report
 
 ⋮ → *Support report* creates troubleshooting material you can send to the
 developer. Nothing is collected remotely and nothing is uploaded automatically.
@@ -545,7 +590,7 @@ tokens, private keys, raw RouterOS responses and full lists of other clients are
 never included, even with that switch enabled. Review `report.txt` before
 sharing. *Copy readable report* is available when a ZIP is inconvenient.
 
-## 17. Troubleshooting
+## 18. Troubleshooting
 
 | Symptom | Cause and fix |
 |---------|---------------|
@@ -567,7 +612,7 @@ sharing. *Copy readable report* is available when a ZIP is inconvenient.
 | Zabbix TLS validation fails | Use a trusted certificate for the frontend. This version does not silently accept invalid or self-signed Zabbix certificates. |
 | Audit says "Report incomplete" | Those menus couldn't be read — usually a session dropped while the app was in the background (it reconnects, so just re-run), or a user without rights to them. |
 
-## 18. What the app never does
+## 19. What the app never does
 
 - **On the router:** no writes, ever. There is no write path in the code — the
   transport interface exposes only reads, and the SSH transport additionally
@@ -582,10 +627,11 @@ sharing. *Copy readable report* is available when a ZIP is inconvenient.
   a server-side delete.
 - **On the phone:** it reads the Wi-Fi chip but never changes, connects,
   disconnects or forgets a network — the permission to do so is explicitly
-  removed from the manifest. It accesses no contacts or media. The only data it
-  stores is its own: router credentials in the Keystore, settings, measurement
-  history, and a temporary support ZIP created only on request — and only app
-  data can be deleted from inside the app.
+  removed from the manifest. It accesses no contacts and uses the system picker
+  instead of requesting broad media access. The only data it stores is its own:
+  router credentials in the Keystore, settings, measurement history, selected
+  floor-plan copies and a temporary support ZIP created only on request — and
+  only app data can be deleted from inside the app.
 
 Questions, bugs and ideas: [GitHub issues](../../../issues), or Telegram
 [@slipko](https://t.me/slipko).

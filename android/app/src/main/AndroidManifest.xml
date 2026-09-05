@@ -6,9 +6,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Android treats SSID/BSSID as location-sensitive Wi-Fi data. The app
-         never reads physical coordinates, but these permissions are required
-         to identify the currently connected access point. -->
+    <!-- Android treats SSID/BSSID as location-sensitive Wi-Fi data. These are
+         required to identify the current AP. When the user explicitly enables
+         GPS context for a floor map, the app may also attach one foreground,
+         last-known fix to a manually placed point. No background tracking. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 

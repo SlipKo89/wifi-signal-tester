@@ -1,9 +1,10 @@
 name: Build Android and macOS
 
 # Every push/merge to main builds an APK and a zipped macOS .app, then publishes
-# one GitHub Release for the version in /VERSION. The workflow creates the v*
-# tag itself; manual tags are neither needed nor used as a trigger. Pull
-# requests build both platforms but do not publish a release.
+# one GitHub Release for the version in /VERSION. A trailing `a` or `b` creates
+# an Alpha/Beta pre-release and therefore never replaces the latest stable
+# release. The workflow creates the v* tag itself; manual tags are not needed.
+# Pull requests build both platforms but do not publish a release.
 on:
   push:
     branches:
@@ -24,6 +25,8 @@ jobs:
       artifact: ${{ steps.rename.outputs.artifact }}
       version: ${{ steps.rename.outputs.version }}
       tag: ${{ steps.rename.outputs.tag }}
+      prerelease: ${{ steps.rename.outputs.prerelease }}
+      channel: ${{ steps.rename.outputs.channel }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,8 +49,20 @@ jobs:
           PUBSPEC_VERSION=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)
           APP_VERSION=$(sed -n "s/^const String kAppVersion = '\([^']*\)';/\1/p" lib/app_info.dart)
 
-          if [ "$VERSION_NUMBER" != "$PUBSPEC_VERSION" ] || [ "$VERSION_NUMBER" != "$APP_VERSION" ]; then
-            echo "::error::Version mismatch: VERSION=$VERSION_NUMBER, pubspec.yaml=$PUBSPEC_VERSION, lib/app_info.dart=$APP_VERSION"
+          if ! [[ "$VERSION_NUMBER" =~ ^[0-9]+\.[0-9]+\.[0-9]+[ab]?$ ]]; then
+            echo "::error::VERSION must be X.Y.Z, X.Y.Za (Alpha), or X.Y.Zb (Beta)"
+            exit 1
+          fi
+
+          EXPECTED_PUBSPEC="$VERSION_NUMBER"
+          if [[ "$VERSION_NUMBER" == *a ]]; then
+            EXPECTED_PUBSPEC="${VERSION_NUMBER%a}-alpha"
+          elif [[ "$VERSION_NUMBER" == *b ]]; then
+            EXPECTED_PUBSPEC="${VERSION_NUMBER%b}-beta"
+          fi
+
+          if [ "$EXPECTED_PUBSPEC" != "$PUBSPEC_VERSION" ] || [ "$VERSION_NUMBER" != "$APP_VERSION" ]; then
+            echo "::error::Version mismatch: VERSION=$VERSION_NUMBER, expected pubspec=$EXPECTED_PUBSPEC, actual pubspec=$PUBSPEC_VERSION, lib/app_info.dart=$APP_VERSION"
             exit 1
           fi
 
@@ -71,11 +86,22 @@ jobs:
           APK="wifi-signal-tester-$VERSION.apk"
           ARTIFACT="wifi-signal-tester-$VERSION-build-${GITHUB_RUN_NUMBER}"
           TAG="v$VERSION"
+          PRERELEASE=false
+          CHANNEL=Stable
+          if [[ "$VERSION" == *a ]]; then
+            PRERELEASE=true
+            CHANNEL=Alpha
+          elif [[ "$VERSION" == *b ]]; then
+            PRERELEASE=true
+            CHANNEL=Beta
+          fi
           cp build/app/outputs/flutter-apk/app-release.apk "$APK"
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
           echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -190,11 +216,21 @@ jobs:
           TAG: ${{ needs.build.outputs.tag }}
           APK: release-assets/${{ needs.build.outputs.apk }}
           MACOS_ZIP: release-assets/${{ needs.macos.outputs.zip }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" "$MACOS_ZIP" \
               --clobber \
               --repo "$GITHUB_REPOSITORY"
+          elif [ "$PRERELEASE" = "true" ]; then
+            gh release create "$TAG" "$APK" "$MACOS_ZIP" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG ($CHANNEL)" \
+              --notes-file docs/release-notes.md \
+              --prerelease \
+              --latest=false
           else
             gh release create "$TAG" "$APK" "$MACOS_ZIP" \
               --repo "$GITHUB_REPOSITORY" \
@@ -202,4 +238,13 @@ jobs:
               --title "$TAG" \
               --notes-file docs/release-notes.md \
               --latest
+          fi
+
+          RELEASE_ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)
+          if [ "$PRERELEASE" = "true" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+              -F prerelease=true -f make_latest=false >/dev/null
+          else
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+              -F prerelease=false -f make_latest=true >/dev/null
           fi

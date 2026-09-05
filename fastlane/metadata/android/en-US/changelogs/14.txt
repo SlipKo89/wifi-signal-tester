@@ -1,0 +1,1 @@
+Fixed the endless loader and inactive Save action for MikroTik Wi-Fi sites in macOS builds by enabling the required Keychain capability. Secure-storage operations now time out with a clear retry action instead of leaving the interface waiting forever. Android behaviour is unchanged.

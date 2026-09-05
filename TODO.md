@@ -34,7 +34,14 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       list, CSV export (share), delete/clear
 - [ ] Roaming test mode: log signal vs timestamp while walking (history covers
       the storage; left: dedicated walk UI + per-AP timeline)
-- [ ] Floor-map / heatmap capture (drop pins, record both-side signal)
+- [x] Floor-map / heatmap capture: editable metric-coordinate map projects,
+      scaled grid, private PNG/JPEG/WebP tracing layer, snap-to-grid walls,
+      doors/windows with material metadata, named day/before-after sessions,
+      manual pins averaging five fresh two-sided RSSI/SNR cycles, min/max and
+      four selectable local heatmap layers with unknown unmeasured space
+- [x] Portable `.wifimap` exchange between phone and desktop: versioned archive,
+      optional background/measurements, GPS off by default, no credentials,
+      bounded validated import and replace-vs-copy conflict handling
 - [ ] Multi-AP view when CAPsMAN reports the client on several radios
 - [x] Polling profiles plus independent signal/ping, router-health and IP→MAC
       intervals; cached identity, serving-router priority and background pause;
@@ -131,7 +138,10 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 - [x] Unified LTE Quality Score 0–100 for live monitoring, alignment and saved
       A/B sessions: adaptive RSRP/RSRQ/SINR/CQI weighting, stability penalty,
       band/cell reset, current/best and P10; clearly labelled as radio-only
-- [ ] GPS-tagged samples for a coverage map (phase 1: record + CSV)
+- [x] Optional foreground GPS context per manually placed Wi-Fi measurement:
+      off by default per map, retain accuracy/altitude, never use GPS to move
+      an indoor plan pin, and save a valid sample when no fix is available;
+      include optional fields in `.wifimap` export
 
 ## Docs & discoverability
 - [x] User guide in both languages (docs/usage.md / usage.ru.md), linked from the
@@ -212,7 +222,16 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
 
 ### C. Bigger directions
 - [ ] A/B before/after snapshots (channel / power / AP placement change) with diff
-- [ ] Two-sided heatmap over a floor plan
+- [~] Two-sided heatmap over an editable floor plan: four honest local layers
+      and unknown unmeasured space are done. Left: interpolation constrained to
+      measured neighbourhoods, density/confidence overlay and direct A/B diff
+      between two survey sessions
+- [ ] Assisted floor-plan import: two-point distance calibration, perspective
+      correction for photos and local edge/wall suggestions that the user must
+      confirm (never silently invent geometry)
+- [~] Floor-plan RF objects: walls, doors, windows and material metadata are
+      editable now. Left: edit an existing object's properties, AP positions,
+      thickness and clearly labelled per-band attenuation estimates
 - [x] SSH as a third read-only transport (setups where only SSH is open) —
       console reads with a `print`/`monitor once` whitelist; audit output
       verified identical to REST on a live router

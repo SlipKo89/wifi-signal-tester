@@ -11,26 +11,64 @@ import 'theme.dart';
 import 'widgets/app_safe_area.dart';
 
 class WifiSitesScreen extends StatefulWidget {
-  const WifiSitesScreen({super.key});
+  final CredentialsStore? store;
+
+  const WifiSitesScreen({super.key, this.store});
 
   @override
   State<WifiSitesScreen> createState() => _WifiSitesScreenState();
 }
 
 class _WifiSitesScreenState extends State<WifiSitesScreen> {
-  final _store = CredentialsStore();
+  late final CredentialsStore _store;
   List<WifiSite>? _sites;
+  bool _storageFailed = false;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
+    _store = widget.store ?? CredentialsStore();
     _reload();
   }
 
   Future<void> _reload() async {
-    final sites = await _store.loadSites();
-    sites.sort((a, b) => (b.lastUsedAtMs ?? 0).compareTo(a.lastUsedAtMs ?? 0));
-    if (mounted) setState(() => _sites = sites);
+    if (!mounted) return;
+    setState(() {
+      _sites = null;
+      _storageFailed = false;
+    });
+    try {
+      final sites = await _store.loadSites();
+      sites.sort(
+        (a, b) => (b.lastUsedAtMs ?? 0).compareTo(a.lastUsedAtMs ?? 0),
+      );
+      if (mounted) setState(() => _sites = sites);
+    } catch (_) {
+      if (mounted) setState(() => _storageFailed = true);
+    }
+  }
+
+  Future<bool> _writeSiteData(Future<void> Function() action) async {
+    if (_busy) return false;
+    setState(() => _busy = true);
+    try {
+      await action();
+      return true;
+    } catch (_) {
+      if (mounted) {
+        final l = context.read<SettingsController>().l;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(l.t(
+            'Could not save the site. Check macOS Keychain access and try again.',
+            'Не удалось сохранить объект. Проверь доступ к Связке ключей macOS и повтори попытку.',
+          )),
+        ));
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   String _name(WifiSite site) {
@@ -134,7 +172,7 @@ class _WifiSitesScreenState extends State<WifiSitesScreen> {
       name: result.$1,
       notes: result.$2,
     );
-    await _store.upsertSite(site);
+    if (!await _writeSiteData(() => _store.upsertSite(site))) return;
     if (!mounted) return;
     await _openSite(site);
   }
@@ -142,11 +180,13 @@ class _WifiSitesScreenState extends State<WifiSitesScreen> {
   Future<void> _editSite(WifiSite site) async {
     final result = await _editDialog(site: site);
     if (result == null) return;
-    await _store.upsertSite(site.copyWith(
-      name: result.$1,
-      notes: result.$2,
-      imported: false,
-    ));
+    if (!await _writeSiteData(() => _store.upsertSite(site.copyWith(
+          name: result.$1,
+          notes: result.$2,
+          imported: false,
+        )))) {
+      return;
+    }
     await _reload();
   }
 
@@ -230,7 +270,7 @@ class _WifiSitesScreenState extends State<WifiSitesScreen> {
         ) ??
         false;
     if (!approved) return;
-    await _store.deleteSite(site.id);
+    if (!await _writeSiteData(() => _store.deleteSite(site.id))) return;
     await _reload();
   }
 
@@ -247,79 +287,155 @@ class _WifiSitesScreenState extends State<WifiSitesScreen> {
         actions: [
           IconButton(
             tooltip: l.t('New site', 'Новый объект'),
-            onPressed: _createSite,
+            onPressed: _busy ? null : _createSite,
             icon: const Icon(Icons.add),
           ),
         ],
       ),
       body: AppSafeArea(
-        child: sites == null
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (_busy) const LinearProgressIndicator(minHeight: 2),
+            Expanded(
+              child: _storageFailed
+                  ? _SitesStorageError(onRetry: _reload)
+                  : sites == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            if (active) ...[
+                              _ActiveSessionCard(
+                                phoneOnly: ctrl.phoneOnly,
+                                onTap: _continueSession,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            Text(
+                              l.t(
+                                'A site is one home, office or customer location with '
+                                    'its own set of MikroTik routers and APs.',
+                                'Объект — это дом, офис или площадка клиента со своим '
+                                    'набором роутеров и точек MikroTik.',
+                              ),
+                              style: const TextStyle(
+                                color: Color(0xFF8B949E),
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            if (sites.isEmpty)
+                              _EmptySites(onCreate: _createSite)
+                            else
+                              ...sites.map((site) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _SiteCard(
+                                      name: _name(site),
+                                      notes: site.notes,
+                                      routerCount: site.routers.length,
+                                      lastUsedAtMs: site.lastUsedAtMs,
+                                      onTap: () => _openSite(site),
+                                      onEdit: () => _editSite(site),
+                                      onDelete: () => _deleteSite(site),
+                                    ),
+                                  )),
+                            const SizedBox(height: 6),
+                            OutlinedButton.icon(
+                              onPressed: _quickConnect,
+                              icon: const Icon(Icons.bolt_outlined),
+                              label: Text(l.t(
+                                'Quick connection without saving',
+                                'Быстрое подключение без сохранения',
+                              )),
+                            ),
+                            TextButton.icon(
+                              onPressed: _phoneOnly,
+                              icon: const Icon(Icons.smartphone),
+                              label: Text(l.t(
+                                'Phone-only network view',
+                                'Просмотр сети только с телефона',
+                              )),
+                            ),
+                          ],
+                        ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton:
+          _busy || _storageFailed || sites == null || sites.isEmpty
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: _createSite,
+                  icon: const Icon(Icons.add),
+                  label: Text(l.t('New site', 'Новый объект')),
+                ),
+    );
+  }
+}
+
+class _SitesStorageError extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _SitesStorageError({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (active) ...[
-                    _ActiveSessionCard(
-                      phoneOnly: ctrl.phoneOnly,
-                      onTap: _continueSession,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                  const Icon(
+                    Icons.key_off_outlined,
+                    size: 36,
+                    color: Color(0xFFFFB74D),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     l.t(
-                      'A site is one home, office or customer location with '
-                          'its own set of MikroTik routers and APs.',
-                      'Объект — это дом, офис или площадка клиента со своим '
-                          'набором роутеров и точек MikroTik.',
+                      'Saved sites are unavailable',
+                      'Сохранённые объекты недоступны',
                     ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l.t(
+                      'The app could not access its secure credential storage. '
+                          'On macOS, allow Keychain access and try again.',
+                      'Приложение не смогло открыть защищённое хранилище учётных '
+                          'данных. На macOS разреши доступ к Связке ключей и повтори попытку.',
+                    ),
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Color(0xFF8B949E),
                       height: 1.35,
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  if (sites.isEmpty)
-                    _EmptySites(onCreate: _createSite)
-                  else
-                    ...sites.map((site) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _SiteCard(
-                            name: _name(site),
-                            notes: site.notes,
-                            routerCount: site.routers.length,
-                            lastUsedAtMs: site.lastUsedAtMs,
-                            onTap: () => _openSite(site),
-                            onEdit: () => _editSite(site),
-                            onDelete: () => _deleteSite(site),
-                          ),
-                        )),
-                  const SizedBox(height: 6),
-                  OutlinedButton.icon(
-                    onPressed: _quickConnect,
-                    icon: const Icon(Icons.bolt_outlined),
-                    label: Text(l.t(
-                      'Quick connection without saving',
-                      'Быстрое подключение без сохранения',
-                    )),
-                  ),
-                  TextButton.icon(
-                    onPressed: _phoneOnly,
-                    icon: const Icon(Icons.smartphone),
-                    label: Text(l.t(
-                      'Phone-only network view',
-                      'Просмотр сети только с телефона',
-                    )),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(l.t('Try again', 'Повторить')),
                   ),
                 ],
               ),
-      ),
-      floatingActionButton: sites == null || sites.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _createSite,
-              icon: const Icon(Icons.add),
-              label: Text(l.t('New site', 'Новый объект')),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
