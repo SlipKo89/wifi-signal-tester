@@ -43,6 +43,13 @@ void main() {
             material: FloorMaterial.wood,
           ),
         ],
+        calibration: const FloorPlanCalibration(
+          start: FloorPoint(1, 1),
+          end: FloorPoint(5, 1),
+          referenceDistanceMeters: 4,
+          source: FloorCalibrationSource.manual,
+          timestampMs: 4,
+        ),
         measurements: const [
           FloorMeasurement(
             id: 'point-1',
@@ -81,6 +88,7 @@ void main() {
     expect(imported.plan.measurements.single.sampleCount, 5);
     expect(imported.plan.surveys.single.name, 'Before tuning');
     expect(imported.plan.measurements.single.geo?.accuracyMeters, 9);
+    expect(imported.plan.calibration?.referenceDistanceMeters, 4);
     expect(imported.backgroundExtension, 'png');
     expect(imported.backgroundBytes, [1, 2, 3, 4]);
   });

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -244,6 +245,24 @@ class WifiFloorPlanBundle {
     if (plan.walls.any((wall) => !pointOk(wall.start) || !pointOk(wall.end)) ||
         plan.measurements.any((sample) => !pointOk(sample.position))) {
       throw const FormatException('Floor-map object lies outside the plan');
+    }
+    final calibration = plan.calibration;
+    final calibrationDistance = calibration == null
+        ? null
+        : math.sqrt(
+            math.pow(calibration.end.xMeters - calibration.start.xMeters, 2) +
+                math.pow(
+                    calibration.end.yMeters - calibration.start.yMeters, 2),
+          );
+    if (calibration != null &&
+        (!pointOk(calibration.start) ||
+            !pointOk(calibration.end) ||
+            !_bounded(calibration.referenceDistanceMeters, 0.05, 500) ||
+            calibrationDistance! < 0.01 ||
+            (calibrationDistance - calibration.referenceDistanceMeters).abs() >
+                math.max(0.01, calibration.referenceDistanceMeters * 0.01) ||
+            calibration.timestampMs < 0)) {
+      throw const FormatException('Invalid floor-map calibration');
     }
     final surveyIds = <String>{};
     for (final survey in plan.surveys) {

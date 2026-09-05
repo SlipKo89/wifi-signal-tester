@@ -1,0 +1,1 @@
+Beta: Wi-Fi floor maps now support exact two-point calibration from a known real-world distance. The plan, walls and historical pins are rescaled together and the reference is retained in .wifimap.

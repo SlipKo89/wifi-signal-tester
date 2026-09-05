@@ -9,6 +9,15 @@ class Release {
 
 /// Newest first. Drives the in-app changelog and the "What's new" popup.
 const List<Release> kReleases = [
+  Release('0.4.4b', '2026-09-05', [
+    'Wi-Fi floor maps now support exact manual two-point calibration from one known real-world distance',
+    'Calibration uniformly rescales the plan, traced walls and historical measurement coordinates without moving them on the image',
+    'The reference line is saved in the portable .wifimap project and can later be reused by an optional AR ruler',
+  ], [
+    'Карты Wi-Fi получили точную ручную калибровку по двум точкам и одному известному реальному расстоянию',
+    'Калибровка одинаково пересчитывает план, обведённые стены и координаты старых замеров, не сдвигая их на изображении',
+    'Эталонный отрезок сохраняется в переносимом проекте .wifimap и позднее сможет использоваться необязательной AR-линейкой',
+  ]),
   Release('0.4.3b', '2026-09-05', [
     'Fixed the endless loader and inactive Save action on the MikroTik Wi-Fi sites screen in macOS builds by enabling the required Keychain capability',
     'Secure-storage reads and writes now have a time limit and show a retryable error instead of leaving the interface waiting forever',

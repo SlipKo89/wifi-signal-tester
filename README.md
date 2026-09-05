@@ -106,7 +106,8 @@ guide is reachable in-app from ⋮ → *How to use* and from the Reference scree
   imported plan/photo, trace snap-to-grid walls, doors and windows with material
   metadata, then create dated/named sessions and place measurement points. Each
   pin averages fresh Phone/AP RSSI and SNR readings; four selectable local
-  heatmap layers leave unmeasured space unknown. Optional GPS is off by default.
+  heatmap layers leave unmeasured space unknown. A two-point tool calibrates an
+  imported plan from one known distance. Optional GPS is off by default.
 - **Phone ↔ desktop map transfer**: export or import one versioned `.wifimap`
   package containing editable geometry, materials, measurements and an optional
   background. GPS is opt-in; credentials and connection profiles are excluded.

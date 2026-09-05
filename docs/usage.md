@@ -541,6 +541,12 @@ Switch to *Move* to pan or pinch/scroll to zoom, *Erase* to tap a nearby object,
 and Undo to restore recent edits. Dimensions, cell size and image opacity stay
 editable through the tune button. Changes are saved locally after each edit.
 
+To establish an accurate image scale, select *Scale*, tap both ends of any
+distance you know (for example, a wall or doorway) and enter its real length.
+The preview shows the resulting plan dimensions. Confirming uniformly rescales
+the plan, traced objects and existing measurement coordinates, so they stay at
+the same visual locations. Grid-cell size remains the chosen physical interval.
+
 Create a named survey session for each visit or configuration state, for example
 *Before tuning — 05 Sep* and *After tuning — 06 Sep*. Select *Measure* and tap
 the real position on the plan. The app reuses the active live MikroTik monitor,
@@ -557,7 +563,7 @@ it does not request access to the whole photo library. Deleting the map removes
 that app-owned copy. *Map parameters* can opt in to a last-known foreground GPS
 context for new points. GPS is off by default, never repositions the indoor pin,
 does not track in background and cannot prevent the radio sample from saving.
-Two-point calibration, constrained interpolation and user-confirmed wall
+Perspective correction, constrained interpolation and user-confirmed wall
 detection remain later stages.
 
 Use the map card menu to export a `.wifimap` project, then transfer it through

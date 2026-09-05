@@ -8,6 +8,14 @@ Compact display/tag suffixes `a` and `b` map to the SemVer prerelease suffixes
 
 ## [Unreleased]
 
+## [0.4.4b] - 2026-09-05
+
+### Added
+- Manual two-point floor-plan calibration. Select two exact points, enter their
+  known real distance, preview the resulting dimensions and rescale the plan,
+  walls and historical measurement pins without moving them on the image. The
+  saved reference is portable in `.wifimap` and ready for a future AR ruler.
+
 ## [0.4.3b] - 2026-09-05
 
 ### Added
@@ -631,7 +639,8 @@ Compact display/tag suffixes `a` and `b` map to the SemVer prerelease suffixes
 - Only the current device's MAC is queried and displayed; other stations are
   ignored.
 
-[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.3b...HEAD
+[Unreleased]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.4b...HEAD
+[0.4.4b]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.3b...v0.4.4b
 [0.4.3b]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.2...v0.4.3b
 [0.4.2]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/SlipKo89/wifi-signal-tester/compare/v0.4.0...v0.4.1

@@ -1,8 +1,13 @@
+import 'dart:math' as math;
+
 class FloorPoint {
   final double xMeters;
   final double yMeters;
 
   const FloorPoint(this.xMeters, this.yMeters);
+
+  FloorPoint scaled(double factor) =>
+      FloorPoint(xMeters * factor, yMeters * factor);
 
   Map<String, Object> toJson() => {'x': xMeters, 'y': yMeters};
 
@@ -37,6 +42,13 @@ class FloorWall {
     this.kind = FloorBarrierKind.wall,
     this.material = FloorMaterial.unknown,
   });
+
+  FloorWall scaled(double factor) => FloorWall(
+        start: start.scaled(factor),
+        end: end.scaled(factor),
+        kind: kind,
+        material: material,
+      );
 
   Map<String, Object> toJson() => {
         'start': start.toJson(),
@@ -179,6 +191,31 @@ class FloorMeasurement {
     this.geo,
   });
 
+  FloorMeasurement scaled(double factor) => FloorMeasurement(
+        id: id,
+        surveyId: surveyId,
+        position: position.scaled(factor),
+        timestampMs: timestampMs,
+        phoneRssi: phoneRssi,
+        apRssi: apRssi,
+        phoneSnr: phoneSnr,
+        apSnr: apSnr,
+        phoneRssiMin: phoneRssiMin,
+        phoneRssiMax: phoneRssiMax,
+        apRssiMin: apRssiMin,
+        apRssiMax: apRssiMax,
+        phoneSnrMin: phoneSnrMin,
+        phoneSnrMax: phoneSnrMax,
+        apSnrMin: apSnrMin,
+        apSnrMax: apSnrMax,
+        phoneSnrEstimated: phoneSnrEstimated,
+        apSnrEstimated: apSnrEstimated,
+        sampleCount: sampleCount,
+        durationMs: durationMs,
+        apName: apName,
+        geo: geo,
+      );
+
   Map<String, Object?> toJson() => {
         'id': id,
         'surveyId': surveyId,
@@ -232,8 +269,49 @@ class FloorMeasurement {
       );
 }
 
+enum FloorCalibrationSource { manual, ar }
+
+/// The last scale reference used for the plan. Keeping this line makes a
+/// calibration inspectable and gives a future AR ruler the same data model.
+class FloorPlanCalibration {
+  final FloorPoint start;
+  final FloorPoint end;
+  final double referenceDistanceMeters;
+  final FloorCalibrationSource source;
+  final int timestampMs;
+
+  const FloorPlanCalibration({
+    required this.start,
+    required this.end,
+    required this.referenceDistanceMeters,
+    required this.source,
+    required this.timestampMs,
+  });
+
+  Map<String, Object> toJson() => {
+        'start': start.toJson(),
+        'end': end.toJson(),
+        'referenceDistanceMeters': referenceDistanceMeters,
+        'source': source.name,
+        'timestamp': timestampMs,
+      };
+
+  factory FloorPlanCalibration.fromJson(Map<String, dynamic> json) =>
+      FloorPlanCalibration(
+        start: FloorPoint.fromJson(_map(json['start'])),
+        end: FloorPoint.fromJson(_map(json['end'])),
+        referenceDistanceMeters:
+            (json['referenceDistanceMeters'] as num?)?.toDouble() ?? 0,
+        source: FloorCalibrationSource.values.firstWhere(
+          (value) => value.name == json['source'],
+          orElse: () => FloorCalibrationSource.manual,
+        ),
+        timestampMs: (json['timestamp'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class WifiFloorPlan {
-  static const formatVersion = 2;
+  static const formatVersion = 3;
 
   final String id;
   final String name;
@@ -246,6 +324,7 @@ class WifiFloorPlan {
   final List<FloorWall> walls;
   final List<FloorSurveySession> surveys;
   final List<FloorMeasurement> measurements;
+  final FloorPlanCalibration? calibration;
   final int createdAtMs;
   final int updatedAtMs;
 
@@ -263,6 +342,7 @@ class WifiFloorPlan {
     this.walls = const [],
     this.surveys = const [],
     this.measurements = const [],
+    this.calibration,
   });
 
   WifiFloorPlan copyWith({
@@ -277,6 +357,8 @@ class WifiFloorPlan {
     List<FloorWall>? walls,
     List<FloorSurveySession>? surveys,
     List<FloorMeasurement>? measurements,
+    FloorPlanCalibration? calibration,
+    bool clearCalibration = false,
     int? updatedAtMs,
   }) =>
       WifiFloorPlan(
@@ -293,9 +375,62 @@ class WifiFloorPlan {
         walls: walls ?? this.walls,
         surveys: surveys ?? this.surveys,
         measurements: measurements ?? this.measurements,
+        calibration: clearCalibration ? null : calibration ?? this.calibration,
         createdAtMs: createdAtMs,
         updatedAtMs: updatedAtMs ?? this.updatedAtMs,
       );
+
+  /// Applies a uniform scale while retaining every object's visual position.
+  /// The grid cell is a physical preference and intentionally is not scaled.
+  WifiFloorPlan recalibrated({
+    required FloorPoint start,
+    required FloorPoint end,
+    required double referenceDistanceMeters,
+    FloorCalibrationSource source = FloorCalibrationSource.manual,
+    int? timestampMs,
+  }) {
+    final dx = end.xMeters - start.xMeters;
+    final dy = end.yMeters - start.yMeters;
+    final currentDistance = math.sqrt(dx * dx + dy * dy);
+    if (!currentDistance.isFinite || currentDistance < 0.01) {
+      throw ArgumentError.value(currentDistance, 'distance', 'too short');
+    }
+    if (!referenceDistanceMeters.isFinite ||
+        referenceDistanceMeters < 0.05 ||
+        referenceDistanceMeters > 500) {
+      throw ArgumentError.value(
+        referenceDistanceMeters,
+        'referenceDistanceMeters',
+        'must be between 0.05 and 500',
+      );
+    }
+    final factor = referenceDistanceMeters / currentDistance;
+    final newWidth = widthMeters * factor;
+    final newHeight = heightMeters * factor;
+    if (newWidth < 0.1 ||
+        newWidth > 500 ||
+        newHeight < 0.1 ||
+        newHeight > 500) {
+      throw ArgumentError('Calibrated plan dimensions must be 0.1–500 m');
+    }
+    final now = timestampMs ?? DateTime.now().millisecondsSinceEpoch;
+    return copyWith(
+      widthMeters: newWidth,
+      heightMeters: newHeight,
+      walls: walls.map((wall) => wall.scaled(factor)).toList(growable: false),
+      measurements: measurements
+          .map((sample) => sample.scaled(factor))
+          .toList(growable: false),
+      calibration: FloorPlanCalibration(
+        start: start.scaled(factor),
+        end: end.scaled(factor),
+        referenceDistanceMeters: referenceDistanceMeters,
+        source: source,
+        timestampMs: now,
+      ),
+      updatedAtMs: now,
+    );
+  }
 
   Map<String, Object?> toJson() => {
         'formatVersion': formatVersion,
@@ -310,6 +445,7 @@ class WifiFloorPlan {
         'walls': walls.map((wall) => wall.toJson()).toList(),
         'surveys': surveys.map((survey) => survey.toJson()).toList(),
         'measurements': measurements.map((sample) => sample.toJson()).toList(),
+        'calibration': calibration?.toJson(),
         'createdAt': createdAtMs,
         'updatedAt': updatedAtMs,
       };
@@ -351,6 +487,9 @@ class WifiFloorPlan {
           .toList(growable: false),
       surveys: surveys,
       measurements: measurements,
+      calibration: json['calibration'] is Map
+          ? FloorPlanCalibration.fromJson(_map(json['calibration']))
+          : null,
       createdAtMs: (json['createdAt'] as num?)?.toInt() ?? now,
       updatedAtMs: (json['updatedAt'] as num?)?.toInt() ?? now,
     );

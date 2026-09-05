@@ -15,7 +15,7 @@ import '../wifi_map/wifi_floor_plan_store.dart';
 import 'theme.dart';
 import 'widgets/app_safe_area.dart';
 
-enum _MapTool { move, measure, wall, erase }
+enum _MapTool { move, measure, wall, calibrate, erase }
 
 enum _HeatmapMetric { phoneRssi, apRssi, phoneSnr, apSnr }
 
@@ -44,6 +44,8 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
   _MapTool _tool = _MapTool.move;
   FloorPoint? _draftStart;
   FloorPoint? _draftEnd;
+  FloorPoint? _calibrationStart;
+  FloorPoint? _calibrationEnd;
   FloorBarrierKind _barrierKind = FloorBarrierKind.wall;
   FloorMaterial _barrierMaterial = FloorMaterial.unknown;
   _HeatmapMetric _heatmapMetric = _HeatmapMetric.phoneRssi;
@@ -287,14 +289,84 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
   void _message(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-  FloorPoint _point(Offset local) {
+  FloorPoint _rawPoint(Offset local) {
     final rawX = (local.dx / _pixelsPerMeter).clamp(0.0, _plan.widthMeters);
     final rawY = (local.dy / _pixelsPerMeter).clamp(0.0, _plan.heightMeters);
+    return FloorPoint(rawX, rawY);
+  }
+
+  FloorPoint _point(Offset local) {
+    final raw = _rawPoint(local);
     final cell = _plan.cellSizeMeters;
     return FloorPoint(
-      (rawX / cell).round() * cell,
-      (rawY / cell).round() * cell,
+      (raw.xMeters / cell).round() * cell,
+      (raw.yMeters / cell).round() * cell,
     );
+  }
+
+  Future<void> _calibrate(TapUpDetails details) async {
+    if (_tool != _MapTool.calibrate) return;
+    final point = _rawPoint(details.localPosition);
+    if (_calibrationStart == null) {
+      setState(() {
+        _calibrationStart = point;
+        _calibrationEnd = null;
+      });
+      return;
+    }
+    final start = _calibrationStart!;
+    final dx = point.xMeters - start.xMeters;
+    final dy = point.yMeters - start.yMeters;
+    final currentDistance = math.sqrt(dx * dx + dy * dy);
+    if (currentDistance < 0.01) {
+      _message(context.read<SettingsController>().l.t(
+            'Choose a second point farther from the first one.',
+            'Выбери вторую точку дальше от первой.',
+          ));
+      return;
+    }
+    setState(() => _calibrationEnd = point);
+    final referenceDistance = await showDialog<double>(
+      context: context,
+      builder: (_) => _CalibrationDialog(
+        plan: _plan,
+        currentDistance: currentDistance,
+      ),
+    );
+    if (!mounted) return;
+    if (referenceDistance == null) {
+      setState(() {
+        _calibrationStart = null;
+        _calibrationEnd = null;
+      });
+      return;
+    }
+    try {
+      final calibrated = _plan.recalibrated(
+        start: start,
+        end: point,
+        referenceDistanceMeters: referenceDistance,
+      );
+      setState(() {
+        _plan = calibrated;
+        _calibrationStart = null;
+        _calibrationEnd = null;
+      });
+      _queueSave();
+      _message(context.read<SettingsController>().l.t(
+            'Scale saved: ${_number(referenceDistance)} m.',
+            'Масштаб сохранён: ${_number(referenceDistance)} м.',
+          ));
+    } on ArgumentError {
+      setState(() {
+        _calibrationStart = null;
+        _calibrationEnd = null;
+      });
+      _message(context.read<SettingsController>().l.t(
+            'This scale would make the plan smaller than 0.1 m or larger than 500 m.',
+            'При таком масштабе план станет меньше 0,1 м или больше 500 м.',
+          ));
+    }
   }
 
   void _startWall(DragStartDetails details) {
@@ -705,6 +777,8 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
         .toList(growable: false);
     setState(() {
       _rememberWalls();
+      final dimensionsChanged = result.width != _plan.widthMeters ||
+          result.height != _plan.heightMeters;
       _plan = _plan.copyWith(
         name: result.name,
         widthMeters: result.width,
@@ -714,6 +788,7 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
         captureGps: result.captureGps,
         walls: walls,
         measurements: measurements,
+        clearCalibration: dimensionsChanged,
       );
     });
     _queueSave();
@@ -808,6 +883,7 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
                     onTapUp: switch (_tool) {
                       _MapTool.erase => _erase,
                       _MapTool.measure => _measure,
+                      _MapTool.calibrate => _calibrate,
                       _MapTool.move => _inspectMeasurement,
                       _ => null,
                     },
@@ -837,6 +913,8 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
                               heatmapMetric: _heatmapMetric,
                               draftStart: _draftStart,
                               draftEnd: _draftEnd,
+                              calibrationStart: _calibrationStart,
+                              calibrationEnd: _calibrationEnd,
                             ),
                           ),
                         ],
@@ -980,6 +1058,11 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
                             label: Text(l.t('Object', 'Объект')),
                           ),
                           ButtonSegment(
+                            value: _MapTool.calibrate,
+                            icon: const Icon(Icons.straighten_outlined),
+                            label: Text(l.t('Scale', 'Масштаб')),
+                          ),
+                          ButtonSegment(
                             value: _MapTool.erase,
                             icon: const Icon(Icons.auto_fix_off_outlined),
                             label: Text(l.t('Erase', 'Стереть')),
@@ -992,6 +1075,8 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
                                   _tool = selection.single;
                                   _draftStart = null;
                                   _draftEnd = null;
+                                  _calibrationStart = null;
+                                  _calibrationEnd = null;
                                 }),
                       ),
                     ),
@@ -1063,6 +1148,30 @@ class _WifiFloorPlanEditorState extends State<WifiFloorPlanEditor> {
                     ),
                   ),
                 ]),
+              ] else if (_tool == _MapTool.calibrate) ...[
+                const SizedBox(height: 7),
+                Row(children: [
+                  const Icon(Icons.straighten_outlined,
+                      size: 18, color: Color(0xFF58A6FF)),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      _calibrationStart == null
+                          ? l.t(
+                              'Tap the first end of a known distance. Points are not snapped to the grid.',
+                              'Нажми первый конец известного отрезка. Точки не привязываются к сетке.',
+                            )
+                          : l.t(
+                              'Now tap the other end and enter the real distance.',
+                              'Теперь нажми второй конец и введи реальное расстояние.',
+                            ),
+                      style: const TextStyle(
+                        color: Color(0xFFB7C0CA),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ]),
               ],
             ],
           ),
@@ -1097,6 +1206,8 @@ class _FloorPlanPainter extends CustomPainter {
   final _HeatmapMetric heatmapMetric;
   final FloorPoint? draftStart;
   final FloorPoint? draftEnd;
+  final FloorPoint? calibrationStart;
+  final FloorPoint? calibrationEnd;
 
   const _FloorPlanPainter({
     required this.plan,
@@ -1105,6 +1216,8 @@ class _FloorPlanPainter extends CustomPainter {
     required this.heatmapMetric,
     this.draftStart,
     this.draftEnd,
+    this.calibrationStart,
+    this.calibrationEnd,
   });
 
   @override
@@ -1159,6 +1272,26 @@ class _FloorPlanPainter extends CustomPainter {
           ..color = const Color(0xFFD29922)
           ..strokeWidth = 5
           ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    final savedCalibration = plan.calibration;
+    if (savedCalibration != null) {
+      _drawCalibration(
+        canvas,
+        savedCalibration.start,
+        savedCalibration.end,
+        '${_number(savedCalibration.referenceDistanceMeters)} m',
+        const Color(0xFF2EA043).withValues(alpha: 0.72),
+      );
+    }
+    if (calibrationStart != null) {
+      _drawCalibration(
+        canvas,
+        calibrationStart!,
+        calibrationEnd ?? calibrationStart!,
+        calibrationEnd == null ? '1' : '2',
+        const Color(0xFF1F6FEB),
       );
     }
 
@@ -1227,6 +1360,42 @@ class _FloorPlanPainter extends CustomPainter {
     }
   }
 
+  void _drawCalibration(
+    Canvas canvas,
+    FloorPoint start,
+    FloorPoint end,
+    String label,
+    Color color,
+  ) {
+    final from = _offset(start);
+    final to = _offset(end);
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(from, to, paint);
+    canvas.drawCircle(from, 6, Paint()..color = const Color(0xFFF3F5F7));
+    canvas.drawCircle(to, 6, Paint()..color = const Color(0xFFF3F5F7));
+    canvas.drawCircle(from, 4, paint);
+    canvas.drawCircle(to, 4, paint);
+    final text = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          backgroundColor: const Color(0xE8F3F5F7),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    text.paint(
+        canvas,
+        Offset((from.dx + to.dx) / 2 + 7,
+            (from.dy + to.dy) / 2 - text.height - 3));
+  }
+
   Offset _offset(FloorPoint point) => Offset(
         point.xMeters * pixelsPerMeter,
         point.yMeters * pixelsPerMeter,
@@ -1239,7 +1408,142 @@ class _FloorPlanPainter extends CustomPainter {
       oldDelegate.heatmapMetric != heatmapMetric ||
       oldDelegate.draftStart != draftStart ||
       oldDelegate.draftEnd != draftEnd ||
+      oldDelegate.calibrationStart != calibrationStart ||
+      oldDelegate.calibrationEnd != calibrationEnd ||
       oldDelegate.pixelsPerMeter != pixelsPerMeter;
+}
+
+class _CalibrationDialog extends StatefulWidget {
+  final WifiFloorPlan plan;
+  final double currentDistance;
+
+  const _CalibrationDialog({
+    required this.plan,
+    required this.currentDistance,
+  });
+
+  @override
+  State<_CalibrationDialog> createState() => _CalibrationDialogState();
+}
+
+class _CalibrationDialogState extends State<_CalibrationDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _distance;
+
+  @override
+  void initState() {
+    super.initState();
+    _distance = TextEditingController(text: _number(widget.currentDistance));
+  }
+
+  @override
+  void dispose() {
+    _distance.dispose();
+    super.dispose();
+  }
+
+  double? get _value =>
+      double.tryParse(_distance.text.trim().replaceAll(',', '.'));
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.watch<SettingsController>().l;
+    final value = _value;
+    final factor = value == null ? null : value / widget.currentDistance;
+    final newWidth = factor == null ? null : widget.plan.widthMeters * factor;
+    final newHeight = factor == null ? null : widget.plan.heightMeters * factor;
+    final objectCount =
+        widget.plan.walls.length + widget.plan.measurements.length;
+    return AlertDialog(
+      title: Text(l.t('Calibrate plan scale', 'Калибровка масштаба')),
+      content: SizedBox(
+        width: 430,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.t(
+                'The selected segment is currently ${_number(widget.currentDistance)} m on the plan.',
+                'Сейчас выбранный отрезок равен ${_number(widget.currentDistance)} м на плане.',
+              )),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _distance,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: l.t('Real distance, m', 'Реальное расстояние, м'),
+                ),
+                onChanged: (_) => setState(() {}),
+                validator: (_) {
+                  if (value == null ||
+                      !value.isFinite ||
+                      value < 0.05 ||
+                      value > 500) {
+                    return l.t('Range: 0.05–500', 'Диапазон: 0,05–500');
+                  }
+                  final resultWidth =
+                      widget.plan.widthMeters * value / widget.currentDistance;
+                  final resultHeight =
+                      widget.plan.heightMeters * value / widget.currentDistance;
+                  if (resultWidth < 0.1 ||
+                      resultWidth > 500 ||
+                      resultHeight < 0.1 ||
+                      resultHeight > 500) {
+                    return l.t(
+                      'Resulting plan must be 0.1–500 m',
+                      'Итоговый план должен быть 0,1–500 м',
+                    );
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              if (newWidth != null && newHeight != null)
+                Text(l.t(
+                  'Plan: ${_number(widget.plan.widthMeters)} × ${_number(widget.plan.heightMeters)} m → ${_number(newWidth)} × ${_number(newHeight)} m',
+                  'План: ${_number(widget.plan.widthMeters)} × ${_number(widget.plan.heightMeters)} м → ${_number(newWidth)} × ${_number(newHeight)} м',
+                )),
+              if (objectCount > 0) ...[
+                const SizedBox(height: 10),
+                Text(
+                  l.t(
+                    '$objectCount walls/points will be rescaled and will stay in the same visual positions.',
+                    '$objectCount стен/точек будут пересчитаны и останутся на тех же местах изображения.',
+                  ),
+                  style: const TextStyle(color: Color(0xFFD29922)),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                l.t(
+                  'The physical grid-cell size will not change.',
+                  'Физический размер клетки не изменится.',
+                ),
+                style: const TextStyle(color: Color(0xFF8B949E)),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l.t('Cancel', 'Отмена')),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.pop(context, _value);
+          },
+          child: Text(l.t('Calibrate', 'Калибровать')),
+        ),
+      ],
+    );
+  }
 }
 
 class _MapParameters {

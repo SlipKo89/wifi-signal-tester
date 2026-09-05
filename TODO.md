@@ -226,9 +226,10 @@ Legend: `[ ]` planned · `[~]` in progress · `[x]` done · `(vX.Y)` target vers
       and unknown unmeasured space are done. Left: interpolation constrained to
       measured neighbourhoods, density/confidence overlay and direct A/B diff
       between two survey sessions
-- [ ] Assisted floor-plan import: two-point distance calibration, perspective
-      correction for photos and local edge/wall suggestions that the user must
-      confirm (never silently invent geometry)
+- [~] Assisted floor-plan import: manual two-point distance calibration is
+      done and retained in `.wifimap`. Left: perspective correction for photos
+      and local edge/wall suggestions that the user must confirm (never
+      silently invent geometry)
 - [~] Floor-plan RF objects: walls, doors, windows and material metadata are
       editable now. Left: edit an existing object's properties, AP positions,
       thickness and clearly labelled per-band attenuation estimates

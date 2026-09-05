@@ -66,6 +66,13 @@ void main() {
           ),
         ),
       ],
+      calibration: FloorPlanCalibration(
+        start: FloorPoint(1, 1),
+        end: FloorPoint(5, 1),
+        referenceDistanceMeters: 4,
+        source: FloorCalibrationSource.manual,
+        timestampMs: 21,
+      ),
     );
 
     final restored = WifiFloorPlan.fromJson(plan.toJson());
@@ -83,6 +90,79 @@ void main() {
     expect(restored.captureGps, isTrue);
     expect(restored.measurements.single.position.yMeters, 3);
     expect(restored.measurements.single.geo?.accuracyMeters, 12);
+    expect(restored.calibration?.referenceDistanceMeters, 4);
+    expect(restored.calibration?.source, FloorCalibrationSource.manual);
+  });
+
+  test('two-point calibration rescales all geometry but not the grid', () {
+    const plan = WifiFloorPlan(
+      id: 'calibration',
+      name: 'Calibration',
+      widthMeters: 10,
+      heightMeters: 5,
+      cellSizeMeters: 0.5,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+      walls: [
+        FloorWall(start: FloorPoint(1, 1), end: FloorPoint(4, 1)),
+      ],
+      measurements: [
+        FloorMeasurement(
+          id: 'point-1',
+          position: FloorPoint(2, 3),
+          timestampMs: 2,
+        ),
+      ],
+    );
+
+    final calibrated = plan.recalibrated(
+      start: const FloorPoint(1, 1),
+      end: const FloorPoint(3, 1),
+      referenceDistanceMeters: 4,
+      timestampMs: 50,
+    );
+
+    expect(calibrated.widthMeters, 20);
+    expect(calibrated.heightMeters, 10);
+    expect(calibrated.cellSizeMeters, 0.5);
+    expect(calibrated.walls.single.start.xMeters, 2);
+    expect(calibrated.walls.single.end.xMeters, 8);
+    expect(calibrated.measurements.single.position.xMeters, 4);
+    expect(calibrated.measurements.single.position.yMeters, 6);
+    expect(calibrated.measurements.single.timestampMs, 2);
+    expect(calibrated.calibration?.start.xMeters, 2);
+    expect(calibrated.calibration?.end.xMeters, 6);
+    expect(calibrated.calibration?.referenceDistanceMeters, 4);
+    expect(calibrated.updatedAtMs, 50);
+  });
+
+  test('two-point calibration rejects unusable scales', () {
+    const plan = WifiFloorPlan(
+      id: 'calibration',
+      name: 'Calibration',
+      widthMeters: 100,
+      heightMeters: 20,
+      cellSizeMeters: 1,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+    );
+
+    expect(
+      () => plan.recalibrated(
+        start: const FloorPoint(1, 1),
+        end: const FloorPoint(1, 1),
+        referenceDistanceMeters: 2,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => plan.recalibrated(
+        start: const FloorPoint(0, 0),
+        end: const FloorPoint(1, 0),
+        referenceDistanceMeters: 10,
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('legacy measurement JSON gains a survey session', () {
